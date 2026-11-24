@@ -65,7 +65,7 @@ class Runs(unittest.TestCase):
             mock.patch.object(bootstrap, "remote_url", return_value="https://github.com/owner/repo.git"),
             mock.patch.object(bootstrap, "json_output", side_effect=self.fake_json),
             mock.patch.object(bootstrap, "run", side_effect=self.fake_run),
-            mock.patch.object(bootstrap.shutil, "which", return_value=None),
+            mock.patch.object(bootstrap, "find_codex", side_effect=bootstrap.Stop("Codex CLI not found (test)")),
         ]
         for patch in patches:
             patch.start()
@@ -159,7 +159,7 @@ class Runs(unittest.TestCase):
     def test_an_app_asked_for_by_name_must_exist(self):
         code, out = self.main("status", "--app", "codex")
         self.assertEqual(1, code, out)
-        self.assertIn("Codex CLI is not on PATH", out)
+        self.assertIn("Codex CLI not found", out)
 
     def test_codex_only_options_need_app_codex(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):

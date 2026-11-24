@@ -21,13 +21,12 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from cli_common import (Stop, claude_version, find_claude, info, json_output, marketplace, ok,  # noqa: E402
+from cli_common import (Stop, claude_version, find_claude, find_codex, info, json_output, marketplace, ok,  # noqa: E402
                         plugin_version, remote_source, remote_url, run, same_remote, show, step, utf8_console, warn)
 
 
@@ -162,11 +161,10 @@ def resolve_apps(args: argparse.Namespace) -> dict[str, str]:
         except Stop as error:
             missing["claude"] = str(error)
     if args.app in ("auto", "codex", "all"):
-        codex = shutil.which("codex")
-        if codex:
-            found["codex"] = codex
-        else:
-            missing["codex"] = "Codex CLI is not on PATH. Open a terminal where codex is installed."
+        try:
+            found["codex"] = find_codex(args.codex)[0]
+        except Stop as error:
+            missing["codex"] = str(error)
     if args.app == "auto":
         if not found:
             raise Stop("neither Claude Code nor Codex was found:\n" + "\n".join(f"          {m}" for m in missing.values()))
@@ -185,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="auto (default): every app found on this computer; all: both must be present")
     parser.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     parser.add_argument("--claude", help="path to the claude executable (default: CLAUDE_CODE_EXECPATH, PATH, desktop app bundle)")
+    parser.add_argument("--codex", help="path to the codex executable (default: PATH, Codex desktop app bundle)")
     parser.add_argument("--local", action="store_true",
                         help="Codex only, for testing before a release: register this working clone instead of the remote")
     parser.add_argument("--ref", default="main", help="Codex only: branch, tag or commit to register (default: main)")

@@ -78,25 +78,25 @@ def _verdict(sb, db, known):
 
 
 def classify(project, manifest, hist):
-    """[(dst, 판정, 설명, src경로, dst경로, 옛 이름 경로 또는 None)] — 판정은 '같음' '같음 · 줄끝 다름' '옛 정본 판' '로컬 수정'
-    '없음' '옛 이름'. 옛 이름의 설명은 그 사본의 판정입니다."""
+    """[(dst, 판정, 설명, src경로, dst경로, 옛 이름 사본)] — 판정은 '같음' '같음 · 줄끝 다름' '옛 정본 판' '로컬 수정' '없음' '옛 이름'.
+    옛 이름 사본은 None 또는 (경로, 로컬 수정인가). 옛 이름의 설명은 그 사본의 판정입니다."""
     tools_dir = project_names(project)[0]
     out = []
     for item in manifest['files']:
         rel = item['dst'].replace('{tools_dir}', tools_dir)
         src = os.path.join(HERE, *item['src'].split('/'))
         dst = os.path.join(project, *rel.split('/'))
-        old = os.path.join(os.path.dirname(dst), item['old']) if item.get('old') else None
-        old = old if old and os.path.isfile(old) else None
+        path = os.path.join(os.path.dirname(dst), item['old']) if item.get('old') else None
         if not os.path.isfile(src):
-            out.append((rel, '정본 없음', item['src'], src, dst, old)); continue
+            out.append((rel, '정본 없음', item['src'], src, dst, None)); continue
         sb, known = io.open(src, 'rb').read(), hist['files'].get(item['src'], {})
+        old_v, old_note = _verdict(sb, io.open(path, 'rb').read(), known) if path and os.path.isfile(path) else (None, '')
+        old = (path, old_v == '로컬 수정') if old_v else None
         if os.path.isfile(dst):
             v, note = _verdict(sb, io.open(dst, 'rb').read(), known)
             out.append((rel, v, note, src, dst, old))
         elif old:
-            v, note = _verdict(sb, io.open(old, 'rb').read(), known)
-            out.append((rel, '옛 이름', '%s — %s%s' % (item['old'], v, (' ' + note) if note and v == '옛 정본 판' else ''),
+            out.append((rel, '옛 이름', '%s — %s%s' % (item['old'], old_v, (' ' + old_note) if old_v == '옛 정본 판' else ''),
                         src, dst, old))
         else:
             out.append((rel, '없음', '', src, dst, None))
@@ -187,7 +187,7 @@ def print_report(project, rows, cfg, hook):
     w = max(len(r[0]) for r in rows) if rows else 10
     for dst, verdict, note, _s, _d, old in rows:
         if old and verdict != '옛 이름':
-            note = (note + ' · ' if note else '') + '옛 이름 사본도 있음(%s)' % os.path.basename(old)
+            note = (note + ' · ' if note else '') + '옛 이름 사본도 있음(%s%s)' % (os.path.basename(old[0]), ' · 로컬 수정' if old[1] else '')
         print('  %-*s  %s%s' % (w, dst, verdict, ('  ' + note) if note else ''))
     path, missing = cfg
     if path is None:
@@ -223,17 +223,18 @@ def apply(project, rows, force, add):
     """옛 이름 사본은 새 이름을 정본으로 쓴 뒤 지웁니다 — 정본 판이 아닌(로컬 수정) 옛 사본은 백업한 뒤에만."""
     changed, left = [], []
     for dst, verdict, note, src, dpath, old in rows:
-        old_local = bool(old) and verdict == '옛 이름' and '로컬 수정' in note
+        old_path, old_local = old if old else (None, False)
         if verdict == '정본 없음':
             continue
         if verdict == '없음' and dst not in add:
             left.append((dst, verdict, '--add 로만 넣습니다')); continue
         if (verdict == '로컬 수정' or old_local) and dst not in force:
-            left.append((dst, verdict, '--force 로만 바꿉니다')); continue
+            why = '옛 이름 사본이 로컬 수정이라 ' if old_local and verdict != '로컬 수정' else ''
+            left.append((dst, verdict, why + '--force 로만 바꿉니다')); continue
         if verdict == '로컬 수정':
             print('  백업      %s → %s' % (dst, os.path.relpath(backup(project, dst, dpath), project)))
         if old_local:
-            print('  백업      %s → %s' % (os.path.relpath(old, project), os.path.relpath(backup(project, old, old), project)))
+            print('  백업      %s → %s' % (os.path.relpath(old_path, project), os.path.relpath(backup(project, old_path, old_path), project)))
         if verdict != '같음':
             d = os.path.dirname(dpath)
             if not os.path.isdir(d):
@@ -242,9 +243,9 @@ def apply(project, rows, force, add):
             if norm_hash(io.open(dpath, 'rb').read()) != norm_hash(io.open(src, 'rb').read()):
                 raise SystemExit('쓴 뒤 해시가 다릅니다: %s' % dst)
             changed.append((dst, verdict))
-        if old:
-            os.remove(old)
-            changed.append((os.path.relpath(old, project).replace(os.sep, '/'), '옛 이름 사본 지움'))
+        if old_path:
+            os.remove(old_path)
+            changed.append((os.path.relpath(old_path, project).replace(os.sep, '/'), '옛 이름 사본 지움'))
     for dst, verdict in changed:
         print('  바꿈      %-30s (%s)' % (dst, verdict if verdict.endswith('지움') else verdict + ' → 정본'))
     for dst, verdict, why in left:

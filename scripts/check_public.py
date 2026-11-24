@@ -35,7 +35,7 @@ ALLOWED_EMAIL = re.compile(r"(?i)(.*@users\.noreply\.github\.com|noreply@github\
                            r"|.*@example\.(com|org|net)|.*@[a-z0-9.-]+\.(example|invalid|test|localhost))$")
 PATTERNS = {
     "user folder": re.compile(r"(?i)\b[a-z]:[\\/]+users[\\/]+(?![<%$])([^\\/\s\"'`<>|*]+)"),
-    "home folder": re.compile(r"(?<![\w.])/(?:Users|home)/(?![<$])([^/\s\"'`<>|*]+)"),
+    "home folder": re.compile(r"(?<![\w.])(?:/[A-Za-z])?/(?:Users|home)/(?![<$])([^/\s\"'`<>|*]+)"),   # 앞의 한 글자 폴더는 Git Bash 의 드라이브 표기
     "secret": re.compile(r"\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}"
                          r"|xox[baprs]-[A-Za-z0-9-]{10,})\b"),
     "secret assignment": re.compile(r"(?i)\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*[\"']([A-Za-z0-9_\-]{16,})[\"']"),

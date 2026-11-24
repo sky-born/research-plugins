@@ -126,6 +126,19 @@ class LegacyProject(Fixture):
             self.assertNotIn(english, text, english)
         self.assertIn("도구/tidy_tracker.py", (p / OLD_TRACKER["index"]).read_text(encoding="utf-8"))
 
+    def test_local_old_copy_beside_new_name_is_kept_until_force(self):
+        # 새 이름이 이미 있어도, 손으로 고친 옛 이름 사본은 --force 로만 백업한 뒤 지웁니다
+        p = self.legacy("두 이름", rename_tools=False)
+        pin(p, _config.legacy_pins(p, json.loads((p / ".manuscript" / "project.json").read_text(encoding="utf-8"))))
+        old = p / "도구" / "번호점검.py"
+        old.write_text((p / "도구" / "check_numbers.py").read_text(encoding="utf-8") + "\n# 로컬 수정\n", encoding="utf-8")
+        u = run(PY + [str(UPDATE), str(p), "--apply"], p, codes=(1,))
+        self.assertIn("옛 이름 사본이 로컬 수정", u.stdout)
+        self.assertTrue(old.is_file())
+        run(PY + [str(UPDATE), str(p), "--apply", "--force", "도구/check_numbers.py"], p, codes=(0,))
+        self.assertFalse(old.exists())
+        self.assertTrue(list((p / ".manuscript" / "tools_backup").rglob("번호점검.py")))
+
 
 if __name__ == "__main__":
     unittest.main()

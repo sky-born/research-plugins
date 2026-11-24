@@ -12,8 +12,9 @@ DEFAULT = {
     "min_tag_score": 4,         # 태그 부여 임계값 (1차)
     "min_tag_score_fallback": 2,
     "max_tags": 5,
-    "oa_staging": "_수신",       # OA 논문을 임시로 받아 두는 폴더 (index_dir 기준 상대경로). 라이브러리가 아닙니다
+    "oa_staging": "_oa_inbox",  # OA 논문을 임시로 받아 두는 폴더 (index_dir 기준 상대경로). 라이브러리가 아닙니다
 }
+LEGACY_OA_STAGING = "_수신"     # 0.10 이하의 기본값 — 설정에 oa_staging 이 없고 이 폴더만 있으면 그대로 씁니다
 
 CONFIG_NAMES = ("paperindex.config.json", "config.json")
 
@@ -37,7 +38,9 @@ def load(path=None, start=None):
     if not p:
         sys.exit("설정 파일을 찾을 수 없습니다. `papertool.py init <라이브러리경로>` 로 만드십시오.")
     cfg = dict(DEFAULT)
-    cfg.update(json.load(open(p, encoding="utf-8")))
+    raw = json.load(open(p, encoding="utf-8"))
+    cfg.update(raw)
+    cfg["_oa_staging_set"] = "oa_staging" in raw
     base = os.path.dirname(os.path.abspath(p))
 
     def resolve(v, want_dir=True):
@@ -96,6 +99,9 @@ def paths(cfg):
     d = cfg["index_dir"]
     stg = cfg.get("oa_staging") or DEFAULT["oa_staging"]
     stg = stg if os.path.isabs(stg) else os.path.join(d, stg)
+    legacy = os.path.join(d, LEGACY_OA_STAGING)
+    if not cfg.get("_oa_staging_set") and not os.path.isdir(stg) and os.path.isdir(legacy):
+        stg = legacy
     return {
         "index_dir": d,
         "fulltext": os.path.join(d, "_fulltext"),

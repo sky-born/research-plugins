@@ -100,7 +100,7 @@ class OaFetchTests(unittest.TestCase):
         self.config = self.base / "paperindex.config.json"
         self.config.write_text(json.dumps({"library": str(self.library), "index_dir": str(self.index)}),
                                encoding="utf-8")
-        self.stg = self.index / "_수신"
+        self.stg = self.index / "_oa_inbox"
         self.txt = self.stg / "_text"
         self.results = self.index / "_scopus"
         self.library_before = self.listing(self.library)
@@ -305,7 +305,7 @@ class StagingManifestTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="oa-manifest-")
         self.addCleanup(self.temp.cleanup)
-        self.stg = Path(self.temp.name) / "_수신"
+        self.stg = Path(self.temp.name) / "_oa_inbox"
         (self.stg / "_text").mkdir(parents=True)
         self.path = self.stg / oafetch.MANIFEST
 
@@ -330,6 +330,33 @@ class StagingManifestTests(unittest.TestCase):
         st = oafetch.Staging(str(self.stg), str(self.stg / "_text"), log=lambda m: None)
         st.save()
         self.assertFalse(self.path.exists())
+
+
+
+class StagingFolderTests(unittest.TestCase):
+    """기본 임시 폴더는 `_oa_inbox` — 설정에 없고 옛 기본 `_수신` 만 있으면 그 폴더를 그대로 씁니다."""
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="oa-staging-")
+        self.addCleanup(temp.cleanup)
+        self.base = Path(temp.name)
+        (self.base / "library").mkdir()
+        (self.base / "index").mkdir()
+        spec = importlib.util.spec_from_file_location("paper_index_config", SKILL / "lib" / "config.py")
+        self.config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.config)
+
+    def staging(self, extra=None):
+        path = self.base / "paperindex.config.json"
+        path.write_text(json.dumps(dict({"library": "library", "index_dir": "index"}, **(extra or {}))), encoding="utf-8")
+        return Path(self.config.paths(self.config.load(str(path)))["oa_staging"]).name
+
+    def test_default_old_folder_and_explicit_setting(self):
+        self.assertEqual("_oa_inbox", self.staging())
+        (self.base / "index" / "_수신").mkdir()
+        self.assertEqual("_수신", self.staging())
+        (self.base / "index" / "_oa_inbox").mkdir()
+        self.assertEqual("_oa_inbox", self.staging())
+        self.assertEqual("mine", self.staging({"oa_staging": "mine"}))
 
 
 if __name__ == "__main__":

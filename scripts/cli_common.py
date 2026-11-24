@@ -26,6 +26,10 @@ APP_BUNDLE_GLOBS: tuple[tuple[str, str], ...] = (
     ("home", "Library/Application Support/Claude/claude-code/*/claude.app/Contents/MacOS/claude"),
     ("localappdata", "Claude-Data/*/claude-code/*/*/claude.exe"),
 )
+# The same for the Codex desktop app's `codex`. Its folders are hashes, so the newest file wins.
+CODEX_BUNDLE_GLOBS: tuple[tuple[str, str], ...] = (
+    ("localappdata", "OpenAI/Codex/bin/*/codex.exe"),
+)
 
 
 class Stop(Exception):
@@ -145,14 +149,14 @@ def _version_key(path: Path) -> tuple[int, ...]:
     return (0,)
 
 
-def _bundle_candidates(env: Mapping[str, str]) -> list[Path]:
+def _bundle_candidates(env: Mapping[str, str], globs: Sequence[tuple[str, str]] = APP_BUNDLE_GLOBS) -> list[Path]:
     bases = {"home": Path.home(), "localappdata": Path(env["LOCALAPPDATA"]) if env.get("LOCALAPPDATA") else None}
     found: list[Path] = []
-    for base_name, pattern in APP_BUNDLE_GLOBS:
+    for base_name, pattern in globs:
         base = bases.get(base_name)
         if base and base.is_dir():
             found.extend(path for path in base.glob(pattern) if path.is_file())
-    return sorted(found, key=_version_key, reverse=True)
+    return sorted(found, key=lambda path: (_version_key(path), path.stat().st_mtime), reverse=True)
 
 
 def find_claude(explicit: str | None = None, env: Mapping[str, str] | None = None) -> tuple[str, str]:
@@ -178,6 +182,23 @@ def find_claude(explicit: str | None = None, env: Mapping[str, str] | None = Non
         return str(bundles[0]), "desktop app bundle"
     raise Stop("Claude Code CLI not found (looked at --claude, CLAUDE_CODE_EXECPATH, PATH and the desktop "
                "app bundle). Pass --claude <path to the claude executable>.")
+
+
+def find_codex(explicit: str | None = None, env: Mapping[str, str] | None = None) -> tuple[str, str]:
+    """Locate the Codex CLI the same way: --codex, then PATH, then the Codex desktop app's bundled binary."""
+    env = os.environ if env is None else env
+    if explicit:
+        if not Path(explicit).is_file():
+            raise Stop(f"--codex {explicit}: no such file")
+        return explicit, "--codex"
+    on_path = shutil.which("codex")
+    if on_path:
+        return on_path, "PATH"
+    bundles = _bundle_candidates(env, CODEX_BUNDLE_GLOBS)
+    if bundles:
+        return str(bundles[0]), "desktop app bundle"
+    raise Stop("Codex CLI not found (looked at --codex, PATH and the desktop app bundle). "
+               "Pass --codex <path to the codex executable>.")
 
 
 def claude_version(path: str) -> str:

@@ -58,6 +58,7 @@ Reopen the app's session when it finishes. The folder you cloned is also the **w
 | `--app claude` · `--app codex` · `--app all` | One app only, or both (fails if either is missing). Omit it to use every app found on the computer |
 | `--dry-run` | Print the commands without running them |
 | `--claude <path>` | Point at the `claude` executable directly |
+| `--codex <path>` | Point at the `codex` executable directly |
 | `--ref <tag or commit>` | Codex only — pin a release tag or commit instead of the default `main` |
 | `--local` | Codex only, for testing before a release — register this working clone instead of GitHub (the folder is not moved) |
 
@@ -69,7 +70,7 @@ Reopen the app's session when it finishes. The folder you cloned is also the **w
 <details>
 <summary>What the bootstrap does</summary>
 
-1. Finds the app's executable. For `claude` the order is `--claude` → the `CLAUDE_CODE_EXECPATH` environment variable (set inside a session) → PATH → the copy bundled with the desktop app; `codex` is looked up on PATH.
+1. Finds the app's executable. For `claude` the order is `--claude` → the `CLAUDE_CODE_EXECPATH` environment variable (set inside a session) → PATH → the copy bundled with the desktop app; for `codex` it is `--codex` → PATH → the copy bundled with the Codex desktop app (Windows).
 2. Reads the marketplace name and plugin list from `.claude-plugin/marketplace.json` and the repository address from the working clone's `git remote`.
 3. Checks that the repository can be read **without a login prompt**. If not, it stops here and says how to fix it.
 4. Runs `claude plugin marketplace add` if the marketplace is not registered, or `claude plugin marketplace update` if it is.

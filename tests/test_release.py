@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -398,6 +399,39 @@ class FindClaude(unittest.TestCase):
             self.assertEqual("owner/repo", cli_common.remote_source(url), url)
         for url in ("https://gitlab.example/owner/repo.git", "/srv/git/repo.git"):
             self.assertEqual(url, cli_common.remote_source(url))
+
+
+
+class FindCodex(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="codex-cli-test-")
+        self.addCleanup(temp.cleanup)
+        self.base = Path(temp.name)
+        self.explicit, self.path = self.base / "explicit", self.base / "path"
+        for file in (self.explicit, self.path):
+            file.write_text("", encoding="utf-8")
+        self.bundles = []
+        for n, folder in enumerate(("aaaa", "bbbb")):            # 폴더 이름은 해시 — 판이 없어 수정 시각이 새것을 정합니다
+            target = self.base / "OpenAI" / "Codex" / "bin" / folder / "codex.exe"
+            target.parent.mkdir(parents=True)
+            target.write_text("", encoding="utf-8")
+            os.utime(target, (1_000_000 + n * 1000, 2_000_000 - n * 1000))
+            self.bundles.append(target)
+
+    def find(self, explicit=None, on_path=True):
+        with mock.patch.object(cli_common.shutil, "which", return_value=str(self.path) if on_path else None):
+            return cli_common.find_codex(explicit, {"LOCALAPPDATA": str(self.base)})
+
+    def test_order_is_explicit_then_path_then_newest_app_bundle(self):
+        self.assertEqual((str(self.explicit), "--codex"), self.find(str(self.explicit)))
+        self.assertEqual((str(self.path), "PATH"), self.find())
+        self.assertEqual((str(self.bundles[0]), "desktop app bundle"), self.find(on_path=False))
+
+    def test_nothing_found_stops(self):
+        with mock.patch.object(cli_common.shutil, "which", return_value=None), self.assertRaises(cli_common.Stop):
+            cli_common.find_codex(None, {"LOCALAPPDATA": str(self.base / "empty")})
+        with self.assertRaises(cli_common.Stop):
+            self.find(str(self.base / "missing"))
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@
     papertool.py scopus-sift <파일.json>   받아 둔 결과를 정규식으로 거름 (오프라인, API 호출 없음)
     papertool.py scopus-merge <파일.json>  저장된 Scopus 결과를 보유 문헌과 대조 (오프라인)
     papertool.py scopus-tidy              옛 판(0.9 이하)이 만든 실행 파일(.bat/.query.txt)을 보관함으로 정리
-    papertool.py scopus "<질의>" --fetch-oa   검색·대조 뒤 미보유 OA 논문만 임시 폴더(_수신)에 받아 전문 텍스트까지
+    papertool.py scopus "<질의>" --fetch-oa   검색·대조 뒤 미보유 OA 논문만 임시 폴더(_oa_inbox)에 받아 전문 텍스트까지
     papertool.py oa-fetch <파일.json>      저장된 결과의 OA 논문만 받음 (라이브러리에는 쓰지 않음)
 
 검색 옵션:  --or  --tag TAG  --year 2019-2026  -n 5  -c 200
@@ -628,7 +628,7 @@ def cmd_doctor(args):
 def _oa_args(p):
     """scopus · scopus-merge 에 붙는 OA 수신 옵션. 검색 범위는 바꾸지 않습니다."""
     p.add_argument("--fetch-oa", dest="fetch_oa", action="store_true",
-                   help="대조 뒤 미보유 OA 논문을 임시 폴더(설정 oa_staging, 기본 _수신)에 받고 전문 텍스트를 만듦")
+                   help="대조 뒤 미보유 OA 논문을 임시 폴더(설정 oa_staging, 기본 _oa_inbox)에 받고 전문 텍스트를 만듦")
     p.add_argument("--oa-limit", dest="oa_limit", type=int, default=None,
                    help="한 번에 받을 OA 상한 (기본 30)")
     p.add_argument("--oa-recheck", dest="recheck", action="store_true",

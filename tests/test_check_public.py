@@ -21,6 +21,7 @@ class Findings(unittest.TestCase):
         self.assertEqual(self.kinds("mail someone" + "@" + "gmail.com"), ["email"])
         self.assertEqual(self.kinds("C:" + "\\Users\\" + "alice\\Documents"), ["user folder"])
         self.assertEqual(self.kinds("/Users/" + "alice/dev"), ["home folder"])
+        self.assertEqual(self.kinds("cd /c" + "/Users/" + "alice/dev"), ["home folder"])
         self.assertEqual(self.kinds("token = '" + "abcdefghijklmnop1234" + "'"), ["secret assignment"])
         self.assertEqual(self.kinds("ghp_" + "a" * 36), ["secret"])
 

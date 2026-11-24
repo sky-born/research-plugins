@@ -151,7 +151,8 @@ python scripts/release.py publish -m "무엇을 고쳤는지 (72자 이내)"
   `$HOME` 이 프로필과 같은 컴퓨터에서는 우연히 통하므로, 한 컴퓨터에서만 확인하면 문제가 드러나지 않습니다.
   어디서나 도는 표기는 `$USERPROFILE`(PowerShell 에서는 `$env:USERPROFILE`)입니다.
 - **배포 · 설치 스크립트는 Python 이라 세 운영체제에서 같은 명령입니다.** 스크립트는 자기를 실행한 Python 과,
-  `--claude` → `CLAUDE_CODE_EXECPATH` → PATH → 데스크톱 앱에 든 실행 파일 순으로 찾은 `claude` 를 씁니다.
+  `--claude` → `CLAUDE_CODE_EXECPATH` → PATH → 데스크톱 앱에 든 실행 파일 순으로 찾은 `claude` 를, `codex` 도
+  `--codex` → PATH → Codex 앱에 든 실행 파일 순으로 찾아 씁니다.
 - **macOS 에서는 `python3` 로 부릅니다.** `python` 이 셸 alias 인 컴퓨터에서는 스크립트 안에서 풀리지 않습니다.
 - **claude.ai 업로드본(`My Uploads`)이 남아 있으면 같은 이름의 CLI 설치본을 가립니다(§4).** 업로드본은 지웁니다.
 

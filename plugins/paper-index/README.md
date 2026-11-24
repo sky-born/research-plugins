@@ -71,7 +71,7 @@ python3 <도구경로>/papertool.py search "키워드"
 | `doctor` | 누락·중복·깨짐 점검 |
 | `scopus "<질의>"` | Scopus 검색 + 보유 문헌 자동 대조 |
 | `scopus-merge <파일>` | 저장된 Scopus 결과를 보유 문헌과 대조 (네트워크 불필요) |
-| `oa-fetch <파일>` | 저장된 Scopus 결과의 **미보유 오픈액세스** 논문을 임시 폴더(`_수신`)에 받고 전문 텍스트 생성. `scopus`·`scopus-merge` 에 `--fetch-oa` 로 이어 붙일 수도 있습니다. 라이브러리에는 쓰지 않습니다 |
+| `oa-fetch <파일>` | 저장된 Scopus 결과의 **미보유 오픈액세스** 논문을 임시 폴더(`_oa_inbox`)에 받고 전문 텍스트 생성. `scopus`·`scopus-merge` 에 `--fetch-oa` 로 이어 붙일 수도 있습니다. 라이브러리에는 쓰지 않습니다 |
 | `scopus-tidy` | 0.9 이하 판이 인덱스 폴더에 만든 실행 파일을 `_scopus/_실행완료/` 로 정리 |
 
 검색 옵션: `--or` (OR 검색) · `--tag ENIG` · `--year 2019-2026` · `-n 5` (스니펫 수) · `-c 200` (문맥 길이).
@@ -110,7 +110,7 @@ python3 <도구경로>/papertool.py search "키워드"
   "preset": "solder-thesis.json",   // presets/ 에서 찾습니다. 비우면 태그 없음
   "min_tag_score": 4,               // 태그 부여 임계값
   "max_tags": 5,
-  "oa_staging": "_수신",            // --fetch-oa 가 OA PDF 를 받아 두는 임시 폴더 (index_dir 기준). 라이브러리 아님
+  "oa_staging": "_oa_inbox",            // --fetch-oa 가 OA PDF 를 받아 두는 임시 폴더 (index_dir 기준). 라이브러리 아님
   "scopus": {                       // 선택 — 빼면 아래 기본값. 모르는 키·값은 경고하고 무시합니다
     "count": 25,                    // scopus 한 번에 받을 건수 (--count 가 덮어씀)
     "page_size": 25,                // --all 의 페이지 크기. 키가 큰 페이지를 받을 때만 올립니다 (최대 200)
@@ -211,7 +211,8 @@ papertool.py scopus "TITLE-ABS-KEY({Sn-Bi-In} AND solder) AND PUBYEAR > 2015" --
 표의 DOI 는 클릭 링크(`https://doi.org/…`)이고 `OA` 열이 붙습니다.
 
 `--fetch-oa` 를 붙이면 **검색 범위는 그대로 두고** 미보유 오픈액세스 논문만 OpenAlex 로 찾아
-임시 폴더(`oa_staging`, 기본 `_수신`)에 받고 `_수신/_text/` 에 전문 텍스트를 만듭니다 (`OA ✔`).
+임시 폴더(`oa_staging`, 기본 `_oa_inbox`)에 받고 `_oa_inbox/_text/` 에 전문 텍스트를 만듭니다 (`OA ✔`).
+설정에 `oa_staging` 이 없고 0.10 이하의 기본 폴더 `_수신` 만 있으면 그 폴더를 그대로 씁니다.
 저장된 결과에 나중에 하려면 `oa-fetch <파일.json>`. 임시 폴더는 라이브러리가 아니므로, 남길 PDF 는
 문헌 관리 프로그램으로 옮긴 뒤 `reindex` 하십시오. 구독 논문은 받지 않습니다.
 **같은 DOI 는 한 번만 받습니다** — 결과 이름(`--name`)이나 질의가 달라도, 다른 컴퓨터가 받아 둔 것이어도
