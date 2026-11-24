@@ -70,7 +70,7 @@ Reopen the app's session when it finishes. The folder you cloned is also the **w
 <details>
 <summary>What the bootstrap does</summary>
 
-1. Finds the app's executable. For `claude` the order is `--claude` → the `CLAUDE_CODE_EXECPATH` environment variable (set inside a session) → PATH → the copy bundled with the desktop app; for `codex` it is `--codex` → PATH → the copy bundled with the Codex desktop app (Windows).
+1. Finds the app's executable. For `claude` the order is `--claude` → the `CLAUDE_CODE_EXECPATH` environment variable (set inside a session) → PATH → the copy bundled with the desktop app; for `codex` it is `--codex` → PATH → the copy bundled with the Codex desktop app (on Windows under `%LOCALAPPDATA%`; on macOS an app in `/Applications` or `~/Applications`).
 2. Reads the marketplace name and plugin list from `.claude-plugin/marketplace.json` and the repository address from the working clone's `git remote`.
 3. Checks that the repository can be read **without a login prompt**. If not, it stops here and says how to fix it.
 4. Runs `claude plugin marketplace add` if the marketplace is not registered, or `claude plugin marketplace update` if it is.

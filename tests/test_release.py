@@ -358,11 +358,34 @@ class TryInSession(unittest.TestCase):
         self.assertNotIn("open the session yourself", out)
 
 
+REAL_BUNDLE_BASES = cli_common._bundle_bases
+
+
+def isolate_bundle_bases(case: unittest.TestCase, base: Path) -> None:
+    """Point the home and Applications folders into `base`, so an app installed on this computer cannot leak in."""
+    def bases(env):
+        found = REAL_BUNDLE_BASES(env)
+        found.update(home=base / "home", applications=base / "Applications")
+        return found
+    patch = mock.patch.object(cli_common, "_bundle_bases", side_effect=bases)
+    patch.start()
+    case.addCleanup(patch.stop)
+
+
+def touch(path: Path, mtime: int | None = None) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+    if mtime is not None:
+        os.utime(path, (mtime, mtime))
+    return path
+
+
 class FindClaude(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="claude-cli-test-")
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
+        isolate_bundle_bases(self, self.base)
         self.explicit, self.session, self.path, self.bundle = (self.base / name for name in ("explicit", "session", "path", "bundle"))
         for file in (self.explicit, self.session, self.path, self.bundle):
             file.write_text("", encoding="utf-8")
@@ -393,6 +416,14 @@ class FindClaude(unittest.TestCase):
         found = cli_common._bundle_candidates({"LOCALAPPDATA": str(self.base)})
         self.assertEqual("2.1.330", found[0].parts[-3])
 
+    def test_macos_app_bundle_with_and_without_the_build_folder(self):
+        support = self.base / "home" / "Library" / "Application Support" / "Claude" / "claude-code"
+        binary = Path("claude.app") / "Contents" / "MacOS" / "claude"
+        oldest = touch(support / "2.1.99" / "abc123" / binary)
+        newest = touch(support / "2.1.330" / "def456" / binary)
+        without_build_folder = touch(support / "2.1.247" / binary)
+        self.assertEqual([newest, without_build_folder, oldest], cli_common._bundle_candidates({}))
+
     def test_remote_source(self):
         for url in ("https://github.com/owner/repo", "https://github.com/owner/repo.git",
                     "git@github.com:owner/repo.git", "ssh://git@github.com/owner/repo.git"):
@@ -407,6 +438,7 @@ class FindCodex(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(prefix="codex-cli-test-")
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
+        isolate_bundle_bases(self, self.base)
         self.explicit, self.path = self.base / "explicit", self.base / "path"
         for file in (self.explicit, self.path):
             file.write_text("", encoding="utf-8")
@@ -432,6 +464,16 @@ class FindCodex(unittest.TestCase):
             cli_common.find_codex(None, {"LOCALAPPDATA": str(self.base / "empty")})
         with self.assertRaises(cli_common.Stop):
             self.find(str(self.base / "missing"))
+
+    def test_macos_app_bundle_in_either_applications_folder_newest_first(self):
+        cli = Path("Contents") / "Resources" / "codex-cli" / "bin" / "codex"
+        every_user = touch(self.base / "Applications" / "Any Name.app" / cli, mtime=3_000_000)
+        this_user = touch(self.base / "home" / "Applications" / "Other.app" / cli, mtime=4_000_000)
+        touch(self.base / "Applications" / "Unrelated.app" / "Contents" / "MacOS" / "codex", mtime=5_000_000)
+        self.assertEqual([this_user, every_user, *self.bundles],
+                         cli_common._bundle_candidates({"LOCALAPPDATA": str(self.base)}, cli_common.CODEX_BUNDLE_GLOBS))
+        with mock.patch.object(cli_common.shutil, "which", return_value=None):
+            self.assertEqual((str(this_user), "desktop app bundle"), cli_common.find_codex(None, {}))
 
 
 if __name__ == "__main__":

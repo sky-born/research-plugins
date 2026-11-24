@@ -70,7 +70,7 @@ python3 ~/dev/research-plugins/bootstrap/bootstrap.py install
 <details>
 <summary>부트스트랩이 하는 일</summary>
 
-1. 앱의 실행 파일을 찾습니다. `claude` 는 `--claude` → 환경변수 `CLAUDE_CODE_EXECPATH`(세션 안에서 돌 때) → PATH → 데스크톱 앱에 들어 있는 것 순서로, `codex` 는 `--codex` → PATH → Codex 데스크톱 앱에 들어 있는 것(Windows) 순서로 찾습니다.
+1. 앱의 실행 파일을 찾습니다. `claude` 는 `--claude` → 환경변수 `CLAUDE_CODE_EXECPATH`(세션 안에서 돌 때) → PATH → 데스크톱 앱에 들어 있는 것 순서로, `codex` 는 `--codex` → PATH → Codex 데스크톱 앱에 들어 있는 것(Windows 는 `%LOCALAPPDATA%` 아래, macOS 는 `/Applications` 또는 `~/Applications` 의 앱) 순서로 찾습니다.
 2. 마켓플레이스 이름과 플러그인 목록을 `.claude-plugin/marketplace.json` 에서, 저장소 주소를 작업 클론의 `git remote` 에서 읽습니다.
 3. 저장소에 **로그인 창 없이** 접근되는지 확인합니다. 안 되면 여기서 멈추고 해결 방법을 알려 줍니다.
 4. 마켓플레이스가 등록돼 있지 않으면 `claude plugin marketplace add`, 있으면 `claude plugin marketplace update` 를 실행합니다.

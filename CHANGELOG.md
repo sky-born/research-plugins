@@ -59,6 +59,13 @@
 
 ## 저장소 — 플러그인 밖
 
+### 2026-11-24 — macOS 에서 앱에 든 codex · claude 찾기
+
+- `bootstrap.py` 가 macOS 에서도 앱에 든 `codex` 를 찾음 — `/Applications` · `~/Applications` 의 앱 가운데
+  `Contents/Resources/codex-cli/bin/codex` 가 든 것(앱 이름은 가리지 않음). 전에는 Windows 위치만 보아 PATH 에 없으면 건너뜀
+- `bootstrap.py` · `release.py` 가 맥 데스크톱 앱에 든 `claude` 를 `claude-code/<판>/<해시>/claude.app` 배치에서도 찾음 —
+  세션 밖에서 PATH 에 `claude` 가 없으면 찾지 못하던 것. `claude-code/<판>/claude.app` 배치도 계속 찾음
+
 ### 2026-11-24 — codex 찾기 · 공개 검사 보강
 
 - `bootstrap.py` 가 `codex` 를 `--codex` → PATH → Codex 데스크톱 앱에 든 실행 파일(Windows) 순으로 찾음 — PATH 에 없어도 됨

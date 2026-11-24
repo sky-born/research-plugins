@@ -20,14 +20,19 @@ from typing import Any, Iterable, Mapping, Sequence
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Where the desktop app keeps its own Claude Code binary when `claude` is not on PATH.
-# Each pattern is relative to the named base folder; the newest version found wins.
+# Each pattern is relative to a base folder named in _bundle_bases; the newest version found wins.
 # Add a line when a new layout is seen - an unknown layout is reported, not guessed.
 APP_BUNDLE_GLOBS: tuple[tuple[str, str], ...] = (
+    ("home", "Library/Application Support/Claude/claude-code/*/*/claude.app/Contents/MacOS/claude"),
     ("home", "Library/Application Support/Claude/claude-code/*/claude.app/Contents/MacOS/claude"),
     ("localappdata", "Claude-Data/*/claude-code/*/*/claude.exe"),
 )
-# The same for the Codex desktop app's `codex`. Its folders are hashes, so the newest file wins.
+# The same for the Codex desktop app's `codex`. Its folders are hashes on Windows and carry no version
+# on macOS, so the newest file wins. On macOS the app's own name varies, so any app bundle that carries
+# the CLI counts.
 CODEX_BUNDLE_GLOBS: tuple[tuple[str, str], ...] = (
+    ("applications", "*.app/Contents/Resources/codex-cli/bin/codex"),
+    ("home", "Applications/*.app/Contents/Resources/codex-cli/bin/codex"),
     ("localappdata", "OpenAI/Codex/bin/*/codex.exe"),
 )
 
@@ -149,8 +154,15 @@ def _version_key(path: Path) -> tuple[int, ...]:
     return (0,)
 
 
+def _bundle_bases(env: Mapping[str, str]) -> dict[str, Path | None]:
+    """The base folders the bundle patterns are relative to. A folder missing on this computer is skipped."""
+    return {"home": Path.home(),
+            "localappdata": Path(env["LOCALAPPDATA"]) if env.get("LOCALAPPDATA") else None,
+            "applications": Path("/Applications")}       # macOS: apps installed for every user
+
+
 def _bundle_candidates(env: Mapping[str, str], globs: Sequence[tuple[str, str]] = APP_BUNDLE_GLOBS) -> list[Path]:
-    bases = {"home": Path.home(), "localappdata": Path(env["LOCALAPPDATA"]) if env.get("LOCALAPPDATA") else None}
+    bases = _bundle_bases(env)
     found: list[Path] = []
     for base_name, pattern in globs:
         base = bases.get(base_name)
@@ -185,7 +197,8 @@ def find_claude(explicit: str | None = None, env: Mapping[str, str] | None = Non
 
 
 def find_codex(explicit: str | None = None, env: Mapping[str, str] | None = None) -> tuple[str, str]:
-    """Locate the Codex CLI the same way: --codex, then PATH, then the Codex desktop app's bundled binary."""
+    """Locate the Codex CLI the same way: --codex, then PATH, then the Codex desktop app's bundled binary
+    (Windows: under LOCALAPPDATA; macOS: an app in /Applications or ~/Applications)."""
     env = os.environ if env is None else env
     if explicit:
         if not Path(explicit).is_file():
