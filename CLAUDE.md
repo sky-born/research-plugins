@@ -89,8 +89,10 @@ python scripts/release.py publish -m "무엇을 고쳤는지 (72자 이내)"
 **push 하면 GitHub Actions(`.github/workflows/check.yml`)가 Windows · macOS · Linux 에서 같은 `check` 를 돌립니다.**
 러너에는 `claude` 가 없어 `--skip-claude` 로 돌므로, `claude plugin validate` 는 배포하는 컴퓨터에서만 확인됩니다.
 
-**커밋 제목은 72자 이내**로 `<플러그인> v<버전>: 한 줄 요약` 처럼 쓰고, 바뀐 점은 `CHANGELOG.md` 의 그 플러그인 절
-맨 위에 `### <버전> — <날짜>` 로 적습니다. `check` 는 올린 버전의 항목이 없으면 중단하고, `publish` 는 제목이 길면 경고합니다.
+**커밋 메시지는 되도록 제목 한 줄로 씁니다.** 제목만으로 목적(왜)이 드러나지 않을 때만 짧은 한 문장을 덧붙입니다. 제목은 72자 이내로 `<플러그인> v<버전>: 한 줄 요약` 처럼 씁니다.
+바뀐 점은 `CHANGELOG.md` 의 그 플러그인 절(플러그인 밖 변경은 「저장소 — 플러그인 밖」 절) 맨 위에 `### <버전> — <날짜>` 로 적습니다.
+`Co-Authored-By` 같은 `…-by:` 꼬리표는 넣지 않습니다 — AI 도구를 쓴 사실은 README 에 밝혀 두었습니다.
+`check` 는 올린 버전의 항목이 없으면 중단합니다. `publish` 는 꼬리표가 있거나 본문이 두 문단 이상이면 중단하고, 제목·본문이 길면 경고합니다.
 **경위와 날짜는 문서 본문이 아니라 `CHANGELOG.md` 에 둡니다.**
 
 **README 는 두 파일입니다** — `README.md`(영어)와 `README.ko.md`(한국어). 한쪽을 고치면 다른 쪽도 함께 고칩니다.

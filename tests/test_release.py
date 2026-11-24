@@ -215,6 +215,32 @@ class Publish(RepoCase):
         self.assertEqual(0, code, out)
         self.assertIn("commit subject is 73 characters", out)
 
+    def test_long_body_warns(self):
+        self.write("docs/notes.md", "notes\n")
+        code, out = self.release("publish", "-m", "docs: notes", "-m", "x" * 161, "--no-push")
+        self.assertEqual(0, code, out)
+        self.assertIn("commit body is 161 characters", out)
+
+    def test_trailers_and_extra_paragraphs_stop_before_committing(self):
+        self.write("docs/notes.md", "notes\n")
+        before = git(self.root, "rev-parse", "HEAD")
+        trailer = "Co-Authored-By: Someone <someone@example.invalid>"
+        for messages, expected in ((["docs: notes", "Why.", trailer], "'Co-Authored-By:' trailer"),
+                                   (["docs: notes", f"Why.\n\n{trailer}"], "'Co-Authored-By:' trailer"),
+                                   (["docs: notes", "Why.\nsigned-off-by: someone"], "'signed-off-by:' trailer"),
+                                   (["docs: notes", "One.", "Two."], "more than a subject and one paragraph"),
+                                   (["docs: notes", "One.\n \nTwo."], "more than a subject and one paragraph"),
+                                   (["docs: notes\nsecond line"], "more than a subject and one paragraph")):
+            with self.subTest(messages=messages):
+                argv = ["publish", "--no-push"]
+                for message in messages:
+                    argv += ["-m", message]
+                code, out = self.release(*argv)
+                self.assertEqual(1, code, out)
+                self.assertIn(expected, out)
+                self.assertIn("CHANGELOG.md", out)
+                self.assertEqual(before, git(self.root, "rev-parse", "HEAD"))
+
     def test_changelog_entry_is_required_once_the_file_exists(self):
         self.write("CHANGELOG.md", "# Changelog\n\n## example\n\n### 1.0.0\n\n- First.\n")
         self.commit("changelog")

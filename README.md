@@ -4,6 +4,7 @@ English | [한국어](README.ko.md)
 
 Plugins for academic writing and PDF literature search, shared by Claude Code and Codex.
 They are versioned in this one repository so that **every computer and every account runs the same version**.
+They are developed with AI coding assistants (Claude Code · Codex).
 
 | Item | Value |
 |---|---|
@@ -318,7 +319,7 @@ A tag goes on the last commit that changed that plugin's folder.
 
 | Option | Meaning |
 |---|---|
-| `-m "..."` | Commit subject (up to 72 characters). Repeat it for body paragraphs. Without it the subject is built from the changed plugins and versions |
+| `-m "..."` | Commit subject (up to 72 characters), usually all the message needs. A second `-m` adds one short sentence on why; what changed goes in `CHANGELOG.md`. Trailers such as `Co-Authored-By` stop it. Without it the subject is built from the changed plugins and versions |
 | `--no-push` | Commit and tag only (`publish`) |
 | `--no-tag` | Do not create tags (`publish`) |
 | `--skip-tests` | Do not run the tests — the output says they were not run |

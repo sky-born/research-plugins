@@ -7,7 +7,7 @@
         Open a Claude Code session in <folder> with this clone's plugins.
     python scripts/release.py bump <plugin> <patch|minor|major|X.Y.Z>
         Raise the plugin's version and regenerate the files derived from it.
-    python scripts/release.py publish -m "subject" [-m "body paragraph"]
+    python scripts/release.py publish -m "subject" [-m "why, one short sentence"]
         check -> commit -> push -> one {name}--v{version} tag per released plugin.
 
 Plugins are served by relative path, so the `version` in a plugin's
@@ -37,6 +37,11 @@ from validate_shared_plugins import validate  # noqa: E402
 
 
 SUBJECT_LIMIT = 72
+BODY_LIMIT = 160
+TRAILER = re.compile(r"^[A-Za-z][A-Za-z-]*-by:", re.IGNORECASE | re.MULTILINE)   # Co-Authored-By, Signed-off-by ...
+PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
+COMMIT_RULE = ("write a subject, plus one short sentence on why only if it needs one; "
+               "what changed goes in CHANGELOG.md, with no trailers (CLAUDE.md)")
 # Fenced blocks whose text is prose (a tree with descriptions, a diagram) may differ between
 # README translations. Every other fenced block must match once comments are removed.
 TRANSLATED_FENCES = {"", "mermaid"}
@@ -482,9 +487,25 @@ def tag_release(root: Path, bump: Bump, *, push: bool, remote: str) -> None:
         ok(f"{tag} pushed to {remote}")
 
 
+def check_message(messages: list[str]) -> None:
+    """Stop on a trailer or a second paragraph; warn on a long subject or body."""
+    subject, body = messages[0], messages[1:]
+    for text in messages:
+        if trailer := TRAILER.search(text):
+            raise Stop(f"commit message has a '{trailer.group(0)}' trailer - {COMMIT_RULE}")
+    if "\n" in subject.strip() or len(body) > 1 or any(PARAGRAPH_BREAK.search(text.strip()) for text in body):
+        raise Stop(f"commit message has more than a subject and one paragraph - {COMMIT_RULE}")
+    if len(subject) > SUBJECT_LIMIT:
+        warn(f"commit subject is {len(subject)} characters; keep it within {SUBJECT_LIMIT}")
+    if body and len(body[0]) > BODY_LIMIT:
+        warn(f"commit body is {len(body[0])} characters; keep it to the purpose, within {BODY_LIMIT}")
+
+
 def cmd_publish(args: argparse.Namespace) -> int:
     root: Path = args.root.resolve()
     remote = args.baseline.split("/", 1)[0]
+    if args.message:
+        check_message(args.message)                 # before the slow checks
     bumped, changed = check(args)
     if not changed:
         step("Done")
@@ -494,9 +515,6 @@ def cmd_publish(args: argparse.Namespace) -> int:
     messages = list(args.message or [])
     if not messages:
         messages = [", ".join(f"{bump.name} v{bump.new}" for bump in bumped) or "Update docs and scripts"]
-    if len(messages[0]) > SUBJECT_LIMIT:
-        warn(f"commit subject is {len(messages[0])} characters; keep it within {SUBJECT_LIMIT} "
-             "and put the detail in the body or CHANGELOG.md")
 
     step("Commit")
     if not git(root, "status", "--porcelain"):
@@ -563,7 +581,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("publish", help="check, commit, push and tag")
     common(p)
     p.add_argument("-m", "--message", action="append",
-                   help=f"commit subject (up to {SUBJECT_LIMIT} characters); repeat for body paragraphs")
+                   help=f"commit subject (up to {SUBJECT_LIMIT} characters); a second -m adds one short sentence on why")
     p.add_argument("--no-push", action="store_true", help="commit and tag locally only")
     p.add_argument("--no-tag", action="store_true", help="do not create tags")
     p.set_defaults(run=cmd_publish)
