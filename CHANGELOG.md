@@ -49,6 +49,11 @@
 
 ## 저장소 — 플러그인 밖
 
+### 2026-11-24 — 배포 전 세션 시험
+
+- `scripts/release.py try <폴더>` 추가 — 작업 클론의 플러그인으로 그 폴더에서 세션을 엶. 플러그인마다 `--plugin-dir` 를 줌
+- `check` 가 `SKILL.md` 머리말의 `name` · `description` 을 검사 — `description` 이 없으면 Claude Code 가 그 스킬을 스킬 목록에서 뺌
+
 ### 2026-11-24 — 공개 전 검사
 
 - `scripts/check_public.py` 추가 — 올릴 파일 · 경로 · 커밋의 작성자 정보에서 이메일 · 사용자 폴더 경로 · 비밀값과 저장소 밖 금지어 목록의

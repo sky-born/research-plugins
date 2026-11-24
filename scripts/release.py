@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Check, version-bump and publish this marketplace.
+"""Check, try out, version-bump and publish this marketplace.
 
     python scripts/release.py check
         Every pre-release check. Changes nothing.
+    python scripts/release.py try <folder>
+        Open a Claude Code session in <folder> with this clone's plugins.
     python scripts/release.py bump <plugin> <patch|minor|major|X.Y.Z>
         Raise the plugin's version and regenerate the files derived from it.
     python scripts/release.py publish -m "subject" [-m "body paragraph"]
@@ -19,7 +21,10 @@ Standard library only; runs the same on Windows, macOS and Linux.
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -317,6 +322,61 @@ def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
     return bumped, changed
 
 
+# ------------------------------------------------------------------ try in a session
+
+def plugin_dir_args(root: Path, plugins: list[str]) -> list[str]:
+    return [part for name in plugins for part in ("--plugin-dir", str(root / "plugins" / name))]
+
+
+def same_path(first: str | Path, second: str | Path) -> bool:
+    return os.path.normcase(Path(first).resolve()) == os.path.normcase(Path(second).resolve())
+
+
+def read_start_info(claude: str, folder: Path, plugin_dirs: list[str]) -> dict:
+    command = [claude, "-p", "x", "--output-format", "stream-json", "--verbose", "--max-turns", "1",
+               "--no-session-persistence", *plugin_dirs]
+    try:
+        process = subprocess.Popen(command, cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    except OSError as error:
+        raise Stop(f"could not start: {show(command)}\n{error}") from error
+    other: list[str] = []
+    try:
+        for line in process.stdout:
+            try:
+                event = json.loads(line) if line.startswith("{") else None
+            except ValueError:
+                event = None
+            if isinstance(event, dict) and event.get("type") == "system" and event.get("subtype") == "init":
+                return event
+            if event is None and line.strip():
+                other.append(line.strip())
+    finally:
+        process.kill()
+        process.wait()
+    raise Stop(f"no session start-up info from: {show(command)}" + (f"\n{lines(other[-10:])}" if other else ""))
+
+
+def load_problems(start: dict, root: Path, plugins: list[str]) -> list[str]:
+    missing = [key for key in ("plugins", "skills") if not isinstance(start.get(key), list)]
+    if missing:
+        return [f"the session start-up info has no {' or '.join(missing)} list - this claude version reports differently"]
+    loaded = {entry.get("name"): entry.get("path", "") for entry in start["plugins"] if isinstance(entry, dict)}
+    problems: list[str] = []
+    for name in plugins:
+        folder = root / "plugins" / name
+        if name not in loaded:
+            problems.append(f"{name} was not loaded")
+        elif not same_path(loaded[name], folder):
+            problems.append(f"{name} loaded from {loaded[name]}, not from this clone")
+        else:
+            for skill in sorted((folder / "skills").glob("*/SKILL.md")):
+                listed = f"{name}:{skill.parent.name}"
+                if listed not in start["skills"]:
+                    problems.append(f"{listed} is not in the session's skill list - check the header of its SKILL.md")
+    return problems
+
+
 # ------------------------------------------------------------------ commands
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -324,6 +384,32 @@ def cmd_check(args: argparse.Namespace) -> int:
     step("Done")
     info("check only - nothing was changed")
     return 0
+
+
+def cmd_try(args: argparse.Namespace) -> int:
+    root: Path = args.root.resolve()
+    folder: Path = args.folder.resolve()
+    if not folder.is_dir():
+        raise Stop(f"{folder} is not a folder")
+    _, plugins = marketplace(root)
+    claude, source = find_claude(args.claude)
+    plugin_dirs = plugin_dir_args(root, plugins)
+
+    step("Session start-up")
+    ok(f"{claude_version(claude)} - {claude} (from {source})")
+    problems = load_problems(read_start_info(claude, folder, plugin_dirs), root, plugins)
+    if problems:
+        raise Stop("the session would not run this clone as it is:\n" + lines(problems))
+    ok(f"loaded from this clone: {', '.join(plugins)}")
+
+    command = [claude, *plugin_dirs]
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        info("not a terminal - open the session yourself:")
+        info(f"cd {show([folder])}")
+        info(show(command))
+        return 0
+    step(f"Session in {folder}")
+    return subprocess.run(command, cwd=folder).returncode
 
 
 def cmd_bump(args: argparse.Namespace) -> int:
@@ -461,6 +547,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("check", help="run every pre-release check; change nothing")
     common(p)
     p.set_defaults(run=cmd_check)
+
+    p = sub.add_parser("try", help="open a Claude Code session with this clone's plugins, for that session only")
+    p.add_argument("folder", type=Path, help="a copy of a project or an empty folder")
+    p.add_argument("--claude", help="path to the claude executable (default: CLAUDE_CODE_EXECPATH, then PATH)")
+    p.add_argument("--root", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
+    p.set_defaults(run=cmd_try)
 
     p = sub.add_parser("bump", help="raise a plugin's version and regenerate derived files")
     p.add_argument("plugin")

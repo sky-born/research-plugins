@@ -8,9 +8,29 @@ paths, not every product-specific schema or the scientific quality of a skill.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 from sync_codex_manifests import REPO_ROOT, load_sources, read_json, synchronize
+
+
+HEADER_KEY = re.compile(r"^([A-Za-z][\w-]*):[ \t]*(.*)$")
+BLOCK_MARKERS = {">", "|", ">-", "|-", ">+", "|+"}
+
+
+def skill_header(text: str) -> dict[str, str] | None:
+    if not text.startswith("---\n") or "\n---" not in text[3:]:
+        return None
+    fields: dict[str, str] = {}
+    key = None
+    for line in text[4:text.index("\n---", 3)].splitlines():
+        match = HEADER_KEY.match(line)
+        if match:
+            key, value = match.group(1), match.group(2).strip()
+            fields[key] = "" if value in BLOCK_MARKERS else value.strip("\"'")
+        elif key and line.strip():
+            fields[key] = f"{fields[key]} {line.strip()}".strip()
+    return fields
 
 
 def validate(root: Path) -> tuple[list[str], int]:
@@ -48,9 +68,15 @@ def validate(root: Path) -> tuple[list[str], int]:
             if skill_name in names:
                 errors.append(f"Duplicate skill folder name across plugins: {skill_name}")
             names.add(skill_name)
-            contents = skill.read_text(encoding="utf-8")
-            if not contents.startswith("---\n") or "\n---" not in contents[4:]:
+            header = skill_header(skill.read_text(encoding="utf-8"))
+            label = f"{manifest['name']}/{skill_name}"
+            if header is None:
                 errors.append(f"{skill}: missing YAML frontmatter")
+                continue
+            if not header.get("description"):
+                errors.append(f"{label}: SKILL.md has no description - Claude Code leaves the skill out of its skill list")
+            if header.get("name") != skill_name:
+                errors.append(f"{label}: SKILL.md name must be its folder name {skill_name!r}")
     return errors, skill_count
 
 

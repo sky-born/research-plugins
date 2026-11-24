@@ -8,7 +8,7 @@ Claude Code·Codex 공통 스킬 마켓플레이스의 **소스 저장소**입�
 | 저장소 | `sky-born/research-plugins` (GitHub, 공개) |
 | 마켓플레이스 이름 | `research-plugins` |
 | 담긴 플러그인 | `.claude-plugin/marketplace.json` 의 `plugins` 가 목록의 원본입니다 |
-| 배포 | `python scripts/release.py` (`check` · `bump` · `publish`) |
+| 배포 | `python scripts/release.py` (`check` · `try` · `bump` · `publish`) |
 | 설치 · 갱신 | `python bootstrap/bootstrap.py` (`install` · `update` · `status`) |
 
 **원고 내용을 이 저장소에 넣지 않습니다.** 여기 들어가는 것은 어느 논문에도 통하는 공통 규칙과
@@ -65,13 +65,14 @@ git clone https://github.com/sky-born/research-plugins "$env:USERPROFILE\dev\res
 ## 1. 고쳤으면 배포까지가 한 작업입니다
 
 **파일만 고치고 끝내면 아무 컴퓨터에도 반영되지 않습니다.** 자동 갱신이 돌지 않기 때문입니다(§4).
-아래 넷을 한 묶음으로 봅니다.
+아래 다섯을 한 묶음으로 봅니다.
 
 1. 파일 수정
 2. **그 플러그인의 `.claude-plugin/plugin.json` 의 `version` 을 올립니다** —
    `python scripts/release.py bump <플러그인> patch|minor|major` 가 Codex 등록 파일과 해시 목록까지 함께 다시 만듭니다
-3. `python scripts/release.py publish` 로 검증·커밋·push·태그
-4. 반영이 필요한 컴퓨터에서 갱신 명령을 칩니다 (§4)
+3. `python scripts/release.py try <폴더>`
+4. `python scripts/release.py publish` 로 검증·커밋·push·태그
+5. 반영이 필요한 컴퓨터에서 갱신 명령을 칩니다 (§4)
 
 2번이 이 저장소의 유일한 배포 신호입니다. 플러그인이 상대 경로(`./plugins/...`)로 배포되므로
 `plugin.json` 의 `version` 값이 곧 배포 버전이고, 이 값이 바뀌어야 다른 컴퓨터가 새 버전으로 봅니다.
@@ -96,9 +97,11 @@ python scripts/release.py publish -m "무엇을 고쳤는지 (72자 이내)"
 `check` 가 두 파일의 제목 구조 · 코드 블록(주석과 `<자리표시>` 는 빼고) · 링크 대상이 같은지 검사합니다.
 이 문서 · 스킬 본문 · 플러그인 README 는 한국어로 둡니다.
 
+**스크립트의 도움말(`--help`)에는 필요한 최소한만 담습니다.**
+
 **배포 전 검증** — `python scripts/release.py check` 가 공통 구성 · 해시 목록 · Claude 매니페스트 · 버전 규칙 · 시험
-(합성 표본: 저널 · 학위논문 × 옛 · 새 형식의 추적 파일)을 돌립니다. 여기에 들어 있지 않은 것이 하나 있습니다 —
-**`python -X utf8 scripts/preview_projects.py <자매 프로젝트> …`**
+(합성 표본: 저널 · 학위논문 × 옛 · 새 형식의 추적 파일)을 돌립니다. 여기에 들어 있지 않은 것은 §1 의 `try` 와
+**`python -X utf8 scripts/preview_projects.py <자매 프로젝트> …`** 입니다
 (실제 프로젝트의 추적 파일 **사본**에 새 도구를 돌려 예고한 차이와 같은지 — 원본에는 쓰지 않음. `grammar_baseline.py` 를 고쳤으면 `--grammar` 로
 원고 사본에 grammar_baseline 시나리오도 돌림 — 설정에 `grammar` 키가 없는 프로젝트는 `--set grammar=<JSON>`). 관리 파일
 (`new-manuscript/managed_files.json` 의 목록)을 `bump` 뒤에 더 고쳤으면 `python -X utf8 scripts/tool_hashes.py` 로 해시 목록을 다시 만들어

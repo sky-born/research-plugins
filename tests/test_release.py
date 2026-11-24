@@ -294,6 +294,69 @@ class ReadmeParity(unittest.TestCase):
         self.assertEqual([], problems)
 
 
+class TryInSession(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="release-try-test-")
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        (self.root / ".claude-plugin").mkdir()
+        (self.root / ".claude-plugin" / "marketplace.json").write_text(json.dumps(
+            {"name": "test-marketplace", "plugins": [{"name": "example", "source": "./plugins/example"}]}), encoding="utf-8")
+        for skill in ("one", "two"):
+            path = self.root / "plugins" / "example" / "skills" / skill / "SKILL.md"
+            path.parent.mkdir(parents=True)
+            path.write_text("", encoding="utf-8")
+        self.folder = self.root / "trial"
+        self.folder.mkdir()
+
+    def start(self, path=None, skills=("example:one", "example:two")) -> dict:
+        return {"plugins": [{"name": "example", "path": str(path or self.root / "plugins" / "example")}],
+                "skills": list(skills)}
+
+    def problems(self, start: dict) -> list[str]:
+        return release.load_problems(start, self.root, ["example"])
+
+    def run_try(self, start: dict) -> tuple[int, str]:
+        out = io.StringIO()
+        with mock.patch.object(release, "find_claude", return_value=("claude", "test")), \
+                mock.patch.object(release, "claude_version", return_value="claude 0.0.0"), \
+                mock.patch.object(release, "read_start_info", return_value=start), \
+                mock.patch.object(release.sys.stdin, "isatty", return_value=False), \
+                contextlib.redirect_stdout(out):
+            code = release.main(["try", str(self.folder), "--root", str(self.root)])
+        return code, out.getvalue()
+
+    def test_one_plugin_dir_per_plugin(self):
+        self.assertEqual(["--plugin-dir", str(self.root / "plugins" / "a"), "--plugin-dir", str(self.root / "plugins" / "b")],
+                         release.plugin_dir_args(self.root, ["a", "b"]))
+
+    def test_clone_with_every_skill_listed_passes(self):
+        self.assertEqual([], self.problems(self.start()))
+
+    def test_installed_copy_is_reported(self):
+        self.assertIn("not from this clone", self.problems(self.start(path=self.root / "cache" / "example"))[0])
+
+    def test_skill_missing_from_the_session_is_reported(self):
+        self.assertIn("example:two is not in the session's skill list", self.problems(self.start(skills=["example:one"]))[0])
+
+    def test_plugin_not_loaded_is_reported(self):
+        self.assertEqual(["example was not loaded"], self.problems({"plugins": [], "skills": []}))
+
+    def test_start_up_info_without_lists_stops_instead_of_passing(self):
+        self.assertIn("has no plugins or skills list", self.problems({})[0])
+
+    def test_outside_a_terminal_it_prints_the_command_instead_of_opening(self):
+        code, out = self.run_try(self.start())
+        self.assertEqual(0, code)
+        self.assertIn("open the session yourself", out)
+        self.assertIn("--plugin-dir", out)
+
+    def test_a_problem_stops_before_the_session(self):
+        code, out = self.run_try(self.start(skills=[]))
+        self.assertEqual(1, code)
+        self.assertNotIn("open the session yourself", out)
+
+
 class FindClaude(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="claude-cli-test-")

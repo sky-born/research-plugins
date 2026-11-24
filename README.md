@@ -189,7 +189,7 @@ research-plugins/
 ├── bootstrap/
 │   └── bootstrap.py                 Register, install, update, status for both apps (install · update · status)
 ├── scripts/
-│   ├── release.py                   Check, version bump, release (check · bump · publish)
+│   ├── release.py                   Check, try out, version bump, release (check · try · bump · publish)
 │   ├── cli_common.py                Helpers shared by the two scripts above
 │   ├── sync_codex_manifests.py      Writes everything derived from plugin.json; reports drift
 │   ├── validate_shared_plugins.py   Validates the layout both apps share
@@ -294,6 +294,7 @@ python scripts/release.py bump <plugin> patch
 
 # 4) check first
 python scripts/release.py check
+python scripts/release.py try <folder>
 
 # 5) release
 python scripts/release.py publish -m "paper-index v0.10.0: short summary"

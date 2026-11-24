@@ -76,6 +76,20 @@ class DistributionTests(unittest.TestCase):
         errors, _ = validate(self.root)
         self.assertTrue(any("missing SKILL.md" in error for error in errors))
 
+    def test_skill_without_description_is_rejected(self):
+        self.skill.write_text("---\nname: example\n---\nShared content.\n", encoding="utf-8")
+        errors, _ = validate(self.root)
+        self.assertTrue(any("has no description" in error for error in errors))
+
+    def test_skill_name_other_than_its_folder_is_rejected(self):
+        self.skill.write_text("---\nname: other\ndescription: An example skill.\n---\nShared content.\n", encoding="utf-8")
+        errors, _ = validate(self.root)
+        self.assertTrue(any("must be its folder name" in error for error in errors))
+
+    def test_multi_line_description_counts(self):
+        self.skill.write_text("---\nname: example\ndescription: >\n  An example\n  skill.\n---\nShared content.\n", encoding="utf-8")
+        self.assertEqual(validate(self.root), ([], 1))
+
     def test_marketplace_display_fields_follow_the_plugin_manifest(self):
         entry = json.loads(self.marketplace.read_text(encoding="utf-8"))["plugins"][0]
         self.assertEqual("Shared example.", entry["description"])           # filled in by the first sync

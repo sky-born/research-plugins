@@ -189,7 +189,7 @@ research-plugins/
 ├── bootstrap/
 │   └── bootstrap.py                 두 앱의 등록 · 설치 · 갱신 · 상태 (install · update · status)
 ├── scripts/
-│   ├── release.py                   검사 · 버전 올림 · 배포 (check · bump · publish)
+│   ├── release.py                   검사 · 세션 시험 · 버전 올림 · 배포 (check · try · bump · publish)
 │   ├── cli_common.py                위 두 스크립트가 함께 쓰는 도우미
 │   ├── sync_codex_manifests.py      plugin.json 에서 나오는 생성물 만들기 · 어긋남 검사
 │   ├── validate_shared_plugins.py   두 앱의 공통 배포 구성 검증
@@ -294,6 +294,7 @@ python scripts/release.py bump <플러그인> patch
 
 # 4) 검사만 먼저
 python scripts/release.py check
+python scripts/release.py try <폴더>
 
 # 5) 배포
 python scripts/release.py publish -m "paper-index v0.10.0: short summary"
