@@ -1,0 +1,56 @@
+{
+  "name": "research-plugins",
+  "version": "1.2.0",
+  "description": "학술 논문 집필 규칙과 PDF 문헌 검색 플러그인. Claude Code 와 Codex 가 같은 스킬을 씁니다.",
+  "owner": {
+    "name": "sky-born",
+    "url": "https://github.com/sky-born"
+  },
+  "renames": {
+    "thesis-draft": null
+  },
+  "plugins": [
+    {
+      "name": "research-writing",
+      "displayName": "Research Writing",
+      "source": "./plugins/research-writing",
+      "description": "학술 논문 집필의 공통 작업 규칙 — 문체·금지 표현, 근거 등급 헤지, 인용 확정, 수정안 제시와 확정 선언 프로토콜, 미결 항목 추적 구조, 도판 기술 규칙. 어느 폴더에서든 원고 작업을 시작하는 진입 스킬과, 새 원고 프로젝트를 도구·설정·추적 파일까지 한 번에 만드는 초기화 스킬을 함께 담습니다.",
+      "author": {
+        "name": "sky-born"
+      },
+      "repository": "https://github.com/sky-born/research-plugins",
+      "license": "MIT",
+      "category": "research",
+      "keywords": [
+        "writing",
+        "manuscript",
+        "academic",
+        "thesis",
+        "revision",
+        "scaffold"
+      ],
+      "strict": true
+    },
+    {
+      "name": "paper-index",
+      "displayName": "Paper Index",
+      "source": "./plugins/paper-index",
+      "description": "PDF 문헌 라이브러리를 전문까지 인덱싱하고 검색합니다. Scopus 검색은 초록까지 받아(COMPLETE view) 보유 문헌과 자동 대조하고, 미보유 오픈액세스 논문은 임시 폴더에 받아 전문 텍스트까지 만듭니다(--fetch-oa). 파일명이 바뀌어도 내용으로 다시 맞춥니다. API 키는 환경변수에서만 읽습니다.",
+      "author": {
+        "name": "sky-born"
+      },
+      "repository": "https://github.com/sky-born/research-plugins",
+      "license": "MIT",
+      "category": "research",
+      "keywords": [
+        "research",
+        "literature",
+        "pdf",
+        "search",
+        "bibliography",
+        "scopus"
+      ],
+      "strict": true
+    }
+  ]
+}

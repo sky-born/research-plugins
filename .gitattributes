@@ -1,0 +1,8 @@
+# 여러 컴퓨터에서 core.autocrlf 설정이 달라도 저장소 내용이 흔들리지 않게 고정합니다.
+* text=auto eol=lf
+
+*.png    binary
+*.jpg    binary
+*.pdf    binary
+*.docx   binary
+*.pptx   binary

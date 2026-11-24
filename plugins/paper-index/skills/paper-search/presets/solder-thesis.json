@@ -1,0 +1,139 @@
+{
+  "name": "solder-thesis",
+  "description": "저온 솔더(Sn-Bi-In)·계면반응·전자패키징 분야의 예시 프리셋. 한 학위논문의 문헌에 맞춰 손질한 규칙입니다.",
+  "tags": {
+    "Sn-Bi-In 삼원계": [
+      "Sn[\\s\\-–]?Bi[\\s\\-–]?In",
+      "\\bSBI\\b",
+      "Sn-\\d+Bi-\\d+In"
+    ],
+    "Sn-Bi 이원계/저온솔더": [
+      "Sn[\\s\\-–]?Bi\\b",
+      "\\b58Bi42Sn\\b",
+      "\\bSn-?57Bi",
+      "low[- ]temperature solder",
+      "\\bLTS\\b"
+    ],
+    "Sn-In / In 첨가": [
+      "Sn[\\s\\-–]?In\\b",
+      "\\bSn52In\\b",
+      "indium addition"
+    ],
+    "상평형·CALPHAD·응고": [
+      "CALPHAD",
+      "phase diagram",
+      "phase equilibri",
+      "Scheil",
+      "liquidus",
+      "solidus",
+      "solidification"
+    ],
+    "ENIG / Ni(P) / Ni3P": [
+      "\\bENIG\\b",
+      "electroless Ni",
+      "Ni[\\s\\-–]?P\\b",
+      "Ni3P",
+      "Ni\\(P\\)",
+      "ENEPIG"
+    ],
+    "Ni-Sn IMC (Ni3Sn4)": [
+      "Ni3Sn4",
+      "\\(Ni,Cu\\)3Sn4",
+      "\\(Cu,Ni\\)6Sn5"
+    ],
+    "Cu-Sn IMC (Cu6Sn5/Cu3Sn)": [
+      "Cu6Sn5",
+      "Cu3Sn"
+    ],
+    "OSP / 표면처리(surface finish)": [
+      "\\bOSP\\b",
+      "organic solderability",
+      "surface finish",
+      "pad finish",
+      "metal finish"
+    ],
+    "IMC 성장속도론 (LSW/FDR/ripening)": [
+      "\\bripening\\b",
+      "Ostwald",
+      "Lifshitz",
+      "Slyozov",
+      "flux[- ]driven",
+      "coarsening",
+      "growth kinetic"
+    ],
+    "전단시험·기계물성": [
+      "shear (test|strength|speed|rate|properties)",
+      "ball shear",
+      "tensile (test|strength)",
+      "elongation",
+      "nanoindentation",
+      "creep"
+    ],
+    "충격·낙하·고변형률": [
+      "drop (test|impact)",
+      "shock",
+      "high strain rate",
+      "impact (test|reliability|load)"
+    ],
+    "파괴·균열·fractography": [
+      "fracture (surface|path|behavior|mode|mechanic)",
+      "crack (path|propagation|initiation)",
+      "brittle fracture",
+      "fractograph"
+    ],
+    "시효(aging)·신뢰성": [
+      "isothermal aging",
+      "thermal aging",
+      "aging treatment",
+      "thermal cycling",
+      "reliability (test|assessment|analysis)"
+    ],
+    "전자이동(EM)·Joule heating": [
+      "electromigration",
+      "current stressing",
+      "Joule heating"
+    ],
+    "리플로우·공정": [
+      "reflow (profile|process|cycle|soldering)",
+      "multiple reflow",
+      "solder paste",
+      "\\bwetting\\b"
+    ],
+    "도금·전착": [
+      "electroplating",
+      "electrodeposit",
+      "electroless plating",
+      "도금"
+    ],
+    "어드밴스드 패키징 (ECTC)": [
+      "Electronic Components and Technology Conference",
+      "heterogeneous integration",
+      "hybrid bonding",
+      "fan[- ]out",
+      "interposer",
+      "\\bRDL\\b",
+      "chiplet"
+    ],
+    "표준·규격": [
+      "JEDEC (STANDARD|JESD)",
+      "IPC/JEDEC",
+      "JESD22",
+      "J-STD-"
+    ],
+    "교과서·일반이론": [
+      "Fourth Edition",
+      "10th Edition",
+      "Phase Transformations in Metals",
+      "Lecture Notes"
+    ],
+    "비주제(참고용)": [
+      "perovskite solar",
+      "convolutional neural network",
+      "high entropy alloy",
+      "General Relativity",
+      "qubit",
+      "photonic",
+      "buck converter"
+    ]
+  }
+}

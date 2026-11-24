@@ -1,0 +1,32 @@
+{
+  "name": "research-plugins",
+  "interface": {
+    "displayName": "Research Plugins"
+  },
+  "plugins": [
+    {
+      "name": "research-writing",
+      "source": {
+        "source": "local",
+        "path": "./plugins/research-writing"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Research"
+    },
+    {
+      "name": "paper-index",
+      "source": {
+        "source": "local",
+        "path": "./plugins/paper-index"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Research"
+    }
+  ]
+}

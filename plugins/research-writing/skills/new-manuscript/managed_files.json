@@ -1,0 +1,18 @@
+{
+  "_설명": "new-manuscript 가 프로젝트에 복사해 관리하는 파일의 목록 — 이 파일이 원본입니다(손으로 유지). init_manuscript.py · update_tools.py · scripts/tool_hashes.py 가 함께 읽고, tool_hashes.json 은 여기서 생성됩니다. src 는 이 폴더 기준, dst 는 프로젝트 루트 기준입니다.",
+  "files": [
+    {"src": "tools/_config.py", "dst": "도구/_config.py"},
+    {"src": "tools/_위치.py", "dst": "도구/_위치.py"},
+    {"src": "tools/번호점검.py", "dst": "도구/번호점검.py"},
+    {"src": "tools/수정필요_정리.py", "dst": "도구/수정필요_정리.py"},
+    {"src": "tools/완료기록_색인.py", "dst": "도구/완료기록_색인.py"},
+    {"src": "tools/완료기록_새항목.py", "dst": "도구/완료기록_새항목.py"},
+    {"src": "tools/미결_새항목.py", "dst": "도구/미결_새항목.py"},
+    {"src": "tools/_동기화.py", "dst": "도구/_동기화.py"},
+    {"src": "tools/동기화_점검.py", "dst": "도구/동기화_점검.py"},
+    {"src": "tools/문법기준.py", "dst": "도구/문법기준.py"},
+    {"src": "hooks/guard_write.py", "dst": ".claude/hooks/guard_write.py"}
+  ],
+  "settings_example": "hooks/settings.example.json",
+  "settings_target": ".claude/settings.json"
+}

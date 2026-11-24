@@ -1,0 +1,30 @@
+{
+  "name": "paper-index",
+  "version": "0.10.2",
+  "description": "PDF 문헌 라이브러리를 전문까지 인덱싱하고 검색합니다. Scopus 검색은 초록까지 받아(COMPLETE view) 보유 문헌과 자동 대조하고, 미보유 오픈액세스 논문은 임시 폴더에 받아 전문 텍스트까지 만듭니다(--fetch-oa). 파일명이 바뀌어도 내용으로 다시 맞춥니다. API 키는 환경변수에서만 읽습니다.",
+  "author": {
+    "name": "sky-born"
+  },
+  "license": "MIT",
+  "keywords": [
+    "research",
+    "literature",
+    "pdf",
+    "search",
+    "bibliography",
+    "scopus"
+  ],
+  "repository": "https://github.com/sky-born/research-plugins",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Paper Index",
+    "shortDescription": "PDF 문헌 라이브러리를 전문까지 인덱싱하고 검색합니다",
+    "longDescription": "PDF 문헌 라이브러리를 전문까지 인덱싱하고 검색합니다. Scopus 검색은 초록까지 받아(COMPLETE view) 보유 문헌과 자동 대조하고, 미보유 오픈액세스 논문은 임시 폴더에 받아 전문 텍스트까지 만듭니다(--fetch-oa). 파일명이 바뀌어도 내용으로 다시 맞춥니다. API 키는 환경변수에서만 읽습니다.",
+    "developerName": "sky-born",
+    "category": "Research",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Paper Index 스킬로 현재 프로젝트 작업을 도와주세요."
+    ]
+  }
+}

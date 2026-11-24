@@ -1,0 +1,55 @@
+# Changelog
+
+플러그인별 배포 이력입니다. 새 판을 배포할 때 그 플러그인 절의 맨 위에 `### <버전> — <날짜>` 와 바뀐 점을 적습니다.
+`python scripts/release.py check` 가 올린 버전의 항목이 있는지 검사합니다.
+공개 저장소로 옮기기 전의 커밋과 태그는 이 저장소에 없습니다. 아래에 적힌 것이 그 전 이력의 전부입니다.
+
+## research-writing
+
+### 0.12.2 — 2026-11-24
+
+- 공개 저장소 `sky-born/research-plugins` 로 옮김 — README 의 설치 줄과 매니페스트의 저장소 주소를 새 주소로
+
+### 0.12.1 — 2026-11-23
+
+- 플러그인 `README.md` 추가 — 설치 한 줄, 필요한 것(Windows 의 훅은 Git Bash 가 있어야 돎), 스킬 · 훅 · 프로젝트 도구 요약
+- `plugin.json` 의 키워드에 `scaffold` 추가 (마켓플레이스 항목에만 있던 것)
+
+## paper-index
+
+### 0.10.2 — 2026-11-24
+
+- 공개 저장소 `sky-born/research-plugins` 로 옮김 — README 의 설치 줄과 매니페스트의 저장소 주소를 새 주소로
+
+### 0.10.1 — 2026-11-23
+
+- 프리셋 `solder-thesis.json` 의 설명을 예시 프리셋으로 고침 (태그 규칙은 그대로)
+
+### 0.10.0 — 2026-11-23
+
+- Scopus 를 부르는 구현을 `lib/scopus.py` 하나로 줄임 — `scopus_search.ps1` 과, 더블클릭용 실행 파일을 만들던 `make_launcher.py` 를 없앰.
+  직접 호출이 막힌 환경에서는 키가 설정된 컴퓨터의 터미널에서 같은 `papertool.py scopus` 명령을 실행
+- `scopus-merge` 가 실행 파일을 자동으로 치우지 않음. `--keep-launcher` 는 받기만 하고 아무 일도 하지 않음
+- `scopus-tidy` 는 0.9 이하 판이 인덱스 폴더에 남긴 실행 파일 정리용으로 남김
+- `README.md` 의 옛 이름(`paper-index-tool`)을 고치고 설치 한 줄을 추가
+
+## 저장소 — 플러그인 밖
+
+### 2026-11-24 — 공개
+
+- 공개 저장소 `sky-born/research-plugins` 로 옮김. 그 전의 커밋과 태그는 옮기지 않음
+- 마켓플레이스 등록 이름을 `personal-marketplace` 에서 `research-plugins` 로 바꿈 — 옛 이름으로 등록한 컴퓨터는 옛 등록을 지우고 다시 설치
+
+### 2026-11-23
+
+- 배포 · 설치 스크립트를 Python 으로 옮김 — `scripts/release.py`(`check` · `bump` · `publish`), `bootstrap/bootstrap.py`(`install` · `update` · `status`).
+  `release.ps1` · `bootstrap.ps1` · `bootstrap.sh` · `codex.py` 를 없앰
+- 설치 스크립트가 플러그인 목록을 `marketplace.json` 에서, 저장소 주소를 `git remote` 에서 읽음. 설정 파일을 직접 고치지 않음
+- 마켓플레이스 항목의 표시 필드(설명 · 작성자 · 라이선스 · 키워드)를 `plugin.json` 에서 생성 — 두 곳에 따로 적다가 어긋났던 것을 맞춤
+- `CHANGELOG.md` · `LICENSE` 추가, 커밋 제목은 72자 이내로
+- `README.md` 를 영어로 쓰고 한국어본을 `README.ko.md` 로 둠. `check` 가 두 파일의 구조가 같은지 검사
+- GitHub Actions(`.github/workflows/check.yml`)로 push 마다 Windows · macOS · Linux 에서 `release.py check` 실행
+- 컴퓨터별 환경 기록을 저장소 밖으로 옮김 — `CLAUDE.md` §3 에는 확인하는 방법과 어디서나 지킬 것만 남김
+- `tool_hashes.py` 가 이 저장소의 이력에 없는 판의 해시를 이어받음 — 이력 없이 새로 시작한 저장소에서도 `check` 가 통과
+- `bootstrap.py` 가 마켓플레이스가 다른 주소로 등록돼 있으면 갱신하지 않고 멈춤
+- 시험 파일과 README 에서 개인 경로와 프로젝트 이름을 뺌. README 의 비공개 관련 문장을 공개 뒤에도 맞는 표현으로 고침

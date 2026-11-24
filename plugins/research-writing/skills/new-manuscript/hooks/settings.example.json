@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && { [ -f .claude/hooks/guard_write.py ] || exit 0; } && case \"$(uname -s)\" in MINGW*|MSYS*|CYGWIN*) PY=python;; *) PY=python3;; esac && \"$PY\" .claude/hooks/guard_write.py pre",
+            "timeout": 15,
+            "statusMessage": "공용 파일 쓰기 검사"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}\" && { [ -f .claude/hooks/guard_write.py ] || exit 0; } && case \"$(uname -s)\" in MINGW*|MSYS*|CYGWIN*) PY=python;; *) PY=python3;; esac && \"$PY\" .claude/hooks/guard_write.py post",
+            "timeout": 20,
+            "statusMessage": "공용 파일 스냅샷"
+          }
+        ]
+      }
+    ]
+  }
+}
