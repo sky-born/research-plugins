@@ -13,7 +13,7 @@ They are versioned in this one repository so that **every computer and every acc
 | Updates | Manual — see [Updating](#updating) |
 | Editing this repository | [`CLAUDE.md`](CLAUDE.md) (in Korean) — which clone to edit, the release steps |
 
-**Jump to** — [Plugins](#plugins) · [Installing](#installing) · [Updating](#updating) · [Repository layout](#repository-layout) · [Changing and releasing](#changing-and-releasing) · [Adding a plugin](#adding-a-plugin) · [Credentials for the private repository](#credentials-for-the-private-repository) · [Troubleshooting](#troubleshooting)
+**Jump to** — [Plugins](#plugins) · [Installing](#installing) · [Updating](#updating) · [Repository layout](#repository-layout) · [Changing and releasing](#changing-and-releasing) · [Adding a plugin](#adding-a-plugin) · [Credentials for pushing](#credentials-for-pushing) · [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -34,7 +34,7 @@ The call syntax differs per app, but **both apps read the same instructions and 
 
 ## Installing
 
-Do this once per computer and account. While the repository is private, [credentials](#credentials-for-the-private-repository) must be in place first.
+Do this once per computer and account. No GitHub login is needed.
 Claude Code and Codex use the same command — the script finds the apps on the computer and registers and installs for each.
 
 **Windows (PowerShell)**
@@ -108,9 +108,6 @@ For Codex the script only calls Codex's own marketplace and plugin commands.
 ```
 
 </details>
-
-> [!NOTE]
-> For a private repository Codex needs **local Git authentication**. Connecting GitHub in ChatGPT does not create it.
 
 <details>
 <summary>Codex — going back from a local test registration to GitHub</summary>
@@ -366,17 +363,11 @@ An old name in another computer's settings is then moved to the new one. Entries
 
 ---
 
-## Credentials for the private repository
+## Credentials for pushing
 
-A private repository needs **GitHub credentials stored on each computer and account**. Without them the update commands fail. A public repository needs none.
+Installing and updating need no login. Only pushing (`release.py publish`) needs **GitHub credentials stored on that computer**. Store them one of two ways.
 
-```bash
-GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/sky-born/research-plugins HEAD
-```
-
-If that succeeds, you are set. If it fails, fix it one of two ways.
-
-- **Windows** — run `git clone https://github.com/sky-born/research-plugins` once and sign in at the Git Credential Manager prompt.
+- **Windows** — sign in at the Git Credential Manager prompt on the first push.
 - **With the `gh` CLI** — `gh auth login`, then `gh auth setup-git`
 
 ---
@@ -386,7 +377,7 @@ If that succeeds, you are set. If it fails, fix it one of two ways.
 | Symptom | What to check |
 |---|---|
 | A skill does not show up | Reopen the session. Check registration and installation with `python bootstrap/bootstrap.py status` |
-| A new version does not arrive | Did you run the [update command](#updating)? → Was that plugin's `version` raised ([Version rule](#version-rule))? → [Credentials](#credentials-for-the-private-repository) |
+| A new version does not arrive | Did you run the [update command](#updating)? → Was that plugin's `version` raised ([Version rule](#version-rule))? |
 | An edit has no effect | You may have edited the cache instead of the working clone ([Three clones](#three-clones)) |
 | The marketplace is reported missing | Run `python bootstrap/bootstrap.py install` again |
 | `claude` is reported as not found | Point at the executable with `--claude <path>` |

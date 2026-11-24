@@ -59,6 +59,10 @@
 
 ## 저장소 — 플러그인 밖
 
+### 2026-11-24 — README 공개 기준
+
+- README 두 판에서 비공개 저장소 전제를 뺌 — 설치 · 갱신에는 로그인이 필요 없고, 자격증명 절은 push 용으로 줄임
+
 ### 2026-11-24 — macOS 에서 앱에 든 codex · claude 찾기
 
 - `bootstrap.py` 가 macOS 에서도 앱에 든 `codex` 를 찾음 — `/Applications` · `~/Applications` 의 앱 가운데
