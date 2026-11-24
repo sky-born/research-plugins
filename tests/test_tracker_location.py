@@ -545,7 +545,7 @@ class UpdateToolsTests(Fixtures):
         before = snapshot(p)
         r = run(PY + [str(ROOT / "scripts" / "preview_projects.py"), str(p), "--focus", "ch3",
                       "--set", 'tracker.record_index_exclude=["archive/"]'], cwd=ROOT)
-        self.assertIn("두 번 돌려도 같음: 예", r.stdout)
+        self.assertIn("same after two runs: yes", r.stdout)
         self.assertIn("tracker_records_index.md", r.stdout)
         self.assertEqual(before, snapshot(p), "미리보기는 원본에 쓰지 않습니다")
 
@@ -556,7 +556,7 @@ class UpdateToolsTests(Fixtures):
         for m in manifest["files"]:
             self.assertTrue((SKILL / m["src"]).is_file(), m["src"])
         r = run(PY + [str(ROOT / "scripts" / "tool_hashes.py"), "--check"], cwd=ROOT)
-        self.assertIn("최신", r.stdout)
+        self.assertIn("is current", r.stdout)
 
 
 if __name__ == "__main__":

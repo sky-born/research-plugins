@@ -41,7 +41,7 @@ BODY_LIMIT = 160
 TRAILER = re.compile(r"^[A-Za-z][A-Za-z-]*-by:", re.IGNORECASE | re.MULTILINE)   # Co-Authored-By, Signed-off-by ...
 PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 COMMIT_RULE = ("write a subject, plus one short sentence on why only if it needs one; "
-               "what changed goes in CHANGELOG.md, with no trailers (CLAUDE.md)")
+               "what changed in a plugin goes in CHANGELOG.md, with no trailers (CLAUDE.md)")
 # Fenced blocks whose text is prose (a tree with descriptions, a diagram) may differ between
 # README translations. Every other fenced block must match once comments are removed.
 TRANSLATED_FENCES = {"", "mermaid"}
@@ -197,8 +197,8 @@ def plugin_changes(root: Path, baseline: str, plugins: list[str], changed: list[
     return bumped, stale
 
 
-def changelog_problems(root: Path, bumped: list[Bump]) -> list[str]:
-    """Each released version needs an entry with at least one bullet under its plugin's heading."""
+def changelog_problems(root: Path, bumped: list[Bump], plugins: list[str]) -> list[str]:
+    """One `##` section per plugin and nothing else; each released version needs an entry with at least one bullet."""
     path = root / "CHANGELOG.md"
     if not path.is_file():
         return []
@@ -211,7 +211,8 @@ def changelog_problems(root: Path, bumped: list[Bump]) -> list[str]:
             sections[current] = ""
         elif current is not None:
             sections[current] += line + "\n"
-    problems = []
+    problems = [f"CHANGELOG.md: '## {name}' is not a plugin in marketplace.json - the file has one section per plugin"
+                for name in sections if name not in plugins]
     for bump in bumped:
         entry = re.search(rf"^###\s+{re.escape(bump.new)}(?![0-9A-Za-z.+-]).*\n(?P<body>(?:(?!###\s).*\n?)*)",
                           sections.get(bump.name, ""), flags=re.MULTILINE)
@@ -309,9 +310,9 @@ def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
         conflict = tag_conflict(root, bump)
         if conflict:
             raise Stop(conflict)
-    problems = changelog_problems(root, bumped)
+    problems = changelog_problems(root, bumped, plugins)
     if problems:
-        raise Stop("changelog entry missing:\n" + lines(problems))
+        raise Stop("changelog:\n" + lines(problems))
 
     step("Tests")
     if args.skip_tests:

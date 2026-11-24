@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""자매 프로젝트의 추적 파일 **사본**에 정본 도구를 돌려, 배포 전에 무엇이 바뀌는지 봅니다. 원본에는 쓰지 않습니다.
+"""Run the canonical tools on a **copy** of a sibling project's tracker files to see what a release would change. Never writes to the original.
 
-    python -X utf8 scripts/preview_projects.py <프로젝트> [<프로젝트> ...]
-        [--set tracker.record_index_exclude='["archive/"]' ...]   사본의 project.json 에 넣을 값(JSON)
-        [--with-manuscript]                                     원고 폴더도 복사해 check_numbers까지 돌림
-        [--focus chN]                                           그 장의 포커스 진단 개수
-        [--keep]                                                임시 폴더를 남김 (경로를 출력)
-        [--diff]                                                바뀐 생성 파일의 unified diff 를 출력
-        [--grammar]                                             grammar_baseline 시나리오도 원고 사본에 돌림(tests/grammar_scenarios.py)
+    python -X utf8 scripts/preview_projects.py <project> [<project> ...]
+        [--set tracker.record_index_exclude='["archive/"]' ...]   value (JSON) to put in the copy's project.json
+        [--with-manuscript]                                     also copy the manuscript folder and run check_numbers
+        [--focus chN]                                           focus diagnostics count for that chapter
+        [--keep]                                                keep the temporary folder (prints its path)
+        [--diff]                                                print a unified diff of changed generated files
+        [--grammar]                                             also run the grammar_baseline scenarios on a manuscript copy (tests/grammar_scenarios.py)
 
-하는 일 — 임시 폴더에 추적 파일 · 완료기록 · 설정 · 훅 · 도구를 복사하고, `managed_files.json` 대로 정본 파일을
-덮은 뒤 `index_records.py` 와 `tidy_tracker.py --apply`(두 번 — 두 번째는 바뀌지 않아야 함)를 돌리고
-원본과 견줍니다. 바뀐 파일 · 줄끝 · 크기 · 색인 §1 과 목록 §3 의 행 수를 보고합니다.
+What it does — copies tracker files · records · settings · hooks · tools to a temporary folder, overwrites them with the
+canonical files listed in `managed_files.json`, runs `index_records.py` and `tidy_tracker.py --apply` (twice — the second
+run must change nothing) and compares with the original. Reports changed files · line endings · sizes · row counts of index §1 and list §3.
 
---grammar — 설정(`--set` 반영 뒤)이 가리키는 문법 점검 범위(장 파일 · `grammar.sources` · `grammar.avoid_lists`)만 따로 임시 폴더에
-복사합니다. 루트 밖 경로(`../avoid_phrases/…`)는 사본 루트에서 같은 상대 위치에 둡니다. 정본 `grammar_baseline.py` 로 범위를 보이고(status)
-시나리오를 차례로 돌린 뒤, 원본 파일의 바이트가 그대로인지 확인합니다.
+--grammar — copies only the grammar-check scope the settings name (after `--set`: chapter files · `grammar.sources` ·
+`grammar.avoid_lists`) to a temporary folder of its own. Paths outside the root (`../avoid_phrases/…`) keep the same relative place
+from the copy's root. Shows the scope with the canonical `grammar_baseline.py` (status), runs the scenarios in turn, then checks
+that the original files' bytes are unchanged.
 """
 from __future__ import annotations
 
@@ -40,16 +41,16 @@ import _config  # noqa: E402
 
 
 def load_cfg(project: Path) -> dict:
-    """설정 파일 그대로에, 설정에 적지 않은 옛 기본 이름(0.12 이하)을 더한 것 — 사본은 이 값으로 돕니다."""
+    """The settings file as it is, plus old default names (0.12 or earlier) it does not write — the copy runs with these values."""
     for rel in ('.manuscript/project.json', '.writing/project.json'):
         p = project / rel
         if p.is_file():
             raw = json.loads(p.read_text(encoding='utf-8'))
             pins = _config.legacy_pins(str(project), raw)
             if pins:
-                print(f'옛 기본 이름을 설정에 적지 않은 프로젝트입니다 — 사본의 설정에 적고 돌립니다: {", ".join(pins)}')
+                print(f'The settings do not write the old default names — adding them to the copy\'s settings: {", ".join(pins)}')
             return _config._merge(raw, pins)
-    raise SystemExit(f'설정 파일이 없습니다: {project}')
+    raise SystemExit(f'No settings file: {project}')
 
 
 def load_raw(project: Path) -> dict:
@@ -60,7 +61,7 @@ def load_raw(project: Path) -> dict:
 
 
 def names(cfg: dict) -> dict:
-    """기본값과 합친 설정 — 이름을 읽을 때."""
+    """Settings merged with the defaults — for reading names."""
     return _config._merge(_config.DEFAULTS, cfg)
 
 
@@ -69,7 +70,7 @@ def copy_tree(src: Path, dst: Path):
 
 
 def block_rows(text: str, start: str, end: str) -> int:
-    """마커(또는 제목) 사이의 표 행 수 — 헤더 두 줄은 빼고 셉니다."""
+    """Table rows between the markers (or headings) — the two header lines are not counted."""
     try:
         a = text.index(start); b = text.index(end, a)
     except ValueError:
@@ -87,7 +88,7 @@ def set_key(cfg: dict, dotted: str, value):
 
 
 def run(cmd, cwd: Path):
-    # 동기화 안전장치의 컴퓨터별 상태는 실제 홈이 아니라 미리보기용 임시 폴더에 — 사본의 ID · 지문이 실제 프로젝트 상태를 더럽히지 않게
+    # per-computer state of the sync guard goes to the preview's temporary folder, not the real home — the copy's ID and fingerprint never touch the real project's state
     env = dict(os.environ)
     env.setdefault('SYNC_STATE_HOME', str(Path(tempfile.gettempdir()) / 'preview-sync-state'))
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
@@ -96,7 +97,7 @@ def run(cmd, cwd: Path):
 
 def preview_grammar(project: Path, sets: list[tuple[str, object]], keep: bool) -> int:
     sys.path.insert(0, str(REPO_ROOT / 'tests'))
-    import grammar_scenarios as S                    # 합성 표본 시험과 같은 시나리오
+    import grammar_scenarios as S                    # the same scenarios as the synthetic-sample tests
 
     raw = load_cfg(project)
     for k, v in sets:
@@ -115,7 +116,7 @@ def preview_grammar(project: Path, sets: list[tuple[str, object]], keep: bool) -
     depth = max([len([x for x in r.split('/') if x == '..']) for r in rels] + [0])
 
     tmp = Path(tempfile.mkdtemp(prefix='preview-grammar-' + project.name + '-'))
-    root = tmp.joinpath(*(['_'] * depth), project.name)   # 루트 밖 경로(`../`)도 임시 폴더 안에 놓이게
+    root = tmp.joinpath(*(['_'] * depth), project.name)   # so paths outside the root (`../`) also land inside the temporary folder
     state, work, outside = tmp / 'state', tmp / 'work', tmp / 'outside'
     rc = 0
     try:
@@ -134,14 +135,14 @@ def preview_grammar(project: Path, sets: list[tuple[str, object]], keep: bool) -
         (root / '.manuscript' / 'project.json').write_text(json.dumps(raw, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
         print('=' * 78)
-        print(f'grammar_baseline 미리보기  {project}')
-        print(f'임시 폴더 {tmp}')
+        print(f'grammar_baseline preview  {project}')
+        print(f'temporary folder {tmp}')
         if missing:
-            print('  ! 원본에 없는 범위 파일: ' + ' · '.join(missing))
+            print('  ! scope files missing from the original: ' + ' · '.join(missing))
         q = S.Proj(root, state)
         q.install()
         st = q.run('status', codes=None)
-        print('--- status (기준 없음 — 종료 %d)' % st.returncode)
+        print('--- status (no baseline — exit %d)' % st.returncode)
         print('\n'.join('    ' + l for l in st.stdout.rstrip().split('\n')))
         for name, fn, needs_work in S.SCENARIOS:
             try:
@@ -159,13 +160,13 @@ def preview_grammar(project: Path, sets: list[tuple[str, object]], keep: bool) -
         changed = [str(k) for k, b in before.items() if k.read_bytes() != b]
         if changed:
             rc = 1
-            print('  FAIL 원본 바이트가 바뀌었습니다: ' + ' · '.join(changed))
+            print('  FAIL original bytes changed: ' + ' · '.join(changed))
         else:
-            print(f'--- 원본 {len(before)}개 파일 바이트 그대로')
+            print(f'--- original {len(before)} files byte-identical')
         return rc
     finally:
         if keep:
-            print(f'임시 폴더를 남겼습니다: {tmp}')
+            print(f'kept the temporary folder: {tmp}')
         else:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -183,7 +184,7 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
     try:
         for f in tracker_files:
             if (project / f).is_file():
-                (tmp / f).parent.mkdir(parents=True, exist_ok=True)     # 추적 파일이 하위 폴더(`추적/`)에 있어도
+                (tmp / f).parent.mkdir(parents=True, exist_ok=True)     # even when tracker files sit in a subfolder (`추적/`)
                 shutil.copy2(project / f, tmp / f)
         for d in (records_dir, '.manuscript', '.writing', '.claude', tools_dir):
             if (project / d).is_dir():
@@ -191,14 +192,14 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
         src_dir = cfg.get('manuscript', {}).get('source_dir')
         if with_manuscript and src_dir and (project / src_dir).is_dir():
             copy_tree(project / src_dir, tmp / src_dir)
-        # 정본으로 덮기
+        # overwrite with the canonical files
         for item in manifest['files']:
             s = SKILL / item['src']; d = tmp / item['dst'].replace('{tools_dir}', tools_dir)
             d.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(s, d)
             if item.get('old'):
-                (d.parent / item['old']).unlink(missing_ok=True)          # update_tools --apply 가 하듯 옛 이름 사본은 지움
-        # 설정 값 넣기 (사본에만) — --set 과, 설정에 적지 않은 옛 이름
+                (d.parent / item['old']).unlink(missing_ok=True)          # remove old-name copies, as update_tools --apply does
+        # put settings values (copy only) — --set and old names the settings do not write
         if sets or cfg != load_raw(project):
             cfg_path = tmp / '.manuscript' / 'project.json'
             if not cfg_path.is_file():
@@ -209,24 +210,24 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
             cfg_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
         print('=' * 78)
-        print(f'미리보기  {project}')
-        print(f'임시 폴더 {tmp}')
+        print(f'preview  {project}')
+        print(f'temporary folder {tmp}')
         logs = []
         rc, out = run(PY + [str(tmp / tools_dir / 'index_records.py')], tmp); logs.append(('index_records.py', rc, out))
         rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--apply'], tmp); logs.append(('tidy_tracker.py --apply', rc, out))
         snap = {f: (tmp / f).read_bytes() for f in tracker_files if (tmp / f).is_file()}
-        rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--apply'], tmp); logs.append(('tidy_tracker.py --apply (2회)', rc, out))
+        rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--apply'], tmp); logs.append(('tidy_tracker.py --apply (2nd run)', rc, out))
         idem = all((tmp / f).read_bytes() == b for f, b in snap.items())
         if with_manuscript:
             rc, out = run(PY + [str(tmp / tools_dir / 'check_numbers.py')], tmp); logs.append(('check_numbers.py', rc, out))
         if focus:
-            rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--focus', focus], tmp); logs.append((f'--focus {focus} (진단)', rc, out))
+            rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--focus', focus], tmp); logs.append((f'--focus {focus} (diagnostics)', rc, out))
         for name, rc, out in logs:
-            print(f'--- {name}  (종료 {rc})')
+            print(f'--- {name}  (exit {rc})')
             print('\n'.join('    ' + l for l in out.rstrip().split('\n')[-12:]))
-        print(f'--- 두 번 돌려도 같음: {"예" if idem else "아니오 — 멱등이 아닙니다"}')
+        print(f'--- same after two runs: {"yes" if idem else "no — not idempotent"}')
 
-        print('--- 원본과의 차이')
+        print('--- differences from the original')
         for f in tracker_files:
             a, b = project / f, tmp / f
             if not a.is_file() or not b.is_file():
@@ -234,27 +235,27 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
             ab, bb = a.read_bytes(), b.read_bytes()
             eol = lambda x: 'CRLF' if b'\r\n' in x else 'LF'
             if ab == bb:
-                print(f'    {f:24s} 같음'); continue
+                print(f'    {f:24s} same'); continue
             at, bt = ab.decode('utf-8', 'replace'), bb.decode('utf-8', 'replace')
             note = []
             if eol(ab) != eol(bb):
-                note.append(f'줄끝 {eol(ab)} → {eol(bb)}')
-            note.append(f'{len(at):,} → {len(bt):,} 자')
+                note.append(f'line endings {eol(ab)} → {eol(bb)}')
+            note.append(f'{len(at):,} → {len(bt):,} chars')
             r1 = block_rows(at, '## 1.', '## 2.'); r2 = block_rows(bt, '## 1.', '## 2.')
             if r1 >= 0 and f == t.get('record_index'):
-                note.append(f'§1 {r1} → {r2} 행')
+                note.append(f'§1 {r1} → {r2} rows')
             r1 = block_rows(at, '<!-- 위치표 -->', '<!-- /위치표 -->'); r2 = block_rows(bt, '<!-- 위치표 -->', '<!-- /위치표 -->')
             if r1 >= 0:
-                note.append(f'§3 {r1} → {r2} 행')
-            print(f'    {f:24s} 바뀜 — ' + ' · '.join(note))
+                note.append(f'§3 {r1} → {r2} rows')
+            print(f'    {f:24s} changed — ' + ' · '.join(note))
             if show_diff:
                 for l in difflib.unified_diff(at.replace('\r\n', '\n').split('\n'), bt.replace('\r\n', '\n').split('\n'),
-                                              f'원본/{f}', f'사본/{f}', lineterm='', n=1):
+                                              f'original/{f}', f'copy/{f}', lineterm='', n=1):
                     print('        ' + l)
         return 0
     finally:
         if keep:
-            print(f'임시 폴더를 남겼습니다: {tmp}')
+            print(f'kept the temporary folder: {tmp}')
         else:
             shutil.rmtree(tmp, ignore_errors=True)
 

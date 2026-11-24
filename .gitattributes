@@ -1,4 +1,4 @@
-# 여러 컴퓨터에서 core.autocrlf 설정이 달라도 저장소 내용이 흔들리지 않게 고정합니다.
+# Pins line endings so the repository content stays the same whatever core.autocrlf is on each computer.
 * text=auto eol=lf
 
 *.png    binary

@@ -12,7 +12,7 @@ They are developed with AI coding assistants (Claude Code · Codex).
 | Repository | `sky-born/research-plugins` |
 | Plugins | `research-writing` · `paper-index` |
 | Updates | Manual — see [Updating](#updating) |
-| Editing this repository | [`CLAUDE.md`](CLAUDE.md) (in Korean) — which clone to edit, the release steps |
+| Editing this repository | [`CLAUDE.md`](CLAUDE.md) — which clone to edit, the release steps |
 
 **Jump to** — [Plugins](#plugins) · [Installing](#installing) · [Updating](#updating) · [Repository layout](#repository-layout) · [Changing and releasing](#changing-and-releasing) · [Adding a plugin](#adding-a-plugin) · [Credentials for pushing](#credentials-for-pushing) · [Troubleshooting](#troubleshooting)
 
@@ -28,7 +28,7 @@ They are developed with AI coding assistants (Claude Code · Codex).
 | `paper-index` | `paper-search` | Indexes a PDF library, searches the full text, and matches Scopus results against the papers you own | `/paper-index:paper-search` |
 
 In Codex, pick the skill of the same name in the skill picker.
-The skill instructions and the names of the tools copied into a project are in Korean.
+The skill instructions are in Korean.
 The call syntax differs per app, but **both apps read the same instructions and run the same tools** ([One source, two registrations](#one-source-two-registrations)).
 
 ---
@@ -175,7 +175,7 @@ and the latter works against a value the desktop app sets, so it would have to b
 research-plugins/
 ├── README.md                        Install and usage (this file)
 ├── README.ko.md                     The same content in Korean
-├── CLAUDE.md                        Working rules for editing this repository (Korean)
+├── CLAUDE.md                        Working rules for editing this repository
 ├── AGENTS.md                        Entry note for Codex (points to CLAUDE.md)
 ├── CHANGELOG.md                     Release history per plugin
 ├── LICENSE                          MIT
@@ -319,7 +319,7 @@ A tag goes on the last commit that changed that plugin's folder.
 
 | Option | Meaning |
 |---|---|
-| `-m "..."` | Commit subject (up to 72 characters), usually all the message needs. A second `-m` adds one short sentence on why; what changed goes in `CHANGELOG.md`. Trailers such as `Co-Authored-By` stop it. Without it the subject is built from the changed plugins and versions |
+| `-m "..."` | Commit subject (up to 72 characters), usually all the message needs. A second `-m` adds one short sentence on why; what changed in a plugin goes in `CHANGELOG.md`. Trailers such as `Co-Authored-By` stop it. Without it the subject is built from the changed plugins and versions |
 | `--no-push` | Commit and tag only (`publish`) |
 | `--no-tag` | Do not create tags (`publish`) |
 | `--skip-tests` | Do not run the tests — the output says they were not run |
@@ -357,6 +357,7 @@ The install script reads the plugin list from `marketplace.json`, so nothing els
 
 **When a plugin is renamed or removed**, record it under `renames` in `marketplace.json`.
 An old name in another computer's settings is then moved to the new one. Entries in this table are kept, not deleted.
+Delete a removed plugin's section from `CHANGELOG.md` too — `check` stops on a section that is not a plugin.
 
 ```json
 "renames": { "old-name": "new-name", "removed-name": null }
@@ -393,17 +394,3 @@ claude plugin validate plugins/paper-index
 claude plugin marketplace list
 claude plugin list
 ```
-
----
-
-<details>
-<summary>History — what moved here from earlier setups</summary>
-
-- **`thesis-draft`** is not in this repository. It used to be a plugin (tags `thesis-draft--v1.0.1` · `v1.1.0`) and now lives in the thesis project's `.claude/skills/thesis-draft/`. `renames` in `marketplace.json` marks it as removed.
-- **`paper-index`** has its only source here. The earlier standalone `paper-index-tool` folder and its `build_plugin.py` → `.plugin` distribution path were replaced by this marketplace. Nothing is taken from the old copy any more.
-- **Old personal Codex skills**
-  - `research-pdf-library` became `paper-search`. Its old index (`manifest.json` · `corpus.txt`) differs from the new format (`papers_index.json` · `_fulltext/`), so it is never overwritten or treated as the new format; connect an already verified `paperindex.config.json` or build a separate index.
-  - The shared editing rules of `thesis-safe-edit` moved to `manuscript-workflow`. Thesis-only paths, source files, build and review order stay in that project's instructions and in `procedure` of its settings.
-  - After installing and checking the new plugins, back up the old skill folders outside the search path. Check old call names and tool paths in project instructions too. The install script never deletes or moves user skills or project files.
-
-</details>

@@ -1,176 +1,178 @@
-# 작업 규칙 — research-plugins
+# Working rules — research-plugins
 
-Claude Code·Codex 공통 스킬 마켓플레이스의 **소스 저장소**입니다.
-이 폴더를 열고 작업할 때 지킬 것을 적습니다. 설치·사용법은 `README.md` 에 있습니다.
+This is the **source repository** of a skill marketplace shared by Claude Code and Codex.
+It lists what to follow when you open this folder and work in it. Installation and usage are in `README.md`.
 
-| 항목 | 값 |
+| Item | Value |
 |---|---|
-| 저장소 | `sky-born/research-plugins` (GitHub, 공개) |
-| 마켓플레이스 이름 | `research-plugins` |
-| 담긴 플러그인 | `.claude-plugin/marketplace.json` 의 `plugins` 가 목록의 원본입니다 |
-| 배포 | `python scripts/release.py` (`check` · `try` · `bump` · `publish`) |
-| 설치 · 갱신 | `python bootstrap/bootstrap.py` (`install` · `update` · `status`) |
+| Repository | `sky-born/research-plugins` (GitHub, public) |
+| Marketplace name | `research-plugins` |
+| Plugins | `plugins` in `.claude-plugin/marketplace.json` is the source of the list |
+| Release | `python scripts/release.py` (`check` · `try` · `bump` · `publish`) |
+| Install · update | `python bootstrap/bootstrap.py` (`install` · `update` · `status`) |
 
-**원고 내용을 이 저장소에 넣지 않습니다.** 여기 들어가는 것은 어느 논문에도 통하는 공통 규칙과
-도구뿐입니다. 특정 논문의 사실·경로·수치는 그 프로젝트의 `CLAUDE.md` 로 갑니다.
+**Manuscript content never goes into this repository.** Only shared rules and tools that work for any paper belong here.
+Facts, paths and numbers of a specific paper go to that project's `CLAUDE.md`.
 
-## 두 앱의 공통 원본
+## One source for both apps
 
-- `plugins/<이름>/skills/`가 Claude Code·Codex의 공통 원본입니다. 앱별 본문 사본을 만들지 않습니다.
-- 프로젝트 규칙은 현재 앱의 `AGENTS.md`/`CLAUDE.md`와 명시된 절차 파일을 실제로 읽습니다.
-  다른 앱 전용 문서가 자동 로딩됐다고 가정하지 않습니다.
-- `.claude-plugin/plugin.json`의 이름·버전·설명을 원본으로 삼습니다.
-  `python scripts/sync_codex_manifests.py`가 `.codex-plugin/plugin.json`과
-  `.agents/plugins/marketplace.json`을 생성합니다. 생성물은 손으로 수정하지 않습니다.
-- `python scripts/release.py check` 한 번이 파일 이름(ASCII) · 공개 검사(개인 정보) · 공통 구성 · 해시 목록 · Claude 매니페스트 ·
-  버전 규칙 · 시험을 모두 검증합니다. 원격 fetch도 수행하고, 아무것도 바꾸지 않습니다.
-- 설치·갱신은 두 앱 모두 `python bootstrap/bootstrap.py install` / `update`입니다.
-  Codex의 배포 전 작업 클론 시험에만 `--app codex --local`을 사용합니다. 설치된 캐시를 직접 고치지 않습니다.
-- 사용자 승인·쓰기 범위·원본 보호는 앱별 등록 정보로 완화하지 않습니다.
-  실제 파일 접근과 실행기·도구 유무를 확인하고 해당 환경에 맞는 실행 방식만 선택합니다.
+- `plugins/<name>/skills/` is the shared source for Claude Code and Codex. Do not make per-app copies of the content.
+- Read the current app's `AGENTS.md`/`CLAUDE.md` and the procedure files they name.
+  Do not assume a document meant for the other app was loaded automatically.
+- Name, version and description come from `.claude-plugin/plugin.json`.
+  `python scripts/sync_codex_manifests.py` generates `.codex-plugin/plugin.json` and
+  `.agents/plugins/marketplace.json`. Generated files are not edited by hand.
+- One run of `python scripts/release.py check` validates file names (ASCII) · the public scan (personal information) · the shared layout · the hash list · the Claude manifests ·
+  the version rule · the tests. It also fetches from the remote, and it changes nothing.
+- Both apps install and update with `python bootstrap/bootstrap.py install` / `update`.
+  Use `--app codex --local` only to try a working clone in Codex before a release. Never edit the installed cache.
+- User approval, write scope and source protection are never relaxed through per-app registration data.
+  Check the actual file access and which runners and tools exist, and pick only the way of running that fits that environment.
 
 ---
 
-## 0. 클론이 셋입니다 — 어느 것을 열었는지부터 확인합니다
+## 0. There are three clones — first check which one you opened
 
-**고칠 수 있는 것은 작업 클론 하나뿐입니다.** 나머지 둘은 Claude Code 가 관리하며,
-거기 고친 것은 다음 갱신에 조용히 사라집니다.
+**Only the working clone may be edited.** Claude Code manages the other two,
+and anything edited there silently disappears on the next update.
 
-| 클론 | 무엇 | 취급 |
+| Clone | What it is | How to treat it |
 |---|---|---|
-| **작업 클론** | `git clone` 으로 내가 만든 것 | **여기서만 고칩니다** |
-| 마켓플레이스 캐시 | `claude plugin marketplace add` 가 만든 clone | 읽기만. `marketplace update` 가 덮어씁니다 |
-| 플러그인 설치본 | `claude plugin install` 이 푼 버전별 사본 | 읽기만. 설치된 버전을 확인할 때 씁니다 |
+| **Working clone** | Made by you with `git clone` | **Edit only here** |
+| Marketplace cache | The clone made by `claude plugin marketplace add` | Read only. `marketplace update` overwrites it |
+| Installed plugins | Per-version copies unpacked by `claude plugin install` | Read only. Use it to see which version is installed |
 
-지금 연 폴더가 어느 것인지는 위치로 판별합니다. `.claude\plugins\` 아래면 작업 클론이 아닙니다.
+Tell which one the open folder is by its location. Anything under `.claude\plugins\` is not the working clone.
 
 ```bash
-git rev-parse --show-toplevel     # 이 경로가 .claude/plugins/ 아래면 손대지 마십시오
+git rev-parse --show-toplevel     # if this path is under .claude/plugins/, do not touch it
 ```
 
-작업 클론의 위치는 컴퓨터마다 다릅니다 — 저장소 밖 환경 기록(§3)을 봅니다. 없으면 새로 만듭니다.
+The working clone's location differs per computer — see the environment record outside the repository (§3). If there is none, make one.
 
 ```powershell
 git clone https://github.com/sky-born/research-plugins "$env:USERPROFILE\dev\research-plugins"
 ```
 
-**클라우드 동기화 폴더(구글드라이브·OneDrive) 안에 작업 클론을 두지 않습니다.**
-동기화가 `.git` 을 반쯤 덮어써 저장소를 깨뜨립니다. 컴퓨터마다 각자 클론하고, 동기화는 GitHub 이 합니다.
+**Never keep the working clone inside a cloud-sync folder (Google Drive, OneDrive).**
+Sync half-overwrites `.git` and breaks the repository. Clone separately on each computer and let GitHub do the syncing.
 
-**다른 컴퓨터의 작업 클론에 커밋되지 않은 변경이 남아 있을 수 있습니다.**
-작업을 시작할 때 `git status` 와 `git log --oneline -1` 을 보고, 원격과 어긋나면 먼저 정리합니다.
+**The working clone on another computer may hold uncommitted changes.**
+When you start, look at `git status` and `git log --oneline -1`, and settle any difference from the remote first.
 
 ---
 
-## 1. 고쳤으면 배포까지가 한 작업입니다
+## 1. A change is finished only when it is released
 
-**파일만 고치고 끝내면 아무 컴퓨터에도 반영되지 않습니다.** 자동 갱신이 돌지 않기 때문입니다(§4).
-아래 다섯을 한 묶음으로 봅니다.
+**Editing files alone reaches no computer**, because automatic updates do not run (§4).
+Treat these five as one unit.
 
-1. 파일 수정
-2. **그 플러그인의 `.claude-plugin/plugin.json` 의 `version` 을 올립니다** —
-   `python scripts/release.py bump <플러그인> patch|minor|major` 가 Codex 등록 파일과 해시 목록까지 함께 다시 만듭니다
-3. `python scripts/release.py try <폴더>`
-4. `python scripts/release.py publish` 로 검증·커밋·push·태그
-5. 반영이 필요한 컴퓨터에서 갱신 명령을 칩니다 (§4)
+1. Edit files
+2. **Raise `version` in that plugin's `.claude-plugin/plugin.json`** —
+   `python scripts/release.py bump <plugin> patch|minor|major` also regenerates the Codex registration files and the hash list
+3. `python scripts/release.py try <folder>`
+4. `python scripts/release.py publish` to check, commit, push and tag
+5. Run the update command on each computer that needs the change (§4)
 
-2번이 이 저장소의 유일한 배포 신호입니다. 플러그인이 상대 경로(`./plugins/...`)로 배포되므로
-`plugin.json` 의 `version` 값이 곧 배포 버전이고, 이 값이 바뀌어야 다른 컴퓨터가 새 버전으로 봅니다.
-파일만 고치고 버전을 그대로 두면 다른 컴퓨터는 옛 버전을 계속 씁니다.
-`release.py` 가 이것을 검사하고, 버전이 그대로면 중단합니다.
+Step 2 is the only release signal in this repository. Plugins are served by relative path (`./plugins/...`), so
+`version` in `plugin.json` is the release version, and other computers see a new version only when it changes.
+If you change files and leave the version alone, other computers keep using the old one.
+`release.py` checks this and stops when the version was not raised.
 
 ```text
 python scripts/release.py check
-python scripts/release.py publish -m "무엇을 고쳤는지 (72자 이내)"
+python scripts/release.py publish -m "what you changed (up to 72 characters)"
 ```
 
-**커밋·push 는 사용자 지시가 있을 때만 합니다.** 수정까지 하고 멈춰 보고합니다.
+**Commit and push only when the user says so.** Stop after editing and report.
 
-**push 하면 GitHub Actions(`.github/workflows/check.yml`)가 Windows · macOS · Linux 에서 같은 `check` 를 돌립니다.**
-러너에는 `claude` 가 없어 `--skip-claude` 로 돌므로, `claude plugin validate` 는 배포하는 컴퓨터에서만 확인됩니다.
+**On push, GitHub Actions (`.github/workflows/check.yml`) runs the same `check` on Windows · macOS · Linux.**
+The runners have no `claude` and run with `--skip-claude`, so `claude plugin validate` is confirmed only on the computer that releases.
 
-**커밋 메시지는 되도록 제목 한 줄로 씁니다.** 제목만으로 목적(왜)이 드러나지 않을 때만 짧은 한 문장을 덧붙입니다. 제목은 72자 이내로 `<플러그인> v<버전>: 한 줄 요약` 처럼 씁니다.
-바뀐 점은 `CHANGELOG.md` 의 그 플러그인 절(플러그인 밖 변경은 「저장소 — 플러그인 밖」 절) 맨 위에 `### <버전> — <날짜>` 로 적습니다.
-`Co-Authored-By` 같은 `…-by:` 꼬리표는 넣지 않습니다 — AI 도구를 쓴 사실은 README 에 밝혀 두었습니다.
-`check` 는 올린 버전의 항목이 없으면 중단합니다. `publish` 는 꼬리표가 있거나 본문이 두 문단 이상이면 중단하고, 제목·본문이 길면 경고합니다.
-**경위와 날짜는 문서 본문이 아니라 `CHANGELOG.md` 에 둡니다.**
+**Write commit messages as one subject line where possible.** Add one short sentence only when the subject does not show the purpose (why). Keep the subject within 72 characters, like `<plugin> v<version>: one-line summary`.
+Record what changed in a plugin at the top of that plugin's section in `CHANGELOG.md` as `### <version> — <date>`, and only what someone who uses or updates the plugin needs to know.
+`CHANGELOG.md` has one `##` section per plugin in `marketplace.json` and nothing else — changes outside the plugins are described by their commit subject alone.
+Do not add `…-by:` trailers such as `Co-Authored-By` — the README states that AI tools are used.
+`check` stops when a raised version has no entry or when `CHANGELOG.md` has a section that is not a plugin. `publish` stops on a trailer or a body of two or more paragraphs, and warns about a long subject or body.
+**The repository holds no work records.** Documents describe the current state, and `CHANGELOG.md` describes changes, not how they came about; dates appear only in version headings.
+The why of a change goes in the commit's one sentence, and work history stays outside the repository.
 
-**README 는 두 파일입니다** — `README.md`(영어)와 `README.ko.md`(한국어). 한쪽을 고치면 다른 쪽도 함께 고칩니다.
-`check` 가 두 파일의 제목 구조 · 코드 블록(주석과 `<자리표시>` 는 빼고) · 링크 대상이 같은지 검사합니다.
-이 문서 · 스킬 본문 · 플러그인 README 는 한국어로 둡니다.
+**There are two READMEs** — `README.md` (English) and `README.ko.md` (Korean). When you change one, change the other too.
+`check` compares their heading structure · code blocks (except comments and `<placeholders>`) · link targets.
+**Everything else in this repository is written in English.** Korean appears only as data — inside code spans, or in strings the tools match in or write into project files.
 
-**스크립트의 도움말(`--help`)에는 필요한 최소한만 담습니다.**
+**Keep a script's help (`--help`) to the minimum it needs.**
 
-**배포 전 검증** — `python scripts/release.py check` 가 공통 구성 · 해시 목록 · Claude 매니페스트 · 버전 규칙 · 시험
-(합성 표본: 저널 · 학위논문 × 옛 · 새 형식의 추적 파일)을 돌립니다. 여기에 들어 있지 않은 것은 §1 의 `try` 와
-**`python -X utf8 scripts/preview_projects.py <자매 프로젝트> …`** 입니다
-(실제 프로젝트의 추적 파일 **사본**에 새 도구를 돌려 예고한 차이와 같은지 — 원본에는 쓰지 않음. `grammar_baseline.py` 를 고쳤으면 `--grammar` 로
-원고 사본에 grammar_baseline 시나리오도 돌림 — 설정에 `grammar` 키가 없는 프로젝트는 `--set grammar=<JSON>`). 관리 파일
-(`new-manuscript/managed_files.json` 의 목록)을 `bump` 뒤에 더 고쳤으면 `python -X utf8 scripts/tool_hashes.py` 로 해시 목록을 다시 만들어
-함께 커밋합니다 — `check` 가 최신인지 검사합니다. 기존 프로젝트의 사본은 배포 뒤 `new-manuscript/update_tools.py` 로 맞춥니다.
+**Pre-release checks** — `python scripts/release.py check` runs the shared layout · the hash list · the Claude manifests · the version rule · the tests
+(synthetic samples: journal · thesis × old · new tracker formats). What it does not cover is `try` from §1 and
+**`python -X utf8 scripts/preview_projects.py <sibling project> …`**
+(runs the new tools on a **copy** of a real project's tracker files to see whether the differences match what was announced — it never writes to the original. If you changed `grammar_baseline.py`, `--grammar`
+also runs the grammar_baseline scenario on a copy of the manuscript — for a project with no `grammar` key in its settings, add `--set grammar=<JSON>`). If you edit managed files
+(the list in `new-manuscript/managed_files.json`) again after `bump`, rebuild the hash list with `python -X utf8 scripts/tool_hashes.py` and
+commit it with them — `check` verifies it is current. Copies in existing projects are brought up to date with `new-manuscript/update_tools.py` after the release.
 
-플러그인을 더하거나 없앨 때는 `README.md` 「새 플러그인 추가하기」를 따릅니다 —
-`marketplace.json` 의 `plugins` 배열과 `renames` 표입니다. 설치 스크립트는 그 목록을 읽으므로 따로 맞출 곳이 없습니다.
-
----
-
-## 2. 문서를 쓸 때 — 환경 사실을 본문에 박지 않습니다
-
-**이 저장소의 문서는 여러 컴퓨터에서 읽고 고칩니다.** 지금 앉은 컴퓨터의 경로나 측정값을
-본문에 그대로 적으면 다른 컴퓨터에서 거짓이 되고, 거기서 고치면 반대 방향으로 거짓이 됩니다.
-
-**규칙 본문은 `research-writing` 의 `references/environment.md` 「환경 사실과 불변 사실을 갈라 씁니다」에 있습니다.**
-여기서는 이 저장소에 적용되는 형태만 적습니다.
-
-- **불변 사실**(명령 이름, 절차와 순서, 버전 규칙, 개념)은 본문에 그대로 씁니다.
-- **환경 사실**(경로, 드라이브 문자, `$HOME` 값, 실행기 이름, 자격증명 유무, 주입된 환경변수)은
-  본문에 값을 적지 않습니다. **탐색 명령으로 바꾸거나, 안 되면 저장소 밖 환경 기록(§3)에 한 줄로** 넣습니다.
-- **환경 기록의 기존 줄을 지우지 않습니다.** 다른 컴퓨터용이며, 지금 컴퓨터에서 맞지 않는다는 것이
-  그 줄이 틀렸다는 뜻이 아닙니다.
-- **측정한 값에는 어디서 쟀는지와 날짜를 붙입니다.** 재 보지 않은 컴퓨터는 **미확인**으로 둡니다.
-  추정으로 칸을 채우지 않습니다.
+To add or remove a plugin, follow "Adding a plugin" in `README.md` —
+the `plugins` array and the `renames` table in `marketplace.json`. The install script reads that list, so nothing else needs to match.
 
 ---
 
-## 3. 환경 사실은 저장소 밖에 둡니다
+## 2. Writing documents — no environment facts in the text
 
-**이 저장소에는 컴퓨터별 값(사용자 폴더, 작업 클론 위치, 실행기 경로와 판, 자격증명 보관 방식)을 적지 않습니다.**
-각자 저장소 밖의 환경 기록에 두고, 새 컴퓨터가 생기면 거기에 줄을 추가합니다.
-저장소 주인의 기록은 개인 작업 폴더의 공통 규칙 문서가 가리키는 `마켓플레이스_환경.md` 입니다.
-그 기록이 보이지 않는 세션에서는 값을 추정하지 않고 아래 방법으로 확인합니다.
+**Documents in this repository are read and edited on several computers.** A path or a measured value from the computer you sit at,
+written into the text, becomes false on another computer, and fixing it there makes it false in the other direction.
 
-| 알고 싶은 것 | 확인하는 법 |
+**The rule itself is in `research-writing`'s `references/environment.md`, on keeping environment facts apart from invariant facts.**
+Only how it applies to this repository is written here.
+
+- **Invariant facts** (command names, procedures and their order, the version rule, concepts) go in the text as they are.
+- **Environment facts** (paths, drive letters, the value of `$HOME`, runner names, whether credentials exist, injected environment variables)
+  never go in the text as values. **Replace them with a command that finds them, or failing that, put one line in the environment record outside the repository (§3).**
+- **Never delete existing lines of an environment record.** They are for other computers; that a line does not hold on this computer
+  does not mean it is wrong.
+- **Give each measured value the place and the date it was measured.** Leave computers you have not measured as **unchecked**.
+  Do not fill cells with guesses.
+
+---
+
+## 3. Environment facts live outside the repository
+
+**This repository records no per-computer values (user folder, working-clone location, runner paths and versions, how credentials are stored).**
+Each owner keeps them in an environment record outside the repository and adds lines there for a new computer.
+The owner's record is `마켓플레이스_환경.md`, which the owner's workspace rules point to.
+A session that cannot see that record does not guess values; it checks them as below.
+
+| To find out | How |
 |---|---|
-| 지금 연 폴더가 작업 클론인지 | `git rev-parse --show-toplevel` — `.claude/plugins/` 아래면 아닙니다 (§0) |
-| `claude` 실행 파일과 판, 등록된 마켓플레이스, 설치된 버전 | `python bootstrap/bootstrap.py status` |
-| 저장소에 로그인 창 없이 접근되는지 | `GIT_TERMINAL_PROMPT=0 git ls-remote <저장소 주소> HEAD` |
-| 플러그인 설치본 폴더 (Git Bash) | `ls -d "$USERPROFILE/.claude/plugins/cache/<마켓플레이스 이름>/"*/*/` |
-| 공개 검사의 개인 금지어 목록 | `git config research-plugins.denylist` — 없으면 `check` 가 일반 패턴만 보고 경고합니다 |
+| Whether the open folder is the working clone | `git rev-parse --show-toplevel` — not if it is under `.claude/plugins/` (§0) |
+| The `claude` executable and its version, registered marketplaces, installed versions | `python bootstrap/bootstrap.py status` |
+| Whether the repository is reachable without a login prompt | `GIT_TERMINAL_PROMPT=0 git ls-remote <repository URL> HEAD` |
+| Installed plugin folders (Git Bash) | `ls -d "$USERPROFILE/.claude/plugins/cache/<marketplace name>/"*/*/` |
+| The personal deny list of the public scan | `git config research-plugins.denylist` — without it, `check` runs only the generic patterns and warns |
 
-어느 컴퓨터에서나 지킬 것:
+On every computer:
 
-- **Git Bash 에서 `~` 를 쓰지 마십시오.** `$HOME` 이 사용자 프로필이 아닌 컴퓨터가 있어 `~/.claude/...` 가 없는 경로로 풀립니다.
-  `$HOME` 이 프로필과 같은 컴퓨터에서는 우연히 통하므로, 한 컴퓨터에서만 확인하면 문제가 드러나지 않습니다.
-  어디서나 도는 표기는 `$USERPROFILE`(PowerShell 에서는 `$env:USERPROFILE`)입니다.
-- **배포 · 설치 스크립트는 Python 이라 세 운영체제에서 같은 명령입니다.** 스크립트는 자기를 실행한 Python 과,
-  `--claude` → `CLAUDE_CODE_EXECPATH` → PATH → 데스크톱 앱에 든 실행 파일 순으로 찾은 `claude` 를, `codex` 도
-  `--codex` → PATH → Codex 앱에 든 실행 파일 순으로 찾아 씁니다.
-- **macOS 에서는 `python3` 로 부릅니다.** `python` 이 셸 alias 인 컴퓨터에서는 스크립트 안에서 풀리지 않습니다.
-- **claude.ai 업로드본(`My Uploads`)이 남아 있으면 같은 이름의 CLI 설치본을 가립니다(§4).** 업로드본은 지웁니다.
+- **Do not use `~` in Git Bash.** On some computers `$HOME` is not the user profile, so `~/.claude/...` resolves to a path that does not exist.
+  On computers where `$HOME` matches the profile it happens to work, so checking on one computer alone does not reveal the problem.
+  The form that works everywhere is `$USERPROFILE` (`$env:USERPROFILE` in PowerShell).
+- **The release and install scripts are Python, so the commands are the same on all three operating systems.** The scripts use the Python that ran them,
+  the `claude` found in the order `--claude` → `CLAUDE_CODE_EXECPATH` → PATH → the executable inside the desktop app, and `codex`
+  found in the order `--codex` → PATH → the executable inside the Codex app.
+- **On macOS, call them with `python3`.** On computers where `python` is a shell alias, it does not resolve inside scripts.
+- **A leftover claude.ai upload (`My Uploads`) hides the CLI install of the same name (§4).** Delete the upload.
 
 ---
 
-## 4. 갱신은 수동입니다 — 자동으로 내려오지 않습니다
+## 4. Updates are manual — they do not arrive on their own
 
-**등록·설치해 두면 새 버전이 알아서 온다는 서술은 사실이 아닙니다.** 이유와 명령은 `README.md` 「갱신하기」 한 곳에
-있습니다. 여기에는 이 저장소를 고칠 때 지킬 것만 적습니다.
+**It is not true that a new version arrives by itself once registered and installed.** The reason and the commands are in one place, "Updating" in `README.md`.
+Only what to follow when editing this repository is written here.
 
-- **배포한 뒤에는 반영이 필요한 컴퓨터마다 `python bootstrap/bootstrap.py update` 를 실행하고 세션을 다시 엽니다.**
-  스크립트가 설치된 플러그인에는 `update` 를, 없는 플러그인에는 `install` 을 골라 부릅니다.
-- **자동화를 다시 시도하지 마십시오** (사용자 판단). 켜려면 `settings.json` 에 `autoUpdate: true` 와
-  `FORCE_AUTOUPDATE_PLUGINS` 를 함께 넣어야 하는데, 후자는 데스크톱 앱이 주입하는 값을 거스르는 것이라
-  앱이 갱신될 때마다 다시 확인해야 하고, 켠 뒤 검증도 다음 세션에서야 됩니다.
+- **After a release, run `python bootstrap/bootstrap.py update` on each computer that needs the change, and reopen the session.**
+  The script calls `update` for installed plugins and `install` for the rest.
+- **Do not try automation again** (the owner's decision). Turning it on takes both `autoUpdate: true` and
+  `FORCE_AUTOUPDATE_PLUGINS` in `settings.json`; the latter overrides a value the desktop app injects,
+  so it must be rechecked every time the app updates, and it can only be verified in the next session.
 
-**업로드본(`My Uploads`)이 남아 있으면 같은 이름의 CLI 설치본을 가립니다** — 업로드본이 `rpm` 에 있는 동안 스킬 목록이
-옛 판에 머물고, 업로드본 폴더가 사라지면 CLI 설치본으로 바뀝니다. 업로드본은 지웁니다.
-어느 세션에 무엇이 붙었는지는 `cat "$APPDATA/Claude/local-agent-mode-sessions"/*/*/rpm/manifest.json` 이 답합니다.
+**A leftover upload (`My Uploads`) hides the CLI install of the same name** — while the upload is in `rpm`, the skill list
+stays on the old version, and once the upload folder is gone it switches to the CLI install. Delete the upload.
+Which session has what attached is answered by `cat "$APPDATA/Claude/local-agent-mode-sessions"/*/*/rpm/manifest.json`.

@@ -12,7 +12,7 @@ AI 코딩 도구(Claude Code · Codex)를 활용해 개발합니다.
 | 저장소 | `sky-born/research-plugins` |
 | 플러그인 | `research-writing` · `paper-index` |
 | 갱신 방식 | 수동 — [갱신하기](#갱신하기) |
-| 이 저장소를 고칠 때 | [`CLAUDE.md`](CLAUDE.md) (한국어) — 클론 구분 · 배포 절차 |
+| 이 저장소를 고칠 때 | [`CLAUDE.md`](CLAUDE.md) — 클론 구분 · 배포 절차 |
 
 **바로 가기** — [담긴 플러그인](#담긴-플러그인) · [설치하기](#설치하기) · [갱신하기](#갱신하기) · [저장소 구조](#저장소-구조) · [고치고 배포하기](#고치고-배포하기) · [새 플러그인 추가하기](#새-플러그인-추가하기) · [push 자격증명](#push-자격증명) · [문제 해결](#문제-해결)
 
@@ -28,7 +28,7 @@ AI 코딩 도구(Claude Code · Codex)를 활용해 개발합니다.
 | `paper-index` | `paper-search` | PDF 문헌 인덱싱 · 전문 검색 · Scopus 결과와 보유 문헌 대조 | `/paper-index:paper-search` |
 
 Codex 에서는 스킬 선택기에 보이는 같은 이름의 스킬을 고릅니다.
-스킬 본문과 프로젝트에 들어가는 도구의 이름은 한국어입니다.
+스킬 본문은 한국어입니다.
 앱마다 호출 문법은 달라도 **읽는 본문과 실행 도구는 같습니다** ([공통 원본과 앱별 등록](#공통-원본과-앱별-등록)).
 
 ---
@@ -319,7 +319,7 @@ push 할 때마다 GitHub Actions(`.github/workflows/check.yml`)가 Windows · m
 
 | 옵션 | 뜻 |
 |---|---|
-| `-m "..."` | 커밋 제목(72자 이내). 보통 제목만으로 충분함. 한 번 더 쓰면 목적(왜)을 적은 짧은 한 문장 — 바뀐 점은 `CHANGELOG.md` 에. `Co-Authored-By` 같은 꼬리표가 있으면 중단. 생략하면 바뀐 플러그인과 버전으로 자동 작성 |
+| `-m "..."` | 커밋 제목(72자 이내). 보통 제목만으로 충분함. 한 번 더 쓰면 목적(왜)을 적은 짧은 한 문장 — 플러그인의 바뀐 점은 `CHANGELOG.md` 에. `Co-Authored-By` 같은 꼬리표가 있으면 중단. 생략하면 바뀐 플러그인과 버전으로 자동 작성 |
 | `--no-push` | 커밋 · 태그까지만 (`publish`) |
 | `--no-tag` | 태그를 만들지 않음 (`publish`) |
 | `--skip-tests` | 시험을 돌리지 않음 — 돌리지 않았다고 출력합니다 |
@@ -357,6 +357,7 @@ plugins/<이름>/
 
 **플러그인 이름을 바꾸거나 없앨 때**는 `marketplace.json` 의 `renames` 에 남깁니다.
 다른 컴퓨터의 설정에 있는 옛 이름이 새 이름으로 옮겨집니다. 이 표는 지우지 않고 쌓아 둡니다.
+없앤 플러그인의 절은 `CHANGELOG.md` 에서도 지웁니다 — 플러그인이 아닌 절이 있으면 `check` 가 멈춥니다.
 
 ```json
 "renames": { "old-name": "new-name", "removed-name": null }
@@ -393,17 +394,3 @@ claude plugin validate plugins/paper-index
 claude plugin marketplace list
 claude plugin list
 ```
-
----
-
-<details>
-<summary>내력 — 예전 구성에서 옮겨 온 것</summary>
-
-- **`thesis-draft`** 는 이 저장소에 없습니다. 한때 플러그인이었고(`thesis-draft--v1.0.1` · `v1.1.0` 태그), 지금은 학위논문 프로젝트의 `.claude/skills/thesis-draft/` 에 있습니다. `marketplace.json` 의 `renames` 에 정리 표시가 있습니다.
-- **`paper-index`** 의 소스는 이 저장소가 유일합니다. 예전의 독립 폴더 `paper-index-tool` 과 `build_plugin.py` → `.plugin` 배포 경로는 마켓플레이스로 대체되었습니다. 옛 사본에서 꺼내 쓰지 않습니다.
-- **Codex 의 옛 개인 스킬**
-  - `research-pdf-library` 의 기능은 `paper-search` 로 옮겼습니다. 옛 인덱스(`manifest.json` · `corpus.txt`)는 새 형식(`papers_index.json` · `_fulltext/`)과 다르므로 덮어쓰거나 새 형식으로 간주하지 않고, 이미 검증된 `paperindex.config.json` 을 연결하거나 별도 인덱스를 만듭니다.
-  - `thesis-safe-edit` 의 공통 수정 규칙은 `manuscript-workflow` 로 옮겼습니다. 학위논문 전용 경로 · 원본 파일 · 빌드 · 검토 순서는 그 프로젝트의 지침과 설정의 `procedure` 에 둡니다.
-  - 새 플러그인을 설치하고 확인한 뒤 옛 스킬 폴더를 검색 경로 밖에 백업합니다. 프로젝트 지침의 옛 호출 이름과 도구 경로도 확인합니다. 설치 스크립트는 사용자 스킬이나 프로젝트 파일을 자동으로 지우거나 옮기지 않습니다.
-
-</details>

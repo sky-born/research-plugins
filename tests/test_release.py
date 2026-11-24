@@ -255,6 +255,17 @@ class Publish(RepoCase):
         code, out = self.release("check")
         self.assertEqual(0, code, out)
 
+    def test_changelog_has_only_plugin_sections(self):
+        self.write("CHANGELOG.md", "# Changelog\n\n## example\n\n### 1.0.0\n\n- First.\n\n## tooling\n\n### 2026-01-01\n\n- Notes.\n")
+        self.commit("changelog")
+        git(self.root, "push", "origin", "main")
+        code, out = self.release("check")
+        self.assertEqual(1, code, out)
+        self.assertIn("'## tooling' is not a plugin", out)
+        self.write("CHANGELOG.md", "# Changelog\n\n## example\n\n### 1.0.0\n\n- First.\n")
+        code, out = self.release("check")
+        self.assertEqual(0, code, out)
+
 
 class RepositoryWithoutHistory(unittest.TestCase):
     """This repository's files committed as the first commit of a new repository must still pass the checks."""
