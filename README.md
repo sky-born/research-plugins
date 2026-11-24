@@ -194,6 +194,7 @@ research-plugins/
 │   ├── sync_codex_manifests.py      Writes everything derived from plugin.json; reports drift
 │   ├── validate_shared_plugins.py   Validates the layout both apps share
 │   ├── tool_hashes.py               Builds the hash list of managed files
+│   ├── check_public.py              Looks for personal information in what would be published
 │   └── preview_projects.py          Applies new tools to a copy of a real project
 ├── tests/                           Pre-release tests (unittest)
 └── plugins/
@@ -303,12 +304,13 @@ The one validation `check` does not run is the preview on a copy of a real proje
 
 What `check` does, in order:
 
-1. Runs `git fetch` on the baseline's remote and confirms the baseline `origin/main`
-2. Validates the layout both apps share and that derived files match their source (`validate_shared_plugins.py`), and that the hash list of managed files is current (`tool_hashes.py --check`)
-3. Validates the marketplace and plugin manifests with `claude plugin validate` — it prints which executable and version it used
-4. Compares with the baseline to find the **plugins that changed**, and confirms each one's `version` was raised — otherwise it **stops**
-5. Confirms `CHANGELOG.md` has an entry for each raised version — otherwise it **stops**
-6. Runs all tests (`tests/`)
+1. Runs `git fetch` on the baseline's remote and confirms the baseline `origin/main`, and that every file name is ASCII — otherwise it **stops**
+2. Looks for personal information in the files, their paths, the commits to push and the identity of the next commit (`check_public.py`) — anything found **stops** it. Personal terms come from a deny list kept outside the repository (`--deny-list`, `RESEARCH_PLUGINS_DENYLIST`, or `git config research-plugins.denylist <file>` in the clone); without one only the generic patterns run, with a warning
+3. Validates the layout both apps share and that derived files match their source (`validate_shared_plugins.py`), and that the hash list of managed files is current (`tool_hashes.py --check`)
+4. Validates the marketplace and plugin manifests with `claude plugin validate` — it prints which executable and version it used
+5. Compares with the baseline to find the **plugins that changed**, and confirms each one's `version` was raised — otherwise it **stops**
+6. Confirms `CHANGELOG.md` has an entry for each raised version — otherwise it **stops**
+7. Runs all tests (`tests/`)
 
 Every push also runs the same `check` on Windows, macOS and Linux through GitHub Actions (`.github/workflows/check.yml`), without the `claude plugin validate` step.
 

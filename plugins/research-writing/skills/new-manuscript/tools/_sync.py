@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-r"""_동기화.py — 공용 파일 동기화 안전장치. 점검 · 스냅샷 · 복구 · 쓰기 가드 · 1회 치환 도우미.
+r"""_sync.py — 공용 파일 동기화 안전장치. 점검 · 스냅샷 · 복구 · 쓰기 가드 · 1회 치환 도우미.
 
 여러 컴퓨터가 클라우드 동기화 폴더(구글드라이브 등)에서 같은 원고 프로젝트를 쓰면, 따라잡지 못한 미러 위에 쓴 판이
 나중에 올라가 다른 컴퓨터의 작업을 조용히 덮습니다. 이 모듈은 그것을 **코드로** 막고 · 잡고 · 되돌립니다 — 모델 토큰은 쓰지
 않습니다. 규약은 플러그인 문서 `manuscript-workflow/references/tracker-workflow.md` 「동기화」에 있습니다.
 
-    from _동기화 import Sync, replace_once
+    from _sync import Sync, replace_once
     s = Sync(cfg)                        # cfg 는 _config.load()
     s.session_start()                    # 세션 시작 — 점검 · 경계 스냅샷 · 상태 한 줄
-    s.guard('Edit', '수정필요_대기.md')    # 쓰기 직전 — 막을 사유 문자열 또는 None
-    s.after_write('수정필요_대기.md')     # 쓰기 직후 — 스냅샷 · 지문 · 「쓴 줄」 기록
+    s.guard('Edit', 'tracker_pending.md')    # 쓰기 직전 — 막을 사유 문자열 또는 None
+    s.after_write('tracker_pending.md')     # 쓰기 직후 — 스냅샷 · 지문 · 「쓴 줄」 기록
     s.session_end()                      # 세션 끝 — 경계 스냅샷 · 보존 정리
     s.accept_warn()                      # WARN 만 있을 때 기준 재설정 — 열린 ERROR 가 있으면 None(닫는 길은 ack 뿐)
     replace_once(path, old, new)         # 대상이 정확히 1회일 때만 바꾸고 줄끝 · 스냅샷까지
@@ -53,10 +53,10 @@ import time
 import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _config import (load as _load_cfg, CONFIG_REL, CONFIG_REL_OLD, nfc,                  # noqa: E402  — nfc: 이름 · 경로 · 줄의 비교는 NFC 로
+from _config import (load as _load_cfg, CONFIG_REL, CONFIG_REL_OLD, DEFAULTS, nfc,                  # noqa: E402  — nfc: 이름 · 경로 · 줄의 비교는 NFC 로
                      TABLE_ROW_RE_M, table_problems, describe_table_problem,              # 표 행 문법은 _config.py 한 곳(정리 도구 · 훅과 같음)
                      list_block_ids, id_key,                                              # 목록의 ID 자리 · ID 정렬도 정리 도구와 같은 정의
-                     allocation_scope, id_stem)                                           # 번호를 도구가 정하는 범위 — 미결_새항목.py 와 같은 정의
+                     allocation_scope, id_stem)                                           # 번호를 도구가 정하는 범위 — new_pending.py 와 같은 정의
 
 UTC_FMT = '%Y%m%dT%H%M%SZ'
 SNAP_RE = re.compile(r'^(\d{8}T\d{6}Z)_([^_]+)_(.+)_([0-9a-f]{8})(\.[^.]*)?$')
@@ -303,7 +303,7 @@ class Sync(object):
                 else:
                     os.rename(src, self.state)
             except OSError as e:
-                sys.stderr.write('_동기화: 옛 상태 폴더 %s 를 %s 로 옮기지 못했습니다(%s) — 다음에 다시 시도합니다\n' % (old, self.pid, e))
+                sys.stderr.write('_sync: 옛 상태 폴더 %s 를 %s 로 옮기지 못했습니다(%s) — 다음에 다시 시도합니다\n' % (old, self.pid, e))
 
     # ---- 설정 값 -------------------------------------------------
     def opt(self, key, default=None):
@@ -312,7 +312,7 @@ class Sync(object):
 
     @property
     def snapshot_dir(self):
-        return os.path.join(self.root, *str(self.opt('snapshot_dir', '보관/추적_백업')).split('/'))
+        return os.path.join(self.root, *str(self.opt('snapshot_dir', DEFAULTS['sync']['snapshot_dir'])).split('/'))
 
     @property
     def local_snap_dir(self):
@@ -356,7 +356,7 @@ class Sync(object):
 
     def records(self):
         """[(번호, 상대경로)] — 완료기록 E*.md"""
-        d = os.path.join(self.root, self.t.get('records_dir', '완료기록'))
+        d = os.path.join(self.root, self.cfg.records_dir)
         prefix = self.t.get('record_prefix', 'E')
         pat = re.compile(r'^%s(\d+)\.md$' % re.escape(prefix))
         out = []
@@ -399,7 +399,7 @@ class Sync(object):
         rel = nfc(rel.replace('\\', '/'))
         if rel in self.shared_files():
             return True
-        rd = self.t.get('records_dir', '완료기록').replace('\\', '/').rstrip('/') + '/'
+        rd = self.cfg.records_dir.replace('\\', '/').rstrip('/') + '/'
         return rel.startswith(rd) and rel.lower().endswith('.md')
 
     def _excluded(self, rel):
@@ -450,7 +450,7 @@ class Sync(object):
 
     def stamp_for_records(self):
         n, mx, hx = self.records_fingerprint()
-        return '<!-- 생성스탬프 %s/ n=%d max=%d sha=%s -->' % (self.t.get('records_dir', '완료기록').replace('\\', '/').rstrip('/'), n, mx, hx)
+        return '<!-- 생성스탬프 %s/ n=%d max=%d sha=%s -->' % (self.cfg.records_dir.replace('\\', '/').rstrip('/'), n, mx, hx)
 
     @staticmethod
     def parse_stamp(text):
@@ -530,7 +530,7 @@ class Sync(object):
         return self._ids_in([self.tracker_rel(k) for k in ('pending', 'archive', 'proposals', 'literature')])
 
     def known_ids(self):
-        """지금 파일들(대기 · 이관 · 제안 · 문헌)의 행 ID 와 이 컴퓨터가 본 ID 등록의 합 — 새 번호 배정(미결_새항목.py)과 손 등록 판정의 기준."""
+        """지금 파일들(대기 · 이관 · 제안 · 문헌)의 행 ID 와 이 컴퓨터가 본 ID 등록의 합 — 새 번호 배정(new_pending.py)과 손 등록 판정의 기준."""
         return self._id_universe() | set(self._load('ids.json', {}))
 
     def hand_added_ids(self, rel, text):
@@ -684,7 +684,7 @@ class Sync(object):
                     worst = max(kinds, key=self.S4_ORDER.index)
                     detail = ' · '.join(notes)
                     if worst == 'forward':
-                        msg = '%s 가 원본보다 낡음(%s) — 세션 끝에 `수정필요_정리.py --apply` 로 다시 만듭니다. 동기화 문제 아님' % (idx, detail)
+                        msg = '%s 가 원본보다 낡음(%s) — 세션 끝에 `tidy_tracker.py --apply` 로 다시 만듭니다. 동기화 문제 아님' % (idx, detail)
                     elif worst == 'revert':
                         msg = '%s — 되돌린 것이면 정상, 아니면 덮어쓰기 의심. 정리 도구로 다시 만들기 전에 확인하십시오' % detail
                     elif worst == 'suspect':
@@ -714,7 +714,7 @@ class Sync(object):
                     elif self.records_fingerprint(upto=mx0)[2] == hx0:
                         new = ['%s%d' % (prefix, k) for k, _ in recs if k > mx0]
                         F.append(Finding('INFO', 'S4', 'S4:records:stale',
-                                         '%s 가 완료기록 폴더보다 낡음(새 기록 %s) — `완료기록_색인.py` 로 다시 만듭니다. 동기화 문제 아님'
+                                         '%s 가 완료기록 폴더보다 낡음(새 기록 %s) — `index_records.py` 로 다시 만듭니다. 동기화 문제 아님'
                                          % (ri, ' '.join(new[:8]) + (' …' if len(new) > 8 else ''))))
                     else:
                         F.append(Finding('WARN', 'S4', 'S4:records:changed',
@@ -1220,7 +1220,7 @@ class Sync(object):
             return None
         lines = ['동기화 점검에 확인되지 않은 ERROR 가 있어 공용 파일 쓰기를 막습니다(%s%s).' % (tool, (' → ' + rel) if rel else '')]
         lines += ['  ! ' + f.line() for f in open_]
-        lines.append('  사용자에게 위 경고를 보이고 확인을 받은 뒤 `<py> -X utf8 도구/동기화_점검.py --ack "<사용자 문구>"` 를 돌리십시오. '
+        lines.append('  사용자에게 위 경고를 보이고 확인을 받은 뒤 `<py> -X utf8 %s --ack "<사용자 문구>"` 를 돌리십시오. ' % self.cfg.tool('check_sync.py') +
                      '덮인 파일은 `--restore <파일>` 로 되돌립니다.')
         return '\n'.join(lines)
 
@@ -1346,7 +1346,7 @@ class WriteLock(object):
     """공용 파일을 **읽고 다시 쓰는 동안만** 잡는 잠금 — 프로젝트 하나 · 컴퓨터 하나에 하나(`<상태 폴더>/write.lock`, 동기화 폴더 밖).
     운영체제 잠금이라 쥔 프로세스가 죽으면 저절로 풀립니다 — 남는 잠금이 없고 풀어 줄 사람도 필요 없습니다. 세션 단위로 잡지 않습니다.
 
-        with sync.write_lock('수정필요_정리') as lock:
+        with sync.write_lock('tidy_tracker') as lock:
             if lock.busy:                  # wait 초 안에 못 잡음 — 쓰지 않고 lock.busy_message() 를 알립니다
                 ...
             (읽기 → 계산 → 읽은 뒤 바뀌었는지 검사 → 저장)
@@ -1522,7 +1522,7 @@ def refuse_if_alert(sync, writing, tool_name):
     open_ = sync.blocking()
     if not open_:
         return True
-    print('! 동기화 점검 ERROR — %s%s' % (tool_name, ' 를 중단합니다. 확인 뒤 `동기화_점검.py --ack` 를 돌리십시오.' if writing else ' 는 진단만 합니다.'))
+    print('! 동기화 점검 ERROR — %s%s' % (tool_name, ' 를 중단합니다. 확인 뒤 `check_sync.py --ack` 를 돌리십시오.' if writing else ' 는 진단만 합니다.'))
     for f in open_:
         print('  ! ' + f.line())
     return not writing

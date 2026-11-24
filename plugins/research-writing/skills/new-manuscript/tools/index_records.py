@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-r"""완료기록_색인.py — 완료 기록(항목당 한 파일)에서 색인을 생성합니다.
+r"""index_records.py — 완료 기록(항목당 한 파일)에서 색인을 생성합니다.
 
 사용법  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> 도구/완료기록_색인.py            수정필요_색인.md 재생성 (평소)
-    <py> 도구/완료기록_색인.py --검사     옛 기록의 `대상` 가운데 문법이 확인하지 못한 것을 보여 줌 (파일은 건드리지 않음)
+    <py> tools/index_records.py            완료 색인 재생성 (평소)
+    <py> tools/index_records.py --검사     옛 기록의 `대상` 가운데 문법이 확인하지 못한 것을 보여 줌 (파일은 건드리지 않음)
 
-스크립트는 `도구\` 안에 있고 대상 파일은 그 상위(프로젝트 루트)에서 찾습니다.
-항목마다 머리에 **완료일** · **대상** · **상태** 줄이 있어야 합니다 — 형식은 `완료기록/README.md`,
-`대상` 의 문법은 `_위치.py`. `대상` 이 없는 기록은 경고하고 절별 역색인에서 빠집니다.
+스크립트는 도구 폴더 안에 있고, 폴더 · 파일 이름은 `.manuscript/project.json` 에서 읽습니다(기본 `records/` · `tracker_records_index.md`).
+항목마다 머리에 **완료일** · **대상** · **상태** 줄이 있어야 합니다 — 형식은 기록 폴더의 `README.md`,
+`대상` 의 문법은 `_location.py`. `대상` 이 없는 기록은 경고하고 절별 역색인에서 빠집니다.
 """
 import os, re, sys, io
 
@@ -25,26 +25,20 @@ def _콘솔_UTF8():
 _콘솔_UTF8()
 
 
-def _루트():
-    """이 스크립트는 `도구\\` 안에 있고, 대상 파일은 그 상위(프로젝트 루트)에 있습니다.
-    루트에 그대로 두고 돌려도 같게 동작합니다."""
-    d = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(d) if os.path.basename(d) == '도구' else d
-
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _config import load as _load_cfg          # noqa: E402
+from _config import load as _load_cfg, project_root          # noqa: E402
 
 # 폴더·파일 이름은 `.manuscript/project.json` 이 정합니다. 없으면 기본값이 쓰입니다.
 _CFG = _load_cfg()
-HERE = _루트()
+HERE = project_root()
 OUT = os.path.join(HERE, _CFG.records_dir)
+BS = lambda p: str(p).replace('/', '\\')       # noqa: E731  — 생성 문구 속 경로 표기(운영체제와 무관하게 같은 글자)
 
 # ---------------------------------------------------------------- 색인 생성
 IDX = os.path.join(HERE, _CFG.record_index_file)
-from _위치 import Grammar, Excluder, section_key   # noqa: E402  — 「파일 · 절」 문법은 _위치.py 한 곳
+from _location import Grammar, Excluder, section_key   # noqa: E402  — 「파일 · 절」 문법은 _location.py 한 곳
 from _config import state_head                     # noqa: E402  — 상태 어휘는 _config.py 한 곳
-from _동기화 import Sync, refuse_if_alert           # noqa: E402  — 동기화 안전장치는 _동기화.py 한 곳
+from _sync import Sync, refuse_if_alert           # noqa: E402  — 동기화 안전장치는 _sync.py 한 곳
 
 _SYNC = None
 
@@ -125,11 +119,11 @@ def render_index():
     L = ['# 완료 기록 색인 — %s' % _CFG.name,
          _sync().stamp_for_records(),             # 생성 스탬프 — 어느 완료기록 묶음에서 만들어졌는지(동기화 점검 S4 가 대조)
          '',
-         '**완료 기록을 찾을 때 이 파일만 엽니다.** 항목 본문은 `완료기록\\E<번호>.md` 한 파일씩입니다.',
-         '이 파일은 `도구\\완료기록_색인.py` 가 생성합니다 — 손으로 고치지 마십시오.', '',
-         '이 색인을 다시 만들 때 — `<py> 도구/완료기록_색인.py`',
+         '**완료 기록을 찾을 때 이 파일만 엽니다.** 항목 본문은 `%s\\E<번호>.md` 한 파일씩입니다.' % BS(_CFG.records_dir),
+         '이 파일은 `%s` 가 생성합니다 — 손으로 고치지 마십시오.' % BS(_CFG.tool('index_records.py')), '',
+         '이 색인을 다시 만들 때 — `<py> %s`' % _CFG.tool('index_records.py'),
          '`<py>` 는 이 컴퓨터의 Python 3 입니다 — 윈도 `python` · 맥 `python3`.', '',
-         '읽는 순서 — ① 아래 **절별 역색인**에서 손댈 파일과 절을 찾아 ID를 얻고 ② `완료기록\\E<번호>.md` 하나만 읽습니다.',
+         '읽는 순서 — ① 아래 **절별 역색인**에서 손댈 파일과 절을 찾아 ID를 얻고 ② `%s\\E<번호>.md` 하나만 읽습니다.' % BS(_CFG.records_dir),
          '', '---', '', '## 1. 절별 역색인', '',
          '절 · 도판 번호는 그 기록을 쓸 때의 번호입니다. `—` 는 절을 적지 않은 기록입니다.', '',
          '| 파일 | 절 | 항목 |', '|---|---|---|']
@@ -145,8 +139,8 @@ def render_index():
     for n, eid, title, date, tgt, st, ln in ents:
         L.append('| %s | %s | %s | %s |' % (eid, title, date, state_head(st)))
     L += ['', '---', '', '## 3. D·B 에서 이관한 항목', '',
-          '본문은 `완료기록\\이관_DB.md` 에 있습니다.', '']
-    mig = os.path.join(OUT, '이관_DB.md')
+          '본문은 `%s` 에 있습니다.' % BS(_CFG.archive), '']
+    mig = os.path.join(HERE, _CFG.archive)
     if os.path.exists(mig):
         s = io.open(mig, encoding='utf-8').read()
         ids = re.findall(r'^\|\s*([A-Z]\d+)\s*\|', s, re.M)
@@ -176,16 +170,16 @@ def check():
 EMPTY_INDEX = '''# 완료 기록 색인
 
 **완료 기록을 찾을 때 이 파일만 엽니다.** 항목 본문은 완료기록 폴더에 한 파일씩입니다.
-이 파일은 완료기록_색인.py 가 생성합니다 - 손으로 고치지 마십시오.
+이 파일은 index_records.py 가 생성합니다 - 손으로 고치지 마십시오.
 
 아직 완료 기록이 없습니다. 첫 항목을 만든 뒤 이 도구를 다시 돌리십시오.
 '''
 
 
 def build_index():
-    if not refuse_if_alert(_sync(), True, '완료기록_색인'):
+    if not refuse_if_alert(_sync(), True, 'index_records'):
         return 3
-    with _sync().write_lock('완료기록_색인') as lock:     # 기록 읽기 → 색인 쓰기를 한 묶음으로 — 정리 도구 · 다른 색인 실행과 엇갈리지 않게
+    with _sync().write_lock('index_records') as lock:     # 기록 읽기 → 색인 쓰기를 한 묶음으로 — 정리 도구 · 다른 색인 실행과 엇갈리지 않게
         if lock.busy:                                   # 색인은 기록 파일에서 통째로 다시 만드는 파일이라, 못 만들어도 다음 실행이 맞춥니다
             print('! ' + lock.busy_message())
             return 4
@@ -201,12 +195,12 @@ def _build_index_locked():
             io.open(IDX, 'w', encoding='utf-8', newline='').write(EMPTY_INDEX)
             print('색인 생성 — 완료 기록이 아직 없습니다 (항목 0건)')
             return 0
-        print('완료기록 폴더가 없습니다. 먼저 만드십시오.'); return 1
+        print('기록 폴더 %s 가 없습니다. 먼저 만드십시오.' % _CFG.records_dir); return 1
     _sync().before_write(_CFG.record_index_file.replace('\\', '/'))
     io.open(IDX, 'w', encoding='utf-8', newline='').write(text)
     _sync().after_write(_CFG.record_index_file.replace('\\', '/'))
-    print('수정필요_색인.md 재생성 — 항목 %d건, 파일 %d개 · 행 %d개'
-          % (len(ents), len(bysec), sum(len(v) for v in bysec.values())))
+    print('%s 재생성 — 항목 %d건, 파일 %d개 · 행 %d개'
+          % (_CFG.record_index_file, len(ents), len(bysec), sum(len(v) for v in bysec.values())))
     for w in warnings_for(ents):
         print('  ! ' + w)
     return 0

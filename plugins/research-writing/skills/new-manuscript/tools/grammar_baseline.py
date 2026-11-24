@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-r"""문법기준.py — 제출 전 문법 점검의 기준. 점검 뒤 바뀐 문단을 코드가 골라냅니다.
+r"""grammar_baseline.py — 제출 전 문법 점검의 기준. 점검 뒤 바뀐 문단을 코드가 골라냅니다.
 
 Claude 가 실제로 본 글의 지문을 기준 파일에 찍어 두고, 지금 원고에서 기준에 없는 단위(바뀐 문단 · 새 문단)만 보입니다.
 무엇이 바뀌었는지와 원문 대조는 이 도구가 하고, 모델은 뽑힌 단위의 문법만 봅니다. 규약은 플러그인 문서
 `manuscript-workflow/references/revision-protocol.md` 「제출 전 문법 점검」, 설정 키 `grammar` 는 `project-config.md`.
 
 사용법  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> -X utf8 도구/문법기준.py init --confirm "<사용자 문구>"   기준 파일이 없을 때만 — 범위의 모든 단위를 찍음(맨 처음 한 번)
-    <py> -X utf8 도구/문법기준.py changed [--out [<묶음>]]       기준에 없는 단위 — id · 파일 · 줄 · 전문 · 피할 표현 표시.
-                                                                --out 만 쓰면 묶음을 기준 파일 옆 `문법묶음/<시각>_<컴퓨터>.json` 에 만듦
-    <py> -X utf8 도구/문법기준.py clean --packet <묶음> --ids <id> …          지적이 없는 단위를 찍음(묶음의 지문만)
-    <py> -X utf8 도구/문법기준.py clean --packet <묶음> --all-except [<id> …] 묶음에서 그 id 만 빼고 찍음
-    <py> -X utf8 도구/문법기준.py resolve --packet <묶음> --id <id> --keep    지적했으나 그대로 두기로 판정된 단위를 찍음
-    <py> -X utf8 도구/문법기준.py resolve --packet <묶음> --id <id> --replace <원문> <수정문> [<원문> <수정문> …]
+    <py> -X utf8 tools/grammar_baseline.py init --confirm "<사용자 문구>"   기준 파일이 없을 때만 — 범위의 모든 단위를 찍음(맨 처음 한 번)
+    <py> -X utf8 tools/grammar_baseline.py changed [--out [<묶음>]]       기준에 없는 단위 — id · 파일 · 줄 · 전문 · 피할 표현 표시.
+                                                                --out 만 쓰면 묶음을 기준 파일 옆 `grammar_packets/<시각>_<컴퓨터>.json` 에 만듦
+    <py> -X utf8 tools/grammar_baseline.py clean --packet <묶음> --ids <id> …          지적이 없는 단위를 찍음(묶음의 지문만)
+    <py> -X utf8 tools/grammar_baseline.py clean --packet <묶음> --all-except [<id> …] 묶음에서 그 id 만 빼고 찍음
+    <py> -X utf8 tools/grammar_baseline.py resolve --packet <묶음> --id <id> --keep    지적했으나 그대로 두기로 판정된 단위를 찍음
+    <py> -X utf8 tools/grammar_baseline.py resolve --packet <묶음> --id <id> --replace <원문> <수정문> [<원문> <수정문> …]
                                                                 고치기로 판정된 단위 — 치환 결과가 지금 원고의 한 단위와 같을 때만 찍음
-    <py> -X utf8 도구/문법기준.py verify <후보 파일>             후보 표의 원문이 위치(파일 · L<번호>)에 글자 그대로 있는지
-    <py> -X utf8 도구/문법기준.py status                         원본별 범위 · 찍힌 · 남은 단위 수
-    공통  --dir <프로젝트 루트>    --baseline <기준 파일>(기본 `.manuscript/문법기준.jsonl` — 시험 · 첫 기준 보관용)
+    <py> -X utf8 tools/grammar_baseline.py verify <후보 파일>             후보 표의 원문이 위치(파일 · L<번호>)에 글자 그대로 있는지
+    <py> -X utf8 tools/grammar_baseline.py status                         원본별 범위 · 찍힌 · 남은 단위 수
+    공통  --dir <프로젝트 루트>    --baseline <기준 파일>(기본 `.manuscript/grammar_baseline.jsonl` — 시험 · 첫 기준 보관용)
 
 단위    md          빈 줄로 나뉜 블록. 제외 접두(`grammar.exclude_prefixes`, 기본 `@NOTE`)로 시작하는 블록은 뺍니다
         lines       설정한 구간 안의 비어 있지 않은 줄. 구간은 시작 정규식에 맞는 줄부터, 그 **다음** 줄부터 찾은 끝 정규식에 맞는
@@ -24,11 +24,11 @@ Claude 가 실제로 본 글의 지문을 기준 파일에 찍어 두고, 지금
         json-values 문자열 값 하나(키는 단위가 아님). `_` 로 시작하는 키의 값은 그 아래 모두 설명 칸이라 뺍니다
 지문    정규화한 글의 SHA-256 — NFC · 줄끝 LF · 앞뒤 공백 제거, 안쪽 공백은 그대로. 파일 · 위치는 넣지 않습니다 — 비교는 내용으로 하므로
         순서만 바뀐 문단은 나오지 않고, 되돌린 문단은 빠지고, 새 문단은 나옵니다. id 는 지문 앞 12자입니다.
-기준    `.manuscript/문법기준.jsonl` — 한 줄에 표시 하나(`지문` · `how`(init | clean | keep | replace) · `시각` · `컴퓨터` · `파일`,
+기준    `.manuscript/grammar_baseline.jsonl` — 한 줄에 표시 하나(`지문` · `how`(init | clean | keep | replace) · `시각` · `컴퓨터` · `파일`,
         init 은 `문구` 도). 추가만 하고 지우지 않습니다. 표시를 잃으면 그 단위가 다시 「바뀐 단위」로 나올 뿐 놓치지는 않습니다.
 묶음    `changed --out` 이 배타적으로 만드는 JSON — 보인 글과 지문. clean · resolve --keep 은 **묶음의 지문만** 찍고 원고를 다시 읽지
         않으므로, 점검하는 사이에 누가 그 문단을 고쳤으면 그 문단은 다시 목록에 올라옵니다. 경로를 주지 않으면 기준 파일 옆
-        `문법묶음/` 에 만듭니다. 다 판정한 묶음은 지웁니다 — 판정 전 단위는 다음 changed 가 다시 뽑으므로 언제 지워도 놓치지 않습니다.
+        `grammar_packets/` 에 만듭니다. 다 판정한 묶음은 지웁니다 — 판정 전 단위는 다음 changed 가 다시 뽑으므로 언제 지워도 놓치지 않습니다.
 설정    `.manuscript/project.json` 의 선택 키 `grammar` — `sources`(기본 범위에 더하는 원본 · `file` 은 루트 기준) · `exclude_prefixes` ·
         `avoid_lists`(피할 표현 목록 · 루트 기준). 키가 없으면 범위는 `manuscript.source_dir` 의 `chapters` 파일(참고문헌 제외)입니다.
         모르는 키 · 모르는 kind · 못 찾은 구간 표지 · 없는 파일 · 0 단위는 경고합니다. `_` 로 시작하는 키는 주석으로 봅니다.
@@ -49,11 +49,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _config import (load as _load_cfg, nfc, _콘솔_UTF8, split_cells, unescape_cell,   # noqa: E402  — _config 를 먼저(NFD 이름 모듈 finder)
                      TABLE_ROW_RE, TABLE_SEP_RE, row_like_id)
-from _동기화 import computer_id, find_project_root                                   # noqa: E402
-import _위치                                                                         # noqa: E402
+from _sync import computer_id, find_project_root                                   # noqa: E402
+import _location                                                                         # noqa: E402
 
-BASELINE_REL = '.manuscript/문법기준.jsonl'
-PACKET_DIR = '문법묶음'                  # 기준 파일 옆 — 경로 없이 changed --out 한 묶음의 자리
+BASELINE_REL = '.manuscript/grammar_baseline.jsonl'
+PACKET_DIR = 'grammar_packets'           # 기준 파일 옆 — 경로 없이 changed --out 한 묶음의 자리
+# 0.12 이하의 이름 — 새 이름의 기준 파일이 없고 이것만 있으면 그대로 씁니다(묶음 자리도 옛 이름)
+LEGACY_BASELINE_REL, LEGACY_PACKET_DIR = '.manuscript/문법기준.jsonl', '문법묶음'
 PACKET_FORMAT = '문법기준-묶음/1'
 KINDS = ('md', 'lines', 'json-values')
 HOWS = ('init', 'clean', 'keep', 'replace')
@@ -459,7 +461,11 @@ def baseline_path(root, arg):
     if arg:
         p = os.path.abspath(arg)
         return locate(p), p
-    return find_path(root, BASELINE_REL), os.path.join(root, *BASELINE_REL.split('/'))
+    real = find_path(root, BASELINE_REL)
+    old = None if real else find_path(root, LEGACY_BASELINE_REL)
+    if old:
+        return old, old
+    return real, os.path.join(root, *BASELINE_REL.split('/'))
 
 
 def read_baseline(path, warn):
@@ -627,7 +633,8 @@ class Ctx(object):
         self.settings = read_settings(self.cfg, self.warn)
         self.base_real, self.base_new = baseline_path(root, a.baseline)
         self.base_disp = rel_of(root, self.base_new) if not a.baseline else nfc(os.path.abspath(a.baseline))
-        self.packet_dir = os.path.join(os.path.dirname(self.base_real or self.base_new), PACKET_DIR)
+        legacy = bool(self.base_real) and nfc(os.path.basename(self.base_real)) == nfc(LEGACY_BASELINE_REL.split('/')[-1])
+        self.packet_dir = os.path.join(os.path.dirname(self.base_real or self.base_new), LEGACY_PACKET_DIR if legacy else PACKET_DIR)
 
     def disp(self, path):
         """루트 안이면 루트 기준 경로, 밖(다른 드라이브 포함)이면 절대 경로."""
@@ -806,7 +813,7 @@ def _match_in(line, frags):
 
 def _parse_locations(cell, gram, root, warn_row):
     """위치 칸 → [(쓴 이름, 루트 기준 경로 또는 None, 실제 경로 또는 None, [줄 …])]."""
-    pat = re.compile(r'`(?P<bt>[^`]+)`|(?<![A-Za-z0-9_])L(?P<ln>\d+)(?:\(\d+곳?\))?|(?P<bare>' + _위치.BARE + r')')
+    pat = re.compile(r'`(?P<bt>[^`]+)`|(?<![A-Za-z0-9_])L(?P<ln>\d+)(?:\(\d+곳?\))?|(?P<bare>' + _location.BARE + r')')
     locs = []
 
     def add_file(tok):
@@ -847,7 +854,7 @@ def cmd_verify(c, a):
     if real is None:
         raise UsageError('후보 파일이 없습니다: %s' % a.candidates)
     text = read_text(real)
-    gram = _위치.Grammar(c.cfg)
+    gram = _location.Grammar(c.cfg)
     cache = {}
 
     def lines_of(path):
@@ -969,14 +976,14 @@ def build_parser():
     # 공통 옵션은 명령 앞 · 뒤 어디에 와도 됩니다. 기본값을 SUPPRESS 로 두어 하위 파서가 앞에 준 값을 None 으로 덮지 않게 합니다.
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument('--dir', default=argparse.SUPPRESS, help='프로젝트 루트(없으면 이 파일의 위치 또는 현재 폴더에서 위로 찾음)')
-    common.add_argument('--baseline', default=argparse.SUPPRESS, help='기준 파일 경로(기본 .manuscript/문법기준.jsonl)')
+    common.add_argument('--baseline', default=argparse.SUPPRESS, help='기준 파일 경로(기본 .manuscript/grammar_baseline.jsonl)')
     ap = argparse.ArgumentParser(description='제출 전 문법 점검의 기준 — 바뀐 문단만 골라냅니다', parents=[common])
     sub = ap.add_subparsers(dest='cmd')
     p = sub.add_parser('init', parents=[common], help='맨 처음 기준(사용자 말씀으로 한 번)')
     p.add_argument('--confirm', metavar='문구', required=True)
     p = sub.add_parser('changed', parents=[common], help='기준에 없는 단위')
     p.add_argument('--out', metavar='묶음', nargs='?', const='',
-                   help='묶음 파일 — 경로를 빼면 기준 파일 옆 문법묶음/<시각>_<컴퓨터>.json')
+                   help='묶음 파일 — 경로를 빼면 기준 파일 옆 grammar_packets/<시각>_<컴퓨터>.json')
     p = sub.add_parser('clean', parents=[common], help='지적이 없는 단위를 찍음')
     p.add_argument('--packet', metavar='묶음', required=True)
     g = p.add_mutually_exclusive_group(required=True)

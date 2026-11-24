@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-r"""미결_새항목.py — 새 미결 항목(대기 파일의 글자 표 · 제안 표)을 다음 번호로 등록합니다.
+r"""new_pending.py — 새 미결 항목(대기 파일의 글자 표 · 제안 표)을 다음 번호로 등록합니다.
 
 사용  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> -X utf8 도구/미결_새항목.py <행 파일>
+    <py> -X utf8 tools/new_pending.py <행 파일>
 
 <행 파일> 은 UTF-8 텍스트 한 줄이고 **ID 자리가 `글자?`** 인 표 행입니다 — 대기 `| D? | 항목 | 위치 | 트리거 | 상태 | 비고 |`,
 제안 `| H? | 제안 | 위치 | 상태 | 근거 |`. 칸의 수와 순서는 그 표의 머리와 같아야 합니다(한 항목은 한 줄 · 셀 안의 `|` 는 `\|`).
@@ -19,9 +19,9 @@ r"""미결_새항목.py — 새 미결 항목(대기 파일의 글자 표 · 제
 범위 — `_config.allocation_scope`(대기 파일의 분류 글자 · 제안 파일의 글자). 문헌 파일과 가지 번호(`D35-1`)는 다루지 않습니다.
 막지 못하는 것 — 다른 컴퓨터가 같은 번호를 받는 것(동기화 점검이 봅니다) · Python · Bash 로 행을 직접 넣는 길.
 
-목록(색인 파일)의 위치 표 · 트리거 표는 다음 `수정필요_정리.py --apply` 가 맞춥니다.
+목록(색인 파일)의 위치 표 · 트리거 표는 다음 `tidy_tracker.py --apply` 가 맞춥니다.
 
-출력  표준 출력 한 줄:  D137<TAB>수정필요_대기.md  (안내 · 경고는 표준 오류로 — 표준 출력은 번호 한 줄뿐)
+출력  표준 출력 한 줄:  D137<TAB>tracker_pending.md  (안내 · 경고는 표준 오류로 — 표준 출력은 번호 한 줄뿐)
 종료  0 성공 · 1 행 형식 오류 · 2 표를 찾지 못함(범위 밖 글자 · 절이나 표가 없음 · 표가 여럿) · 3 동기화 점검 ERROR 로 거부 ·
       4 잠금을 못 잡음(다시 돌리면 됩니다)
 """
@@ -123,7 +123,7 @@ def next_number(known, letter):
 
 def register(cfg, sync, row, letter):
     """잠금 안에서 부릅니다 — 파일을 지금 읽어 번호를 정하고 행을 넣습니다. (ID, 루트 기준 파일)."""
-    from _동기화 import _read_bytes, _atomic_write
+    from _sync import _read_bytes, _atomic_write
     scope = allocation_scope(cfg)
     if letter not in scope:
         raise Problem(2, '글자 %s 는 이 도구가 번호를 정하는 범위가 아닙니다 — 되는 글자: %s (문헌 파일 · 가지 번호는 손으로)'
@@ -176,11 +176,11 @@ def main(argv):
     try:
         row, letter = read_row(args[0])
         cfg = load()
-        from _동기화 import Sync, refuse_if_alert
+        from _sync import Sync, refuse_if_alert
         sync = Sync(cfg)
-        if not refuse_if_alert(sync, True, '미결_새항목'):
+        if not refuse_if_alert(sync, True, 'new_pending'):
             return 3
-        with sync.write_lock('미결_새항목') as lock:
+        with sync.write_lock('new_pending') as lock:
             if lock.busy:
                 say('! ' + lock.busy_message())
                 return 4
@@ -189,7 +189,7 @@ def main(argv):
         say('등록하지 않았습니다 — %s' % e)
         return e.code
     print('%s\t%s' % (new_id, rel), flush=True)
-    say('  목록의 위치 표 · 트리거 표는 다음 `수정필요_정리.py --apply` 가 맞춥니다')
+    say('  목록의 위치 표 · 트리거 표는 다음 `tidy_tracker.py --apply` 가 맞춥니다')
     return 0
 
 

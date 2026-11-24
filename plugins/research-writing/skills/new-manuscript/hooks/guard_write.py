@@ -2,9 +2,9 @@
 r"""guard_write.py — Claude Code 훅 본체(PreToolUse · PostToolUse). 원고 프로젝트의 공용 파일을 지킵니다.
 
     guard_write.py pre     Edit · Write · Bash · PowerShell 직전 — ① 이미 있는 완료기록 `E*.md` 와 생성 색인을 Write 로 덮어쓰면 거부
-                                                    ② 동기화 점검(_동기화.py)에 확인되지 않은 ERROR 가 있으면 공용 파일 쓰기를 거부
+                                                    ② 동기화 점검(_sync.py)에 확인되지 않은 ERROR 가 있으면 공용 파일 쓰기를 거부
                                                     ③ Edit · Write 직전 판을 로컬 스냅샷으로 남김(뒤의 차이 계산용)
-                                                    ⑤ 새 미결 ID 행을 손으로 넣는 Edit · Write 를 거부 — 번호는 `도구/미결_새항목.py` 가 정함
+                                                    ⑤ 새 미결 ID 행을 손으로 넣는 Edit · Write 를 거부 — 번호는 도구 폴더의 `new_pending.py` 가 정함
                                                        (그 도구가 프로젝트에 있을 때만 · 범위는 `_config.allocation_scope`)
                                                     ⑥ 공용 파일 Edit · Write 직전, 도구가 쓰기 잠금을 쥐고 있으면 풀릴 때까지 잠깐 기다림
                                                        (막지 않음 — 훅은 Edit 보다 먼저 끝나므로 잠금을 쥐지는 못합니다)
@@ -18,8 +18,9 @@ r"""guard_write.py — Claude Code 훅 본체(PreToolUse · PostToolUse). 원고
   · 프로젝트 `.claude/settings.json` 이 `.claude/hooks/guard_write.py`(관리 사본)로 등록(보조) — 플러그인 훅이 없는 환경용.
   둘 다 있으면 같은 도구 호출을 한 번만 처리합니다(상태 폴더의 `hook_seen/<tool_use_id>` 표시).
 프로젝트 판정 — Edit · Write 는 **대상 파일 경로에서**, Bash · PowerShell 은 cwd 에서 위로 올라가며 `.manuscript/project.json`(또는 `.writing/`)을
-찾습니다. 없으면 즉시 0 으로 끝나 다른 프로젝트에 영향이 없습니다. 점검 모듈은 이 파일 옆 `../tools/_동기화.py`(플러그인 배치) →
-프로젝트 `도구/_동기화.py` 순으로 찾습니다.
+찾습니다. 없으면 즉시 0 으로 끝나 다른 프로젝트에 영향이 없습니다. 점검 모듈은 이 파일 옆 `../tools/_sync.py`(플러그인 배치) →
+프로젝트 도구 폴더(설정의 `tools_dir`)의 `_sync.py` 순으로 찾습니다.
+설정 없이 옛 기본 이름(한글)을 쓰는 프로젝트에서는 설정 파일 말고는 Edit · Write 를 막고, 설정에 적을 값을 사유로 보입니다.
 
 입출력 — 표준 입력의 JSON(tool_name, tool_input, cwd, tool_use_id)을 읽고, 막을 때만 표준 출력에
   {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "..."}}
@@ -56,31 +57,26 @@ def find_root(start):
         p = up
 
 
-def _tracker(root):
-    rec_dir, prefix, index = '완료기록', 'E', '수정필요_색인.md'
+def _raw_config(root):
     for rel in CONFIG_RELS:
         p = os.path.join(root, rel)
-        if not os.path.isfile(p):
-            continue
-        try:
-            t = json.load(io.open(p, encoding='utf-8')).get('tracker', {})
-            rec_dir = t.get('records_dir', rec_dir)
-            prefix = t.get('record_prefix', prefix)
-            index = t.get('record_index', index)
-        except (OSError, ValueError) as e:
-            sys.stderr.write('guard_write: %s 를 읽지 못해 기본값을 씁니다: %s\n' % (rel, e))
-        break
-    return rec_dir, prefix, index
+        if os.path.isfile(p):
+            try:
+                return json.load(io.open(p, encoding='utf-8'))
+            except (OSError, ValueError) as e:
+                sys.stderr.write('guard_write: %s 를 읽지 못했습니다: %s\n' % (rel, e))
+            break
+    return {}
 
 
-def decide_overwrite(root, data):
+def decide_overwrite(cfg, root, data):
     """완료 기록 · 생성 색인의 Write 덮어쓰기 — 막아야 하면 사유, 아니면 None."""
     if data.get('tool_name') != 'Write':
         return None
     fp = (data.get('tool_input') or {}).get('file_path') or ''
     if not fp:
         return None
-    rec_dir, prefix, index = _tracker(root)
+    rec_dir, prefix, index = cfg.records_dir, cfg.raw['tracker'].get('record_prefix', 'E'), cfg.record_index_file
     target = os.path.abspath(fp if os.path.isabs(fp) else os.path.join(root, fp))
     try:
         rel = os.path.relpath(target, root)
@@ -92,21 +88,29 @@ def decide_overwrite(root, data):
     rec_pat = re.escape(rec_dir.replace(os.sep, '/').strip('/')) + '/' + re.escape(prefix) + r'\d+\.md'
     if re.fullmatch(rec_pat, rel) and os.path.exists(target):
         return ('완료 기록 %s 은 이미 있습니다. 기록은 덮어쓰지 않습니다 — 고칠 곳만 Edit 으로 바꾸고, '
-                '새 항목은 도구/완료기록_새항목.py 로 다음 번호에 만듭니다 (동시 편집 규칙 — tracker-workflow.md).' % rel)
+                '새 항목은 %s 로 다음 번호에 만듭니다 (동시 편집 규칙 — tracker-workflow.md).' % (rel, cfg.tool('new_record.py')))
     if rel == index.replace(os.sep, '/') and os.path.exists(target):
-        return ('%s 은 도구가 생성하는 파일입니다. 손으로 쓰지 말고 도구/완료기록_색인.py 로 다시 만듭니다.' % rel)
+        return ('%s 은 도구가 생성하는 파일입니다. 손으로 쓰지 말고 %s 로 다시 만듭니다.' % (rel, cfg.tool('index_records.py')))
     return None
 
 
-NEW_ITEM_TOOL = os.path.join('도구', '미결_새항목.py')
+def decide_legacy(root, data, message):
+    """설정 없이 옛 기본 이름을 쓰는 프로젝트 — 설정 파일이 아닌 Edit · Write 를 막는 사유, 아니면 None."""
+    if data.get('tool_name') not in ('Edit', 'Write', 'MultiEdit'):
+        return None
+    fp = (data.get('tool_input') or {}).get('file_path') or ''
+    target = os.path.abspath(fp if os.path.isabs(fp) else os.path.join(root, fp))
+    if any(os.path.normcase(target) == os.path.normcase(os.path.join(root, rel)) for rel in CONFIG_RELS):
+        return None
+    return message
 
 
-def decide_new_ids(root, sync, tool, ti, rel):
+def decide_new_ids(cfg, root, sync, tool, ti, rel):
     """새 미결 ID 를 손으로 넣는 Edit · Write — 막아야 하면 사유, 아니면 None. 번호는 도구가 잠금 안에서 정합니다(두 세션이 같은 번호를
     집지 않게). 판정은 `Sync.hand_added_ids`(범위 · 새 ID 의 정의는 그 한 곳). 프로젝트에 번호 도구가 아직 없으면(사본을 갱신하지 않은
-    프로젝트) 막지 않습니다 — 막으면 넣을 길이 없습니다. 옛 `_동기화.py` 도 통과시킵니다."""
+    프로젝트) 막지 않습니다 — 막으면 넣을 길이 없습니다. 옛 `_sync.py` 도 통과시킵니다."""
     find = getattr(sync, 'hand_added_ids', None)
-    if find is None or not os.path.isfile(os.path.join(root, NEW_ITEM_TOOL)):
+    if find is None or not os.path.isfile(os.path.join(root, cfg.tools_dir, 'new_pending.py')):
         return None
     if tool == 'Write':
         text = ti.get('content') or ''
@@ -120,17 +124,19 @@ def decide_new_ids(root, sync, tool, ti, rel):
     letter = re.match(r'[A-Z]+', new[0]).group(0)
     return ('새 미결 항목 %s 을(를) 손으로 넣으려 했습니다. 번호는 도구가 정합니다 — 두 세션이 같은 번호를 집지 않게 하기 위해서입니다. '
             '행의 ID 자리를 `%s?` 로 바꿔 한 줄짜리 파일로 적고 `<py> -X utf8 %s <그 파일>` 을 돌린 뒤, 출력된 번호를 받아 쓰십시오 '
-            '(tracker-workflow.md 「동시 편집」).' % (' · '.join(new), letter, NEW_ITEM_TOOL.replace(os.sep, '/')))
+            '(tracker-workflow.md 「동시 편집」).' % (' · '.join(new), letter, cfg.tool('new_pending.py')))
 
 
 def _load_sync(root):
-    """(_config, _동기화) 모듈 — 플러그인 배치(`../tools`)를 먼저, 없으면 프로젝트 사본(`도구/`)."""
-    for tools in (os.path.join(os.path.dirname(HERE), 'tools'), os.path.join(root, '도구')):
-        if os.path.isfile(os.path.join(tools, '_동기화.py')) and os.path.isfile(os.path.join(tools, '_config.py')):
+    """(_config, _sync) 모듈 — 플러그인 배치(`../tools`)를 먼저, 없으면 프로젝트 사본(설정의 `tools_dir`, 없으면 `tools` · `도구`)."""
+    dirs = [os.path.join(os.path.dirname(HERE), 'tools')]
+    dirs += [os.path.join(root, d) for d in (_raw_config(root).get('tools_dir'), 'tools', '도구') if d]
+    for tools in dirs:
+        if os.path.isfile(os.path.join(tools, '_sync.py')) and os.path.isfile(os.path.join(tools, '_config.py')):
             if tools not in sys.path:
                 sys.path.insert(0, tools)
             mods = []
-            for name in ('_config', '_동기화'):
+            for name in ('_config', '_sync'):
                 spec = importlib.util.spec_from_file_location(name, os.path.join(tools, name + '.py'))
                 m = importlib.util.module_from_spec(spec)
                 sys.modules[name] = m
@@ -148,7 +154,7 @@ def deny(reason):
 
 def notice_tables(sync, rels):
     """쓰기 뒤 — 추적 파일에 표 결함(쪼개진 행 등)이 남아 있으면 그 턴에 알립니다(막지 않음). 모델에게는 additionalContext,
-    사용자에게는 systemMessage. 옛 `_동기화.py`(table_report 없음)나 검사 결함은 조용히 건너뜁니다 — fail-open."""
+    사용자에게는 systemMessage. 옛 `_sync.py`(table_report 없음)나 검사 결함은 조용히 건너뜁니다 — fail-open."""
     try:
         probs = sync.table_report(rels)
     except Exception as e:
@@ -177,16 +183,25 @@ def run(mode, data):
     if root is None:
         return 0
 
+    cfg_mod, sync_mod = _load_sync(root)
+    if sync_mod is None:
+        return 0
+    legacy = getattr(cfg_mod, 'LegacyNames', None)
+    try:
+        cfg = cfg_mod.load(root)
+    except BaseException as e:                   # LegacyNames 는 SystemExit — 도구에서는 멈추고, 훅에서는 사유로 씁니다
+        if legacy is None or not isinstance(e, legacy):
+            raise
+        reason = decide_legacy(root, data, str(e)) if mode == 'pre' else None
+        if reason:
+            deny(reason)
+        return 0
     if mode == 'pre':
-        reason = decide_overwrite(root, data)
+        reason = decide_overwrite(cfg, root, data)
         if reason:
             deny(reason)
             return 0
 
-    cfg_mod, sync_mod = _load_sync(root)
-    if sync_mod is None:
-        return 0
-    cfg = cfg_mod.load(root)
     sync = sync_mod.Sync(cfg)
     marker = '%s_%s' % (mode, data.get('tool_use_id') or hashlib.sha1(json.dumps(ti, sort_keys=True).encode('utf-8')).hexdigest()[:16])
     if sync.hook_seen(marker):
@@ -203,11 +218,11 @@ def run(mode, data):
         if rel.startswith('..') or not sync.is_shared(rel):
             return 0
         if mode == 'pre':
-            reason = sync.guard(tool, rel) or decide_new_ids(root, sync, tool, ti, rel)
+            reason = sync.guard(tool, rel) or decide_new_ids(cfg, root, sync, tool, ti, rel)
             if reason:
                 deny(reason)
                 return 0
-            wait = getattr(sync, 'wait_write_lock', None)        # 옛 `_동기화.py` 에는 없습니다
+            wait = getattr(sync, 'wait_write_lock', None)        # 옛 `_sync.py` 에는 없습니다
             if wait and not wait():                              # 정리 도구 등이 쓰는 중이면 풀릴 때까지 잠깐 — 못 기다려도 막지 않습니다
                 sys.stderr.write('guard_write: 쓰기 잠금이 풀리지 않아 기다리지 않고 통과시킵니다\n')
             sync.before_write(rel)
@@ -222,7 +237,7 @@ def run(mode, data):
         if not open_:
             return 0
         cmd = ti.get('command') or ''
-        names = {os.path.basename(r) for r in sync.shared_files()} | {sync.cfg.raw.get('tracker', {}).get('records_dir', '완료기록')}
+        names = {os.path.basename(r) for r in sync.shared_files()} | {cfg.records_dir}
         if any(n and n in cmd for n in names):
             deny(sync.guard(tool))
         return 0

@@ -22,8 +22,8 @@ Claude Code·Codex 공통 스킬 마켓플레이스의 **소스 저장소**입�
 - `.claude-plugin/plugin.json`의 이름·버전·설명을 원본으로 삼습니다.
   `python scripts/sync_codex_manifests.py`가 `.codex-plugin/plugin.json`과
   `.agents/plugins/marketplace.json`을 생성합니다. 생성물은 손으로 수정하지 않습니다.
-- `python scripts/release.py check` 한 번이 공통 구성 · 해시 목록 · Claude 매니페스트 · 버전 규칙 · 시험을
-  모두 검증합니다. 원격 fetch도 수행하고, 아무것도 바꾸지 않습니다.
+- `python scripts/release.py check` 한 번이 파일 이름(ASCII) · 공개 검사(개인 정보) · 공통 구성 · 해시 목록 · Claude 매니페스트 ·
+  버전 규칙 · 시험을 모두 검증합니다. 원격 fetch도 수행하고, 아무것도 바꾸지 않습니다.
 - 설치·갱신은 두 앱 모두 `python bootstrap/bootstrap.py install` / `update`입니다.
   Codex의 배포 전 작업 클론 시험에만 `--app codex --local`을 사용합니다. 설치된 캐시를 직접 고치지 않습니다.
 - 사용자 승인·쓰기 범위·원본 보호는 앱별 등록 정보로 완화하지 않습니다.
@@ -99,8 +99,8 @@ python scripts/release.py publish -m "무엇을 고쳤는지 (72자 이내)"
 **배포 전 검증** — `python scripts/release.py check` 가 공통 구성 · 해시 목록 · Claude 매니페스트 · 버전 규칙 · 시험
 (합성 표본: 저널 · 학위논문 × 옛 · 새 형식의 추적 파일)을 돌립니다. 여기에 들어 있지 않은 것이 하나 있습니다 —
 **`python -X utf8 scripts/preview_projects.py <자매 프로젝트> …`**
-(실제 프로젝트의 추적 파일 **사본**에 새 도구를 돌려 예고한 차이와 같은지 — 원본에는 쓰지 않음. `문법기준.py` 를 고쳤으면 `--grammar` 로
-원고 사본에 문법기준 시나리오도 돌림 — 설정에 `grammar` 키가 없는 프로젝트는 `--set grammar=<JSON>`). 관리 파일
+(실제 프로젝트의 추적 파일 **사본**에 새 도구를 돌려 예고한 차이와 같은지 — 원본에는 쓰지 않음. `grammar_baseline.py` 를 고쳤으면 `--grammar` 로
+원고 사본에 grammar_baseline 시나리오도 돌림 — 설정에 `grammar` 키가 없는 프로젝트는 `--set grammar=<JSON>`). 관리 파일
 (`new-manuscript/managed_files.json` 의 목록)을 `bump` 뒤에 더 고쳤으면 `python -X utf8 scripts/tool_hashes.py` 로 해시 목록을 다시 만들어
 함께 커밋합니다 — `check` 가 최신인지 검사합니다. 기존 프로젝트의 사본은 배포 뒤 `new-manuscript/update_tools.py` 로 맞춥니다.
 
@@ -140,6 +140,7 @@ python scripts/release.py publish -m "무엇을 고쳤는지 (72자 이내)"
 | `claude` 실행 파일과 판, 등록된 마켓플레이스, 설치된 버전 | `python bootstrap/bootstrap.py status` |
 | 저장소에 로그인 창 없이 접근되는지 | `GIT_TERMINAL_PROMPT=0 git ls-remote <저장소 주소> HEAD` |
 | 플러그인 설치본 폴더 (Git Bash) | `ls -d "$USERPROFILE/.claude/plugins/cache/<마켓플레이스 이름>/"*/*/` |
+| 공개 검사의 개인 금지어 목록 | `git config research-plugins.denylist` — 없으면 `check` 가 일반 패턴만 보고 경고합니다 |
 
 어느 컴퓨터에서나 지킬 것:
 

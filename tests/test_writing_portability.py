@@ -43,7 +43,7 @@ class WritingPortabilityTests(unittest.TestCase):
 
     def run_empty_tracker(self, project: Path, *args: str):
         result = self.run_python(
-            project / "도구" / "수정필요_정리.py", *args, cwd=project, codes=(1,)
+            project / "tools" / "tidy_tracker.py", *args, cwd=project, codes=(1,)
         )
         # Empty new projects intentionally return 1 for the missing-records diagnostic.
         # Zero open items with intact tables is a note, not a warning: the list
@@ -106,10 +106,10 @@ class WritingPortabilityTests(unittest.TestCase):
 
     def test_generated_tools_run_with_nondefault_paths(self):
         project = self.create_project("도구 실행")
-        for tool in ("번호점검.py", "완료기록_색인.py"):
-            self.run_python(project / "도구" / tool, cwd=project)
+        for tool in ("check_numbers.py", "index_records.py"):
+            self.run_python(project / "tools" / tool, cwd=project)
         self.run_empty_tracker(project)
-        self.assertTrue((project / "수정필요_색인.md").is_file())
+        self.assertTrue((project / "tracker_records_index.md").is_file())
         before = self.snapshot(project)
         self.run_empty_tracker(project, "--apply")
         once = self.snapshot(project)
@@ -126,15 +126,15 @@ class WritingPortabilityTests(unittest.TestCase):
         # The index title must follow project.json, not a name baked into the tool,
         # and a later rename must show up on the next regeneration.
         project = self.create_project("색인 제목")
-        records = project / "완료기록"
+        records = project / "records"
         records.mkdir(exist_ok=True)
         (records / "E1.md").write_text(
             "# E1 — 색인 제목 검증\n\n**완료일** 2026-01-01\n**대상** `intro.md` ¶1\n"
             "**상태** 반영 (확정 대기)\n\n## 발단\n\n검증용 항목입니다.\n",
             encoding="utf-8",
         )
-        index = project / "수정필요_색인.md"
-        tool = project / "도구" / "완료기록_색인.py"
+        index = project / "tracker_records_index.md"
+        tool = project / "tools" / "index_records.py"
         self.run_python(tool, cwd=project)
         self.assertTrue(
             index.read_text(encoding="utf-8").startswith("# 완료 기록 색인 — 이식성 검증 원고"),
@@ -158,18 +158,18 @@ class WritingPortabilityTests(unittest.TestCase):
         cfg = json.loads((project / ".manuscript" / "project.json").read_text(encoding="utf-8"))
         self.assertEqual(cfg["manuscript"]["chapters"][0]["file"], "intro.md")
         trigger = cfg["tracker"]["triggers"][0]
-        pending = project / "수정필요_대기.md"
+        pending = project / "tracker_pending.md"
         text = pending.read_text(encoding="utf-8")
         header = "|---|---|---|---|---|---|\n"
         self.assertIn(header, text)
         row = "| A1 | 포커스 검증 항목 | intro.md ¶1 | %s | 대기 | |\n" % trigger
         pending.write_text(text.replace(header, header + row, 1), encoding="utf-8")
         result = self.run_python(
-            project / "도구" / "수정필요_정리.py", "--focus", "ch1", "--apply",
+            project / "tools" / "tidy_tracker.py", "--focus", "ch1", "--apply",
             cwd=project, codes=(0, 1),
         )
         self.assertNotIn("Traceback", result.stderr)
-        listing = (project / "수정필요_목록.md").read_text(encoding="utf-8")
+        listing = (project / "tracker_index.md").read_text(encoding="utf-8")
         block = listing.split("<!-- 포커스 -->", 1)[1].split("<!-- /포커스 -->", 1)[0]
         self.assertIn("**작업 중인 장** ch1", block)
         self.assertIn("1건", block)
@@ -183,21 +183,21 @@ class WritingPortabilityTests(unittest.TestCase):
         cfg = json.loads((project / ".manuscript" / "project.json").read_text(encoding="utf-8"))
         trigger = cfg["tracker"]["triggers"][1]
         header = "|---|---|---|---|---|---|\n"
-        pending = project / "수정필요_대기.md"
+        pending = project / "tracker_pending.md"
         text = pending.read_text(encoding="utf-8")
         row = "| A1 | 남는 대기 항목 | intro.md ¶1 | %s | 대기 | |\n" % trigger
         pending.write_text(text.replace(header, header + row, 1), encoding="utf-8")
-        proposals = project / "수정필요_제안.md"
+        proposals = project / "tracker_proposals.md"
         text = proposals.read_text(encoding="utf-8")
         rows = ("| H1 | 버린 제안 | intro.md ¶1 | %s | 종결 | 버림 |\n"
                 "| H2 | 남는 제안 | intro.md ¶2 | %s | 대기 | 검토 중 |\n") % (trigger, trigger)
         proposals.write_text(text.replace(header, header + rows, 1), encoding="utf-8")
         result = self.run_python(
-            project / "도구" / "수정필요_정리.py", "--focus", "ch1", "--apply",
+            project / "tools" / "tidy_tracker.py", "--focus", "ch1", "--apply",
             cwd=project, codes=(0, 1),
         )
         self.assertNotIn("Traceback", result.stderr)
-        listing = (project / "수정필요_목록.md").read_text(encoding="utf-8")
+        listing = (project / "tracker_index.md").read_text(encoding="utf-8")
         for name in ("위치표", "트리거표", "포커스"):
             block = listing.split("<!-- %s -->" % name, 1)[1].split("<!-- /%s -->" % name, 1)[0]
             self.assertIn("A1", block, name)
@@ -212,7 +212,7 @@ class WritingPortabilityTests(unittest.TestCase):
         # as citations; a caption line does not cite itself.
         project = self.create_project("저널 번호")
         src = project / "draft sources"
-        tool = project / "도구" / "번호점검.py"
+        tool = project / "tools" / "check_numbers.py"
         (src / "bib.md").write_text("@REF 1. 첫 문헌.\n\n@REF 2. 둘째 문헌.\n", encoding="utf-8")
         (src / "intro.md").write_text("접합부가 깨진다 [1]. Fig. 1 을 봅니다.\n", encoding="utf-8")
         results = ("@FIG a.png | Figure 1. 첫 그림.\n\n"
@@ -253,7 +253,7 @@ class WritingPortabilityTests(unittest.TestCase):
             "@FIG c.png | Figure 2-2. 인용되지 않는 그림.\n",
             encoding="utf-8",
         )
-        out = self.run_python(project / "도구" / "번호점검.py", cwd=project).stdout
+        out = self.run_python(project / "tools" / "check_numbers.py", cwd=project).stdout
         self.assertIn("ch1 Figure 캡션 1건  OK", out)
         self.assertIn("ch2 Figure 캡션 2건  OK", out)
         self.assertIn("본문에서 인용되지 않음 ['2-2']", out)
@@ -263,25 +263,25 @@ class WritingPortabilityTests(unittest.TestCase):
         # The allocator, not the model, picks the record number; a number another
         # session took first is skipped, and a malformed body creates nothing.
         project = self.create_project("기록 번호 할당")
-        tool = project / "도구" / "완료기록_새항목.py"
+        tool = project / "tools" / "new_record.py"
         body = self.scratch / "record_body.md"
         body.write_text(
             "# E? — 할당 검증\n\n**완료일** 2026-01-02\n**대상** `intro.md` ¶1\n**상태** 확정\n\n본문 (E?).\n",
             encoding="utf-8",
         )
         out = self.run_python(tool, str(body), cwd=project).stdout.strip().splitlines()[-1]
-        self.assertEqual(out.split("\t"), ["E1", "완료기록/E1.md"])
-        text = (project / "완료기록" / "E1.md").read_text(encoding="utf-8")
+        self.assertEqual(out.split("\t"), ["E1", "records/E1.md"])
+        text = (project / "records" / "E1.md").read_text(encoding="utf-8")
         self.assertTrue(text.startswith("# E1 — 할당 검증"), text.splitlines()[0])
         self.assertIn("본문 (E1).", text)
-        (project / "완료기록" / "E2.md").write_text("# E2 — 다른 세션이 먼저 만든 항목\n", encoding="utf-8")
+        (project / "records" / "E2.md").write_text("# E2 — 다른 세션이 먼저 만든 항목\n", encoding="utf-8")
         out = self.run_python(tool, str(body), cwd=project).stdout.strip().splitlines()[-1]
         self.assertEqual(out.split("\t")[0], "E3")
-        self.assertIn("다른 세션이 먼저", (project / "완료기록" / "E2.md").read_text(encoding="utf-8"))
+        self.assertIn("다른 세션이 먼저", (project / "records" / "E2.md").read_text(encoding="utf-8"))
         bad = self.scratch / "record_body_bad.md"
         bad.write_text("제목 줄이 없음\n\n**완료일** 2026-01-02\n", encoding="utf-8")
         self.run_python(tool, str(bad), cwd=project, codes=(1,))
-        self.assertFalse((project / "완료기록" / "E4.md").exists())
+        self.assertFalse((project / "records" / "E4.md").exists())
 
     def test_generated_files_do_not_depend_on_the_host(self):
         # Trackers are generated on Windows and on macOS and travel between them through
@@ -301,9 +301,9 @@ class WritingPortabilityTests(unittest.TestCase):
 """,
             encoding="utf-8",
         )
-        self.run_python(project / "도구" / "완료기록_새항목.py", str(body), cwd=project)
-        self.run_python(project / "도구" / "완료기록_색인.py", cwd=project)
-        self.run_python(project / "도구" / "수정필요_정리.py", "--apply",
+        self.run_python(project / "tools" / "new_record.py", str(body), cwd=project)
+        self.run_python(project / "tools" / "index_records.py", cwd=project)
+        self.run_python(project / "tools" / "tidy_tracker.py", "--apply",
                         cwd=project, codes=(0, 1))
 
         produced = [p for p in project.rglob("*")
@@ -315,8 +315,8 @@ class WritingPortabilityTests(unittest.TestCase):
         for path in sorted(p for p in produced if p.suffix == ".md"):
             text = path.read_text(encoding="utf-8")
             name = path.relative_to(project).as_posix()
-            for baked in ("python 도구", "python3 도구",
-                          "python -X utf8 도구", "python3 -X utf8 도구"):
+            for baked in ("python tools", "python3 tools",
+                          "python -X utf8 tools", "python3 -X utf8 tools"):
                 self.assertNotIn(baked, text, "%s 에 실행기 이름이 박혔습니다: %s" % (name, baked))
             if "<py>" in text:
                 # A file that uses the placeholder must also say what to substitute.
@@ -333,7 +333,7 @@ class WritingPortabilityTests(unittest.TestCase):
         self.assertIn("guard_write.py", command)
         self.assertEqual(settings["hooks"]["PreToolUse"][0]["matcher"], "Edit|Write|Bash|PowerShell")
         self.assertIn("PostToolUse", settings["hooks"])
-        records = project / "완료기록"
+        records = project / "records"
         (records / "E1.md").write_text("# E1 — 기존 항목\n", encoding="utf-8")
 
         def run(path, tool_name="Write"):
@@ -350,7 +350,7 @@ class WritingPortabilityTests(unittest.TestCase):
         decision = json.loads(denied.stdout)["hookSpecificOutput"]
         self.assertEqual(decision["permissionDecision"], "deny")
         self.assertIn("E1.md", decision["permissionDecisionReason"])
-        index = run(project / "수정필요_색인.md")
+        index = run(project / "tracker_records_index.md")
         self.assertEqual(json.loads(index.stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
         for allowed in (run(records / "E2.md"), run(project / "CLAUDE.md"), run(records / "E1.md", "Edit")):
             self.assertEqual((allowed.returncode, allowed.stdout.strip()), (0, ""), allowed.stderr)

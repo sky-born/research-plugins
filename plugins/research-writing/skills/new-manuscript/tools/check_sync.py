@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-r"""동기화_점검.py — 공용 파일 동기화 점검 · 스냅샷 · 복구 · 확인. 본체는 `_동기화.py`(같은 폴더).
+r"""check_sync.py — 공용 파일 동기화 점검 · 스냅샷 · 복구 · 확인. 본체는 `_sync.py`(같은 폴더).
 
 사용법  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> -X utf8 도구/동기화_점검.py                       세션 시작 — 점검 전부 · 경계 스냅샷(로컬 + 드라이브) · 상태 한 줄
-    <py> -X utf8 도구/동기화_점검.py --quick               점검만(스냅샷 없음)
-    <py> -X utf8 도구/동기화_점검.py --end                 세션 끝 — 경계 스냅샷 · 보존 정리 (정리 도구 --apply 가 자동으로 부름)
-    <py> -X utf8 도구/동기화_점검.py --ack "<사용자 문구>"  열린 ERROR 를 사용자 확인으로 닫음 — 사용자에게 보이고 확인을 받은 뒤에만
-    <py> -X utf8 도구/동기화_점검.py --accept-warn         WARN 만 있을 때 기준(쓴 줄 등록 · 본 기록 · ID)을 지금 상태에 맞춤 — 문구 불필요 ·
+    <py> -X utf8 tools/check_sync.py                       세션 시작 — 점검 전부 · 경계 스냅샷(로컬 + 드라이브) · 상태 한 줄
+    <py> -X utf8 tools/check_sync.py --quick               점검만(스냅샷 없음)
+    <py> -X utf8 tools/check_sync.py --end                 세션 끝 — 경계 스냅샷 · 보존 정리 (정리 도구 --apply 가 자동으로 부름)
+    <py> -X utf8 tools/check_sync.py --ack "<사용자 문구>"  열린 ERROR 를 사용자 확인으로 닫음 — 사용자에게 보이고 확인을 받은 뒤에만
+    <py> -X utf8 tools/check_sync.py --accept-warn         WARN 만 있을 때 기준(쓴 줄 등록 · 본 기록 · ID)을 지금 상태에 맞춤 — 문구 불필요 ·
                                                            열린 ERROR 가 있으면 거부(2)
-    <py> -X utf8 도구/동기화_점검.py --damage              손실 보고 전체 — 이 컴퓨터가 쓴 줄 가운데 사라진 것
-    <py> -X utf8 도구/동기화_점검.py --restore <파일> [--at "YYYY-MM-DD HH:MM" | --hash <8자리>]
+    <py> -X utf8 tools/check_sync.py --damage              손실 보고 전체 — 이 컴퓨터가 쓴 줄 가운데 사라진 것
+    <py> -X utf8 tools/check_sync.py --restore <파일> [--at "YYYY-MM-DD HH:MM" | --hash <8자리>]
                                                            스냅샷으로 되돌림(되돌리기 전 현재 판도 남김)
-    <py> -X utf8 도구/동기화_점검.py --snapshots <파일>    그 파일의 스냅샷 목록
-    <py> -X utf8 도구/동기화_점검.py --guard <파일> [--tool Edit]   쓰기 직전 판정(훅 · 도구가 부름) — 막으면 사유를 내고 2
-    <py> -X utf8 도구/동기화_점검.py --after-write <파일>  쓰기 직후 처리(훅 · 도구가 부름)
-    <py> -X utf8 도구/동기화_점검.py --after-bash          Bash 뒤 — 지문이 바뀐 공용 파일만 처리
+    <py> -X utf8 tools/check_sync.py --snapshots <파일>    그 파일의 스냅샷 목록
+    <py> -X utf8 tools/check_sync.py --guard <파일> [--tool Edit]   쓰기 직전 판정(훅 · 도구가 부름) — 막으면 사유를 내고 2
+    <py> -X utf8 tools/check_sync.py --after-write <파일>  쓰기 직후 처리(훅 · 도구가 부름)
+    <py> -X utf8 tools/check_sync.py --after-bash          Bash 뒤 — 지문이 바뀐 공용 파일만 처리
 
 종료 코드 — 0 OK · 1 WARN 또는 확인된 ERROR(ack_hours 안 — 쓰기를 막지 않음) · 2 확인되지 않은 ERROR(또는 --guard 가 막음) · 3 인자 · 설정 오류
 ERROR 가 있으면 공용 파일을 쓰기 전에 사용자에게 보이고 확인을 받습니다(`--ack`). WARN 만 있으면 동기화된 것으로 봅니다 — 상태 한 줄로
@@ -27,7 +27,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _config import load as _load_cfg, _콘솔_UTF8  # noqa: E402
-from _동기화 import Sync, find_project_root, parse_utc  # noqa: E402
+from _sync import Sync, find_project_root, parse_utc  # noqa: E402
 
 
 def _rc(findings, sync=None):

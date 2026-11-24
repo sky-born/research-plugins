@@ -1,4 +1,4 @@
-"""문법기준.py — 합성 표본(학위논문형 LF · 저널형 CRLF)으로 시나리오와 경계 사례를 확인합니다.
+"""grammar_baseline.py — 합성 표본(학위논문형 LF · 저널형 CRLF)으로 시나리오와 경계 사례를 확인합니다.
 
 표본은 OS 임시 폴더에 만들고 연구 파일은 건드리지 않습니다. 시나리오 본체는 grammar_scenarios.py(실제 사본 시험과 공용)입니다.
 
@@ -135,25 +135,25 @@ def make_thesis(root: Path) -> Path:
     p = root / 'thesis'
     cfg = {
         'project': '학위논문 표본', 'kind': 'dissertation',
-        'manuscript': {'source_dir': '초안_소스', 'chapters': [{'n': 1, 'file': 'ch1.md'}, {'n': 2, 'file': 'ch2.md'}],
+        'manuscript': {'source_dir': 'manuscript_src', 'chapters': [{'n': 1, 'file': 'ch1.md'}, {'n': 2, 'file': 'ch2.md'}],
                        'references': 'references.md', 'build_script': 'build_tpl.py'},
         'grammar': {
             'sources': [
-                {'file': '초안_소스/abstract.md'},
-                {'file': '초안_소스/build_tpl.py', 'kind': 'lines', 'regions': [
+                {'file': 'manuscript_src/abstract.md'},
+                {'file': 'manuscript_src/build_tpl.py', 'kind': 'lines', 'regions': [
                     {'start': '^TITLE = ', 'end': '^AUTHOR = '},
                     {'start': '^TABLES = \\{', 'end': '^# -+ collectors'},
                     {'start': '^\\s*# ---- Appendix', 'end': '^\\s*# ---- References'}]},
-                {'file': '초안_소스/그림목차.json', 'kind': 'json-values'}],
+                {'file': 'manuscript_src/그림목차.json', 'kind': 'json-values'}],
             'avoid_lists': ['../피할_표현/분야.md']},
     }
     write(p / '.manuscript' / 'project.json', json.dumps(cfg, ensure_ascii=False, indent=2) + '\n')
-    write(p / '초안_소스' / 'ch1.md', CH1)
-    write(p / '초안_소스' / 'ch2.md', CH2)
-    write(p / '초안_소스' / 'abstract.md', ABSTRACT)
-    write(p / '초안_소스' / 'references.md', '[1] A. Author, Sample Journal 1 (2020) 1.\n')
-    write(p / '초안_소스' / 'build_tpl.py', BUILD_PY)
-    write(p / '초안_소스' / '그림목차.json', FIGLIST)
+    write(p / 'manuscript_src' / 'ch1.md', CH1)
+    write(p / 'manuscript_src' / 'ch2.md', CH2)
+    write(p / 'manuscript_src' / 'abstract.md', ABSTRACT)
+    write(p / 'manuscript_src' / 'references.md', '[1] A. Author, Sample Journal 1 (2020) 1.\n')
+    write(p / 'manuscript_src' / 'build_tpl.py', BUILD_PY)
+    write(p / 'manuscript_src' / '그림목차.json', FIGLIST)
     write(root / '피할_표현' / '분야.md', AVOID)
     return p
 
@@ -220,16 +220,16 @@ class Edges(Base):
     def test_region_bounds(self):
         p = self.proj('thesis')
         out = p.run('status').stdout
-        row = [l for l in out.splitlines() if '초안_소스/build_tpl.py' in l][0]
+        row = [l for l in out.splitlines() if 'manuscript_src/build_tpl.py' in l][0]
         self.assertEqual(int(row.split()[2]), BUILD_REGION_UNITS, out)
         # AUTHOR(끝 표지 줄)와 함수 본문은 구간 밖
-        p.replace_once('초안_소스/build_tpl.py', "AUTHOR = 'Sample Author'", "AUTHOR = 'Other Author'")
-        p.replace_once('초안_소스/build_tpl.py', '    return 1\n', '    return 2\n')
+        p.replace_once('manuscript_src/build_tpl.py', "AUTHOR = 'Sample Author'", "AUTHOR = 'Other Author'")
+        p.replace_once('manuscript_src/build_tpl.py', '    return 1\n', '    return 2\n')
         p.run('changed')
-        p.replace_once('초안_소스/build_tpl.py', "'Behavior on Different Inputs')", "'Behaviour on Different Inputs')")
+        p.replace_once('manuscript_src/build_tpl.py', "'Behavior on Different Inputs')", "'Behaviour on Different Inputs')")
         r = p.run('changed', codes=(1,))
         self.assertEqual(len(p.listed(r.stdout)), 1)
-        self.assertIn('초안_소스/build_tpl.py L5', r.stdout)
+        self.assertIn('manuscript_src/build_tpl.py L5', r.stdout)
 
     def test_json_units(self):
         p = self.proj('thesis')
@@ -239,7 +239,7 @@ class Edges(Base):
 
     def test_json_comment_keys_nested_and_duplicate(self):
         p = self.proj('thesis', init=False)
-        fig = '초안_소스/그림목차.json'
+        fig = 'manuscript_src/그림목차.json'
         write(p.root / fig, '{\n'
               ' "_설명": "설명 문구",\n'
               ' "_묶음": {"a": "Nested text under a comment key.", "b": ["Listed text under a comment key."]},\n'
@@ -278,10 +278,10 @@ class Edges(Base):
         para = J_INTRO.split('\n\n')[1]
         p.replace_once('manuscript/intro.md', para, para + ' ZZ')
         r = p.run('--baseline', base, 'changed', '--out', codes=(1,))
-        made = list((outside / '문법묶음').glob('*.json'))
+        made = list((outside / 'grammar_packets').glob('*.json'))
         self.assertEqual(len(made), 1, r.stdout)
         self.assertNotIn(' ', made[0].name)
-        self.assertFalse((p.root / '.manuscript' / '문법묶음').exists())
+        self.assertFalse((p.root / '.manuscript' / 'grammar_packets').exists())
         r = p.run('--baseline', base, 'clean', '--packet', made[0], '--all-except')
         self.assertIn('찍음 1', r.stdout)
         p.run('--baseline', base, 'changed')
@@ -298,13 +298,13 @@ class Edges(Base):
         before = p.run('status').stdout
         tot0 = int(re.search(r'합계\s+(\d+)', before).group(1))
         dup = 'ZZDUP The same paragraph appears in two chapters for the duplicate test.'
-        p.replace_once('초안_소스/ch1.md', CH1.split('\n\n')[2], CH1.split('\n\n')[2] + '\n\n' + dup)
-        p.replace_once('초안_소스/ch2.md', CH2.split('\n\n')[1], CH2.split('\n\n')[1] + '\n\n' + dup)
+        p.replace_once('manuscript_src/ch1.md', CH1.split('\n\n')[2], CH1.split('\n\n')[2] + '\n\n' + dup)
+        p.replace_once('manuscript_src/ch2.md', CH2.split('\n\n')[1], CH2.split('\n\n')[1] + '\n\n' + dup)
         r = p.run('changed', codes=(1,))
         got = p.listed(r.stdout)
         self.assertEqual(len(got), 1)
-        self.assertIn('초안_소스/ch1.md L', got[0][1])
-        self.assertIn(' · 초안_소스/ch2.md L', got[0][1])
+        self.assertIn('manuscript_src/ch1.md L', got[0][1])
+        self.assertIn(' · manuscript_src/ch2.md L', got[0][1])
         st = p.run('status', codes=(1,)).stdout
         m = re.search(r'합계\s+(\d+)\s+(\d+)\s+(\d+)', st)
         self.assertEqual((int(m.group(1)), int(m.group(3))), (tot0 + 2, 2))
@@ -314,18 +314,18 @@ class Edges(Base):
         p = self.proj('thesis')
         para = CH1.split('\n\n')[3]
         self.assertIn('weighed to', para)
-        p.replace_once('초안_소스/ch1.md', para, para.replace('before melting', 'before the melting'))
+        p.replace_once('manuscript_src/ch1.md', para, para.replace('before melting', 'before the melting'))
         r = p.run('changed', codes=(1,))
         self.assertIn('! 피할 표현: `Weighed to`\n', r.stdout)                 # 첫 코드 스팬만 — 괄호 설명의 `of` 는 표현이 아님
         para2 = CH1.split('\n\n')[2]
-        p.replace_once('초안_소스/ch1.md', para2, para2.replace('motivation of the', 'motivation of this'))
+        p.replace_once('manuscript_src/ch1.md', para2, para2.replace('motivation of the', 'motivation of this'))
         r = p.run('changed', codes=(1,))
         self.assertEqual(r.stdout.count('피할 표현'), 1, r.stdout)
 
     def test_packet_tamper_and_unknown_id(self):
         p = self.proj('thesis')
         para = CH1.split('\n\n')[2]
-        p.replace_once('초안_소스/ch1.md', para, para + ' ZZ')
+        p.replace_once('manuscript_src/ch1.md', para, para + ' ZZ')
         work = Path(tempfile.mkdtemp(prefix='grammar-pk-'))
         self.addCleanup(shutil.rmtree, work, True)
         pk = work / 'p.json'
@@ -344,6 +344,19 @@ class Edges(Base):
         r = p.run('clean', '--packet', pk2, '--all-except', codes=(2,))
         self.assertIn('맞지 않습니다', r.stdout)
         self.assertEqual(p.baseline_bytes(), before)
+
+    def test_legacy_baseline_name_is_kept(self):
+        # 0.12 이하의 기준 파일 이름만 있으면 그 파일을 그대로 쓰고, 묶음도 옛 자리에 둡니다
+        p = self.proj('journal')
+        new = p.root / '.manuscript' / 'grammar_baseline.jsonl'
+        old = p.root / '.manuscript' / '문법기준.jsonl'
+        new.rename(old)
+        p.run('status')
+        para = J_INTRO.split('\n\n')[1]
+        p.replace_once('manuscript/intro.md', para, para + ' ZZ')
+        p.run('changed', '--out', codes=(1,))
+        self.assertTrue(list((p.root / '.manuscript' / '문법묶음').glob('*.json')))
+        self.assertFalse(new.exists())
 
     def test_needs_baseline_and_confirm(self):
         p = self.proj('journal', init=False)

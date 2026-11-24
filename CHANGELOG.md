@@ -6,6 +6,20 @@
 
 ## research-writing
 
+### 0.13.0 — 2026-11-24
+
+- 관리 도구 아홉의 파일 이름을 영어로 — `_동기화.py` → `_sync.py` · `_위치.py` → `_location.py` · `동기화_점검.py` → `check_sync.py` ·
+  `번호점검.py` → `check_numbers.py` · `문법기준.py` → `grammar_baseline.py` · `수정필요_정리.py` → `tidy_tracker.py` ·
+  `완료기록_색인.py` → `index_records.py` · `완료기록_새항목.py` → `new_record.py` · `미결_새항목.py` → `new_pending.py`
+- 새 프로젝트의 기본 이름을 영어로 — 도구 폴더 `tools/`(새 설정 키 `tools_dir`) · 원고 폴더 `manuscript_src/` · 추적 파일 `tracker_*.md` ·
+  기록 폴더 `records/`(이관 `records/archive.md`) · 스냅샷 `archive/tracker_backup/` · 도구 백업 `.manuscript/tools_backup/` ·
+  문법 기준 `.manuscript/grammar_baseline.jsonl`(묶음 `grammar_packets/`)
+- 0.12 이하가 만든 프로젝트 — 옛 이름(한글)을 설정에 적으면 그대로 돕니다. 적지 않은 채 옛 이름만 있으면 도구는 멈추고 훅은 설정 파일
+  말고는 쓰기를 막으며, 둘 다 적을 값을 보입니다. `update_tools.py` 도 같은 값을 보이고 적기 전에는 적용하지 않으며, 적은 뒤 `--apply` 가
+  옛 이름의 도구 사본을 새 이름으로 옮깁니다. 문법 기준 파일은 옛 이름만 있으면 그대로 씁니다
+- 도구 · 훅 · 초기화에 박혀 있던 이름을 `_config.py` 의 기본값 한 곳에서 읽게 함
+- 같은 프로젝트를 여러 컴퓨터가 쓰면 함께 갱신합니다 — 0.12 이하의 훅은 새 이름의 도구 사본을 찾지 못해 미결 번호 손 등록 검사를 건너뜁니다
+
 ### 0.12.2 — 2026-11-24
 
 - 공개 저장소 `sky-born/research-plugins` 로 옮김 — README 의 설치 줄과 매니페스트의 저장소 주소를 새 주소로
@@ -34,6 +48,13 @@
 - `README.md` 의 옛 이름(`paper-index-tool`)을 고치고 설치 한 줄을 추가
 
 ## 저장소 — 플러그인 밖
+
+### 2026-11-24 — 공개 전 검사
+
+- `scripts/check_public.py` 추가 — 올릴 파일 · 경로 · 커밋의 작성자 정보에서 이메일 · 사용자 폴더 경로 · 비밀값과 저장소 밖 금지어 목록의
+  낱말을 찾습니다(값은 가려서 보고). `release.py check` 가 돌리고, 걸리면 멈춥니다
+- `release.py check` 가 파일 이름이 ASCII 가 아니면 멈춤
+- `scripts/tool_hashes.py` 가 `managed_files.json` 의 옛 이름(`old`)의 이력과 기록도 이어받음
 
 ### 2026-11-24 — 공개
 

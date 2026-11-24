@@ -44,14 +44,14 @@ Claude Code · Codex 가 같은 `skills/` 원본을 사용합니다.
 
 ## 프로젝트에 들어가는 도구
 
-`new-manuscript` 가 프로젝트의 `도구/` 폴더에 사본을 넣습니다. 목록의 원본은 `skills/new-manuscript/managed_files.json` 이고,
+`new-manuscript` 가 프로젝트의 `tools/` 폴더에 사본을 넣습니다. 목록의 원본은 `skills/new-manuscript/managed_files.json` 이고,
 사본이 정본과 같은 판인지는 `update_tools.py` 가 `tool_hashes.json` 으로 판정합니다.
 
 | 도구 | 하는 일 |
 |---|---|
-| `번호점검.py` | Figure · Table · 참고문헌 번호의 전수 점검 (진단만) |
-| `수정필요_정리.py` | 미결 항목 목록 파일의 정리 · 검사 |
-| `미결_새항목.py` · `완료기록_새항목.py` | 새 미결 항목 · 완료 기록을 다음 번호로 등록 |
-| `완료기록_색인.py` | 완료 기록에서 색인 생성 |
-| `문법기준.py` | 제출 전 문법 점검의 기준 — 점검 뒤 바뀐 문단만 골라냄 |
-| `동기화_점검.py` | 공용 파일의 동기화 점검 · 스냅샷 · 복구 |
+| `check_numbers.py` | Figure · Table · 참고문헌 번호의 전수 점검 (진단만) |
+| `tidy_tracker.py` | 미결 항목 목록 파일의 정리 · 검사 |
+| `new_pending.py` · `new_record.py` | 새 미결 항목 · 완료 기록을 다음 번호로 등록 |
+| `index_records.py` | 완료 기록에서 색인 생성 |
+| `grammar_baseline.py` | 제출 전 문법 점검의 기준 — 점검 뒤 바뀐 문단만 골라냄 |
+| `check_sync.py` | 공용 파일의 동기화 점검 · 스냅샷 · 복구 |

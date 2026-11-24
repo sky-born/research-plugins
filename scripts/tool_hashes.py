@@ -66,15 +66,17 @@ def build() -> dict:
     files: dict[str, dict[str, list[str]]] = {}
     for item in manifest['files']:
         rel = (SKILL / item['src']).relative_to(REPO_ROOT).as_posix()
-        # 그 파일을 건드린 커밋과 그때의 경로(이름 변경을 따라감)
+        rels = [rel] + ([rel.rsplit('/', 1)[0] + '/' + item['old']] if item.get('old') else [])
+        # 그 파일을 건드린 커밋과 그때의 경로(이름 변경을 따라감 · 옛 이름의 이력도 — 이름 변경을 커밋하기 전에도 같은 결과)
         touch: dict[str, str] = {}
-        cur = None
-        for line in git('log', '--follow', '--name-only', '--format=%H', '--', rel).decode().split('\n'):
-            line = line.strip()
-            if re.fullmatch(r'[0-9a-f]{40}', line):
-                cur = line
-            elif line and cur:
-                touch[cur] = line
+        for r in rels:
+            cur = None
+            for line in git('log', '--follow', '--name-only', '--format=%H', '--', r).decode().split('\n'):
+                line = line.strip()
+                if re.fullmatch(r'[0-9a-f]{40}', line):
+                    cur = line
+                elif line and cur:
+                    touch.setdefault(cur, line)
         table: dict[str, set[str]] = {}
         h = None
         for c in commits:                       # 오래된 것부터 — 건드리지 않은 커밋에서는 내용이 그대로입니다
@@ -88,7 +90,8 @@ def build() -> dict:
         p = SKILL / item['src']                 # 작업 트리 — 아직 커밋되지 않은 현재 내용
         if p.is_file():
             table.setdefault(norm_hash(p.read_bytes()), set()).add(cur_ver)
-        for old_hash, versions in recorded.get(item['src'], {}).items():     # 이력 밖의 판은 적힌 것을 이어받음
+        keys = [item['src']] + ([item['src'].rsplit('/', 1)[0] + '/' + item['old']] if item.get('old') else [])
+        for old_hash, versions in (kv for k in keys for kv in recorded.get(k, {}).items()):   # 이력 밖의 판은 적힌 것을 이어받음(옛 이름 포함)
             outside = [v for v in versions if v not in covered]
             if outside:
                 table.setdefault(old_hash, set()).update(outside)

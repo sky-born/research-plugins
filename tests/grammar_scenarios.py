@@ -1,11 +1,11 @@
-"""문법기준.py 시나리오 — 프로젝트 폴더 하나를 받아 도구의 약속을 차례로 확인합니다.
+"""grammar_baseline.py 시나리오 — 프로젝트 폴더 하나를 받아 도구의 약속을 차례로 확인합니다.
 
 원고 문장 · 개수를 박지 않습니다. 그 프로젝트의 설정과 파일에서 고칠 단위를 골라 바꾸고, 도구의 출력과 종료 코드로 확인합니다.
 단위 고르기(빈 줄 블록 · 구간 줄 · JSON 값)는 도구와 따로 다시 구현해 교차 확인이 되게 합니다.
 합성 표본(test_grammar_baseline.py)과 실제 프로젝트 사본(scripts/preview_projects.py --grammar)이 같은 함수를 씁니다.
 시나리오는 프로젝트 사본에만 씁니다.
 
-도구 파일 — 정본 `new-manuscript/tools/` 의 네 파일을 프로젝트의 `도구/` 로 복사해 돌립니다.
+도구 파일 — 정본 `new-manuscript/tools/` 의 네 파일을 프로젝트의 `tools/` 로 복사해 돌립니다.
 """
 
 from __future__ import annotations
@@ -23,9 +23,9 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
 _T = HERE.parent / 'plugins' / 'research-writing' / 'skills' / 'new-manuscript' / 'tools'
-TOOL_FILES = [_T / n for n in ('문법기준.py', '_config.py', '_위치.py', '_동기화.py')]
+TOOL_FILES = [_T / n for n in ('grammar_baseline.py', '_config.py', '_location.py', '_sync.py')]
 PY = [sys.executable, '-X', 'utf8', '-B']
-BASELINE_REL = '.manuscript/문법기준.jsonl'
+BASELINE_REL = '.manuscript/grammar_baseline.jsonl'
 DEFAULT_CHAPTERS = ['ch%d.md' % i for i in (1, 2, 3, 4)]
 
 
@@ -79,7 +79,7 @@ class Proj(object):
     def __init__(self, root: Path, state_home: Path, tool_dir: Path | None = None):
         self.root = Path(root)
         self.state = Path(state_home)
-        self.tool_dir = Path(tool_dir) if tool_dir else self.root / '도구'
+        self.tool_dir = Path(tool_dir) if tool_dir else self.root / 'tools'
         self.log = []
 
     # ---- 도구
@@ -90,7 +90,7 @@ class Proj(object):
 
     def run(self, *args, codes=(0,), cwd=None):
         env = dict(os.environ, SYNC_STATE_HOME=str(self.state), PYTHONIOENCODING='utf-8')
-        cmd = PY + [str(self.tool_dir / '문법기준.py')] + [str(a) for a in args]
+        cmd = PY + [str(self.tool_dir / 'grammar_baseline.py')] + [str(a) for a in args]
         r = subprocess.run(cmd, cwd=str(cwd or self.root), capture_output=True, text=True, encoding='utf-8',
                            errors='replace', env=env, timeout=600)
         self.log.append((args, r.returncode, r.stdout + r.stderr))
@@ -113,7 +113,7 @@ class Proj(object):
         """[(루트 기준 경로, kind, regions)] — 기본 범위(장 파일, 참고문헌 제외) + grammar.sources. 있는 파일만."""
         c = self.cfg()
         m = c.get('manuscript', {})
-        src = m.get('source_dir', '초안_소스')
+        src = m.get('source_dir', 'manuscript_src')
         base = (src.strip('/') + '/') if (self.root / src).is_dir() else ''
         refs = m.get('references', 'references.md')
         chapters = [x['file'] for x in m.get('chapters', [{'file': f} for f in DEFAULT_CHAPTERS])]
@@ -499,8 +499,8 @@ def s_lines_and_json(p: Proj):
 
 
 def s_packet_default(p: Proj):
-    """경로 없는 changed --out — 기준 파일 옆 문법묶음/<시각>_<컴퓨터>.json · status 가 남은 묶음을 알림 · 그 묶음으로 찍으면 0."""
-    d = p.baseline().parent / '문법묶음'
+    """경로 없는 changed --out — 기준 파일 옆 grammar_packets/<시각>_<컴퓨터>.json · status 가 남은 묶음을 알림 · 그 묶음으로 찍으면 0."""
+    d = p.baseline().parent / 'grammar_packets'
     had = d.is_dir()
     before = set(os.listdir(d)) if had else set()
     f, _line, b = p.eligible(1)[0]
@@ -509,7 +509,7 @@ def s_packet_default(p: Proj):
     r = p.run('changed', '--out', codes=(1,))
     new = sorted(set(os.listdir(d)) - before)
     assert len(new) == 1 and re.fullmatch(r'\d{8}-\d{6}_[0-9A-Za-z가-힣-]+\.json', nfc(new[0])), new     # 공백 없음 — 충돌 사본 이름과 겹치지 않게
-    assert ('문법묶음/' + nfc(new[0])) in nfc(r.stdout).replace('\\', '/'), r.stdout
+    assert ('grammar_packets/' + nfc(new[0])) in nfc(r.stdout).replace('\\', '/'), r.stdout
     st = p.run('status', codes=(1,))
     assert '묶음 %d개가' % (len(before) + 1) in st.stdout, st.stdout
     p.run('clean', '--packet', d / new[0], '--all-except')
@@ -519,7 +519,7 @@ def s_packet_default(p: Proj):
         d.rmdir()
     p.replace_once(f, b1, b)
     p.run('changed')
-    return '경로 없는 --out — 기준 옆 문법묶음/%s · status 가 남은 묶음 알림 · 그 묶음으로 찍으면 0' % new[0]
+    return '경로 없는 --out — 기준 옆 grammar_packets/%s · status 가 남은 묶음 알림 · 그 묶음으로 찍으면 0' % new[0]
 
 
 def s_nfd_names(p: Proj):
@@ -619,9 +619,9 @@ def s_verify(p: Proj, work: Path):
 def s_readonly(project: Path, state: Path, outside: Path, candidates: Path | None = None):
     """§5 의 쓰임 — 도구를 프로젝트 밖에 두고 --dir · --baseline 으로만 읽습니다. 프로젝트 바이트가 그대로인지."""
     before = tree_hash(project)
-    q = Proj(project, state, tool_dir=outside / '도구')
+    q = Proj(project, state, tool_dir=outside / 'tools')
     q.install()
-    base = outside / '기준_보관' / '문법기준.jsonl'
+    base = outside / '기준_보관' / 'grammar_baseline.jsonl'
     common = ['--dir', project, '--baseline', base]
     q.run(*common, 'status', codes=(1,), cwd=outside)
     q.run(*common, 'init', '--confirm', '시험 문구', cwd=outside)

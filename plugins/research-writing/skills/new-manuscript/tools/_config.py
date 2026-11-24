@@ -7,7 +7,7 @@ r"""원고 프로젝트 설정 로더 — `.manuscript/project.json`
     from _config import load
     cfg = load()
     cfg.chapters          -> [(1, 'ch1.md'), ...]
-    cfg.tracker_files     -> ['수정필요_목록.md', ...]
+    cfg.tracker_files     -> ['tracker_index.md', ...]
     cfg.triggers          -> ['지금', ...]
 
 다른 논문에서 쓰려면 `.manuscript/project.json` 만 만들면 됩니다. 도구는 고치지 않습니다.
@@ -27,10 +27,10 @@ def nfc(s):
 class _NFCFinder(importlib.abc.MetaPathFinder):
     """NFD 로 저장된 한글 이름 모듈을 import 할 수 있게 하는 마지막 순위 finder.
 
-    Python 의 FileFinder 는 폴더 목록을 문자열 그대로 캐시해 대조하므로 `from _위치 import …` 는 NFD 이름의 `_위치.py` 를 못 찾아
+    Python 의 FileFinder 는 폴더 목록을 문자열 그대로 캐시해 대조하므로 한글 이름 모듈의 import 는 NFD 로 저장된 파일을 못 찾아
     ModuleNotFoundError 가 됩니다(맥 구글드라이브 미러에서 확인 · 도구 README 「방법 메모」). 기본 finder 가 실패한 **한글 이름**에 한해
     이 파일이 든 폴더와 sys.path 의 폴더에서 NFC 로 같은 이름의 .py 를 찾아 경로로 적재합니다. ASCII 이름은 건드리지 않습니다.
-    `_config` 를 먼저 import 하는 도구는 고치지 않아도 됩니다 — 그래서 한글 이름 모듈을 쓰는 도구는 `_config` 부터 import 합니다."""
+    관리 도구의 이름은 ASCII 라 해당하지 않고, 프로젝트가 따로 둔 한글 이름 모듈을 위한 것입니다 — 그런 도구는 `_config` 부터 import 합니다."""
 
     def find_spec(self, fullname, path=None, target=None):
         if path is not None or '.' in fullname or fullname.isascii():
@@ -71,7 +71,7 @@ CONFIG_REL = os.path.join('.manuscript', 'project.json')
 CONFIG_REL_OLD = os.path.join('.writing', 'project.json')   # 2026-09-01 이전 이름 — 폴백
 
 # ---------------------------------------------------------------- 공유 정의 — 같은 개념은 여기 한 곳에
-# 도판 · 표 표지. 번호점검은 kind 에 따라 평면 · 장-번호 중 하나만 받고, 위치 문법(_위치.py)은 둘 다 받습니다.
+# 도판 · 표 표지. check_numbers 는 kind 에 따라 평면 · 장-번호 중 하나만 받고, 위치 문법(_location.py)은 둘 다 받습니다.
 FIG_TAB_WORDS = r'(?:Figs?\.|Figures?|Tables?)'
 FIG_TAB_NUM_FLAT = r'\d+'
 FIG_TAB_NUM_CHAPTER = r'\d+-\d+'
@@ -179,7 +179,7 @@ def id_key(rid):
     return (m.group(1), int(m.group(2)), int(m.group(3) or 0)) if m else (rid, 0, 0)
 
 
-# 새 미결 항목의 번호 — 도구(`미결_새항목.py`)가 정합니다. 범위의 정의는 여기 한 곳이고, 도구(배정)와 훅(손 등록 거부)이 함께 씁니다.
+# 새 미결 항목의 번호 — 도구(`new_pending.py`)가 정합니다. 범위의 정의는 여기 한 곳이고, 도구(배정)와 훅(손 등록 거부)이 함께 씁니다.
 PROPOSAL_PREFIX = 'H'                                                        # 제안 파일의 ID 글자
 NEW_ROW_RE = re.compile(r'^\|\s*([A-Z]{1,2})\?\s*\|')                        # 번호 자리가 `?` 인 새 행 — `| D? | … |`
 
@@ -271,38 +271,39 @@ def state_head(status):
     return h + ((' · 관련 ' + ' '.join(refs)) if refs else '')
 
 DEFAULTS = {
+    "tools_dir": "tools",                         # 관리 도구를 두는 폴더(루트 바로 아래)
     "manuscript": {
-        "source_dir": "초안_소스",
+        "source_dir": "manuscript_src",
         "chapters": [{"n": i, "file": "ch%d.md" % i} for i in (1, 2, 3, 4)],
         "references": "references.md",
         "build_script": "build_tpl.py",
         "figure_dir": "fig_src",
     },
     "tracker": {
-        "index": "수정필요_목록.md",
-        "pending": "수정필요_대기.md",
-        "record_index": "수정필요_색인.md",
-        "literature": "수정필요_문헌.md",
-        "proposals": "수정필요_제안.md",
-        "records_dir": "완료기록",
-        "archive": "완료기록/이관_DB.md",
+        "index": "tracker_index.md",
+        "pending": "tracker_pending.md",
+        "record_index": "tracker_records_index.md",
+        "literature": "tracker_literature.md",
+        "proposals": "tracker_proposals.md",
+        "records_dir": "records",
+        "archive": "records/archive.md",
         "record_prefix": "E",
         "movable_prefixes": ["A", "B", "C", "D"],
         "index_size_limit_kb": 40,
         # 공통 다섯 — 심사 · 투고 일정에 걸린 값은 프로젝트의 project.json(tracker.triggers)이 더합니다
         "triggers": ["지금", "해당 절 작업 시", "사용자 판단", "자료 확보 후", "최종 제출 직전"],
-        # 위치 문법(_위치.py) — 프로젝트가 더하는 절 표기(정규식 목록)와 완료 색인 §1 에서 뺄 파일(글롭 목록)
+        # 위치 문법(_location.py) — 프로젝트가 더하는 절 표기(정규식 목록)와 완료 색인 §1 에서 뺄 파일(글롭 목록)
         "section_markers": [],
         "record_index_exclude": [],
         # 인수인계(현재 상태) 파일 — 갈아쓰는 문서라 동기화 손실 보고(S6)에서 뺍니다. 없으면 빈 문자열
         "checkpoint": "",
     },
-    # 공용 파일 동기화 안전장치(_동기화.py) — 값의 뜻은 tracker-workflow.md 「동기화」. 핵심 검사는 이 기본값만으로도 돕니다.
+    # 공용 파일 동기화 안전장치(_sync.py) — 값의 뜻은 tracker-workflow.md 「동기화」. 핵심 검사는 이 기본값만으로도 돕니다.
     "sync": {
         "shared_extra": [],                        # 추적 파일 · 완료기록 · 원고 md 말고도 공용인 파일(루트 기준 글롭)
-        "snapshot_dir": "보관/추적_백업",            # 드라이브 쪽 스냅샷 폴더(루트 기준)
+        "snapshot_dir": "archive/tracker_backup",    # 드라이브 쪽 스냅샷 폴더(루트 기준)
         "conflict_patterns": [" \\d+$", " \\(\\d+\\)$", "conflicted copy"],   # 충돌 사본 이름(확장자 뺀 이름에 대조)
-        "exclude": [".git/", "__pycache__/", "node_modules/", "보관/", ".manuscript/도구_백업/"],
+        "exclude": [".git/", "__pycache__/", "node_modules/", "archive/", ".manuscript/tools_backup/"],
         "stale_days": 2,
         "snapshot_days": 30,                       # 자기 컴퓨터 스냅샷의 보존 기간(드라이브 — 로컬은 2배)
         "snapshot_days_others": 90,                # 다른 컴퓨터가 만든 스냅샷을 지울 수 있는 나이
@@ -317,12 +318,82 @@ DEFAULTS = {
 }
 
 
+# 0.12 이하가 만든 프로젝트의 기본 이름. 설정에 이 키가 없고 디스크에 이 이름만 있으면 옛 프로젝트입니다 — load() 가 멈추고
+# 설정에 적을 값(이 표 그대로)을 보입니다. 새 프로젝트는 DEFAULTS(영어)를 씁니다.
+LEGACY_DEFAULTS = {
+    "tools_dir": "도구",
+    "manuscript": {"source_dir": "초안_소스"},
+    "tracker": {
+        "index": "수정필요_목록.md",
+        "pending": "수정필요_대기.md",
+        "record_index": "수정필요_색인.md",
+        "literature": "수정필요_문헌.md",
+        "proposals": "수정필요_제안.md",
+        "records_dir": "완료기록",
+        "archive": "완료기록/이관_DB.md",
+    },
+    "sync": {
+        "snapshot_dir": "보관/추적_백업",
+        "exclude": [".git/", "__pycache__/", "node_modules/", "보관/", ".manuscript/도구_백업/", ".manuscript/tools_backup/"],
+    },
+}
+TOOLS_BACKUP = os.path.join('.manuscript', 'tools_backup')     # update_tools.py 가 바꾸기 전 사본을 두는 곳
+
+
+def _items(table):
+    """[(절 또는 None, 키, 값)] — 최상위 값은 절이 None."""
+    out = []
+    for k, v in table.items():
+        if isinstance(v, dict):
+            out += [(k, kk, vv) for kk, vv in v.items()]
+        else:
+            out.append((None, k, v))
+    return out
+
+
+def _has(raw, sec, key):
+    return key in (raw if sec is None else (raw.get(sec) or {}))
+
+
+def legacy_pins(root, raw):
+    """옛 프로젝트이면 설정에 적을 값 {절: {키: 값}}(최상위 키는 그대로), 아니면 {}.
+    옛 프로젝트 — 설정에 없는 경로 키 가운데 하나라도 새 이름은 없고 옛 이름이 디스크에 있음. 적을 값은 설정에 없는 옛 키 전부입니다."""
+    absent = [(s, k, v) for s, k, v in _items(LEGACY_DEFAULTS) if not _has(raw, s, k)]
+    new = dict(((s, k), v) for s, k, v in _items(DEFAULTS))
+    old_only = lambda rel_old, rel_new: (os.path.exists(os.path.join(root, *rel_old.split('/')))       # noqa: E731
+                                         and not os.path.exists(os.path.join(root, *rel_new.split('/'))))
+    if not any(isinstance(v, str) and old_only(v, new[(s, k)]) for s, k, v in absent):
+        return {}
+    pins = {}
+    for s, k, v in absent:
+        if s is None:
+            pins[k] = v
+        else:
+            pins.setdefault(s, {})[k] = v
+    return pins
+
+
+class LegacyNames(SystemExit):
+    """설정 없이 옛 기본 이름(한글)을 쓰는 프로젝트 — 멈추고 설정에 적을 값을 보입니다."""
+    def __init__(self, root, pins):
+        self.root, self.pins = root, pins
+        SystemExit.__init__(self, legacy_message(pins))
+
+
+def legacy_message(pins):
+    return ('이 프로젝트는 옛 기본 이름(한글)을 씁니다. `%s` 에 아래 값을 더한 뒤 다시 돌리십시오 — 지금 이름 그대로입니다:\n%s'
+            % (CONFIG_REL.replace(os.sep, '/'), json.dumps(pins, ensure_ascii=False, indent=2)))
+
+
 def project_root(start=None):
-    """`도구/` 안에서 불리면 그 상위를, 아니면 주어진 폴더를 프로젝트 루트로 봅니다."""
+    """주어진 폴더, 아니면 이 파일의 폴더나 그 상위 가운데 설정 파일이 있는 곳. 둘 다 없으면 도구 폴더(`tools` · `도구`)의 상위."""
     if start:
         return os.path.abspath(start)
     d = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(d) if os.path.basename(d) == '도구' else d
+    for cand in (d, os.path.dirname(d)):
+        if any(os.path.isfile(os.path.join(cand, rel)) for rel in (CONFIG_REL, CONFIG_REL_OLD)):
+            return cand
+    return os.path.dirname(d) if os.path.basename(d) in (DEFAULTS['tools_dir'], LEGACY_DEFAULTS['tools_dir']) else d
 
 
 def _merge(base, over):
@@ -340,6 +411,15 @@ class Config(object):
         self.kind = raw.get('kind', 'manuscript')
         self._m = raw['manuscript']
         self._t = raw['tracker']
+
+    # ---- 도구
+    @property
+    def tools_dir(self):
+        return self.raw['tools_dir']
+
+    def tool(self, name):
+        """안내 문구에 쓰는 도구 경로(루트 기준, `/` 구분) — 예: `tools/tidy_tracker.py`."""
+        return '%s/%s' % (str(self.tools_dir).replace('\\', '/').strip('/'), name)
 
     # ---- 원고
     @property
@@ -359,7 +439,7 @@ class Config(object):
 
     @property
     def chapters(self):
-        """[(번호, 파일명), ...] — 번호점검·빌드가 쓰는 형태"""
+        """[(번호, 파일명), ...] — check_numbers · 빌드가 쓰는 형태"""
         return [(c['n'], c['file']) for c in self._m['chapters']]
 
     @property
@@ -442,7 +522,8 @@ class Config(object):
         return self.raw[k]
 
 
-def load(root=None):
+def load(root=None, strict=True):
+    """strict — 설정 없이 옛 기본 이름을 쓰는 프로젝트면 LegacyNames 로 멈춥니다. update_tools.py 만 False 로 읽고 직접 보고합니다."""
     root = project_root(root)
     path = os.path.join(root, CONFIG_REL)
     if not os.path.isfile(path):
@@ -456,7 +537,13 @@ def load(root=None):
                 raw = json.load(f)
         except ValueError as e:
             raise SystemExit('%s 를 읽지 못했습니다: %s' % (CONFIG_REL, e))
-    return Config(root, _merge(DEFAULTS, raw))
+    if strict:
+        pins = legacy_pins(root, raw)
+        if pins:
+            raise LegacyNames(root, pins)
+    cfg = Config(root, _merge(DEFAULTS, raw))
+    cfg.raw_file = raw                     # 설정 파일에 적힌 그대로(기본값과 합치기 전)
+    return cfg
 
 
 if __name__ == '__main__':

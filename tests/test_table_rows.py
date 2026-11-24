@@ -29,7 +29,7 @@ STATE = Path(os.environ["SYNC_STATE_HOME"])
 
 sys.path.insert(0, str(TOOLS))
 import _config  # noqa: E402
-import _동기화  # noqa: E402
+import _sync  # noqa: E402
 
 HDR_PEND = "| ID | 항목 | 위치 | 트리거 | 상태 | 비고 |\n|---|---|---|---|---|---|\n"
 HDR_PRO = "| ID | 제안 | 위치 | 트리거 | 상태 | 비고 |\n|---|---|---|---|---|---|\n"
@@ -71,7 +71,7 @@ class Fixture(unittest.TestCase):
 
     @staticmethod
     def tidy(p: Path, *args, codes=(0, 1)):
-        return run(PY + [str(p / "도구" / "수정필요_정리.py"), *args], p, codes=codes)
+        return run(PY + [str(p / "tools" / "tidy_tracker.py"), *args], p, codes=codes)
 
     @staticmethod
     def edit_payload(p: Path, rel: str, tid: str):
@@ -88,7 +88,7 @@ class GrammarTests(unittest.TestCase):
         self.assertEqual(_config.unescape_cell("x \\| y"), "x | y")
 
     def test_row_regex_is_shared_by_sync_and_tidy(self):
-        self.assertIs(_동기화.ROW_ID_RE, _config.TABLE_ROW_RE_M)
+        self.assertIs(_sync.ROW_ID_RE, _config.TABLE_ROW_RE_M)
         for ok in ("| A70 | x |", "| AB1-2 | x |", "|D14|x|"):
             self.assertTrue(_config.TABLE_ROW_RE.match(ok), ok)
         for no in ("| ID | 항목 |", "| P006·P007 | x |", "|---|---|", " | A1 | x |"):
@@ -134,7 +134,7 @@ class TidyTests(Fixture):
     def test_warns_split_row_holds_migration_and_restores_separator(self):
         p = self.project("쪼개진행")
         trig = self.trig(p)
-        pend, arch = p / "수정필요_대기.md", p / "완료기록" / "이관_DB.md"
+        pend, arch = p / "tracker_pending.md", p / "records" / "archive.md"
         tail = "'` 해 해시하고 꼬리 — 남은 것 |"
         self.add_rows(pend, HDR_PEND,
                       f"| A1 | 닫힘 | `manuscript/results.md` ③ | {trig} | 완료 (2026-10-06) | 비고 |\n"
@@ -151,7 +151,7 @@ class TidyTests(Fixture):
         self.assertIn("A1: 행 바로 아래", r.stdout)
         self.assertIn("이관을 보류", r.stdout)
         self.assertIn("구분선 복원", r.stdout)
-        self.assertIn("이관_DB.md", r.stdout.split("바뀔 파일", 1)[1])
+        self.assertIn("archive.md", r.stdout.split("바뀔 파일", 1)[1])
         self.assertNotIn(SEP_ARCH, arch.read_text(encoding="utf-8"), "진단만으로는 쓰지 않습니다")
         self.assertIn("| A1 |", pend.read_text(encoding="utf-8"))
 
@@ -164,7 +164,7 @@ class TidyTests(Fixture):
         self.assertNotIn("| A1 |", arch.read_text(encoding="utf-8"))
 
         # 꼬리를 행에 합치면 이관됩니다 — 구분선은 그대로, 행은 그 아래
-        _동기화.replace_once(str(pend), f"| 비고 |\n{tail}", f"| 비고 {tail}")
+        _sync.replace_once(str(pend), f"| 비고 |\n{tail}", f"| 비고 {tail}")
         r = self.tidy(p, "--apply")
         self.assertNotIn("표 행 형식", r.stdout)
         self.assertNotIn("보류", r.stdout)
@@ -184,7 +184,7 @@ class TidyTests(Fixture):
     def test_skips_migration_when_archive_holds_a_stray_line(self):
         p = self.project("이관표꼬리")
         trig = self.trig(p)
-        pend, arch = p / "수정필요_대기.md", p / "완료기록" / "이관_DB.md"
+        pend, arch = p / "tracker_pending.md", p / "records" / "archive.md"
         self.add_rows(pend, HDR_PEND, f"| A1 | 닫힘 | `manuscript/results.md` ③ | {trig} | 완료 (2026-10-06) | |\n")
         arch.write_text(arch.read_text(encoding="utf-8").replace(SEP_ARCH + "\n", SEP_ARCH + "\n| B1 | 옛 이관 | x | 완료 | 비고 |\n꼬리만 남은 줄 |\n", 1),
                         encoding="utf-8", newline="\n")
@@ -198,10 +198,10 @@ class TidyTests(Fixture):
     def test_focus_copies_cell_with_escaped_pipe_in_full(self):
         p = self.project("포커스세로줄")
         trig = self.trig(p)
-        self.add_rows(p / "수정필요_제안.md", HDR_PRO,
+        self.add_rows(p / "tracker_proposals.md", HDR_PRO,
                       f"| H1 | 보충 자료 안 | `manuscript/results.md` ③ | {trig} | 대기 | 앞부분 `@FIG a.png \\| 캡션` 뒷부분 끝말 |\n")
         r = self.tidy(p, "--focus", "ch2", "--apply")
-        listing = (p / "수정필요_목록.md").read_text(encoding="utf-8")
+        listing = (p / "tracker_index.md").read_text(encoding="utf-8")
         focus = listing.split("<!-- 포커스 -->", 1)[1].split("<!-- /포커스 -->", 1)[0]
         self.assertIn("#### H1 ", focus)
         self.assertIn("앞부분 `@FIG a.png | 캡션` 뒷부분 끝말", focus, "\\| 뒤가 잘리지 않고 문단에서는 | 로")
@@ -215,31 +215,31 @@ class ReplaceOnceTests(Fixture):
     def test_blocks_edit_that_splits_a_row_and_passes_escaped_pipe(self):
         p = self.project("치환차단")
         trig = self.trig(p)
-        pend = p / "수정필요_대기.md"
+        pend = p / "tracker_pending.md"
         self.add_rows(pend, HDR_PEND, f"| A1 | 열림 | `manuscript/results.md` ③ | {trig} | 대기 | 비고 |\n")
         before = pend.read_bytes()
         with self.assertRaises(ValueError) as cm:
-            _동기화.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고\n꼬리 |")
+            _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고\n꼬리 |")
         self.assertIn("표 행", str(cm.exception))
         self.assertEqual(before, pend.read_bytes(), "막혔으면 파일은 그대로")
         with self.assertRaises(ValueError):
-            _동기화.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고 | 셀 하나 더 |")      # 셀 수
+            _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고 | 셀 하나 더 |")      # 셀 수
         with self.assertRaises(ValueError):
-            _동기화.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고")                     # 끝 세로줄
-        _동기화.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고 \\| 덧붙임 |")           # 셀 안의 세로줄은 \\|
+            _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고")                     # 끝 세로줄
+        _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고 \\| 덧붙임 |")           # 셀 안의 세로줄은 \\|
         self.assertEqual(_config.table_problems(pend.read_text(encoding="utf-8")), [])
-        _동기화.replace_once(str(pend), "| 대기 | 비고 \\| 덧붙임 |", "| 대기 | 비고\n꼬리 |", check_tables=False)
+        _sync.replace_once(str(pend), "| 대기 | 비고 \\| 덧붙임 |", "| 대기 | 비고\n꼬리 |", check_tables=False)
         self.assertEqual(sorted(c for _n, c, _p in _config.table_problems(pend.read_text(encoding="utf-8"))),
                          ["orphan", "tail"], "알고 하는 치환은 통과 — 끝 세로줄 없는 행 + 꼬리")
 
     def test_existing_problem_only_warns(self):
         p = self.project("치환경고")
         trig = self.trig(p)
-        pend = p / "수정필요_대기.md"
+        pend = p / "tracker_pending.md"
         self.add_rows(pend, HDR_PEND, f"| A1 | 열림 | `manuscript/results.md` ③ | {trig} | 대기 | |\n이미 있던 꼬리 |\n")
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            out = _동기화.replace_once(str(pend), "| A1 | 열림 |", "| A1 | 열림 (고침) |")
+            out = _sync.replace_once(str(pend), "| A1 | 열림 |", "| A1 | 열림 (고침) |")
         self.assertEqual(out["count"], 1)
         self.assertIn("이미 있던 표 결함", err.getvalue())
         self.assertIn("열림 (고침)", pend.read_text(encoding="utf-8"))
@@ -250,19 +250,19 @@ class HookTests(Fixture):
     def test_post_hook_reports_broken_rows_in_tracker_files_only(self):
         p = self.project("훅알림")
         trig = self.trig(p)
-        pend = p / "수정필요_대기.md"
-        run(PY + [str(p / "도구" / "동기화_점검.py")], p, codes=(0, 1))          # 지문 기준
+        pend = p / "tracker_pending.md"
+        run(PY + [str(p / "tools" / "check_sync.py")], p, codes=(0, 1))          # 지문 기준
         good = f"| A1 | 열림 | `manuscript/results.md` ③ | {trig} | 대기 | 비고 |\n"
         self.add_rows(pend, HDR_PEND, good + "쪼개진 꼬리 |\n")
-        r = hook("post", self.edit_payload(p, "수정필요_대기.md", "e1"), p)
+        r = hook("post", self.edit_payload(p, "tracker_pending.md", "e1"), p)
         out = json.loads(r.stdout)
         self.assertIn("표 행", out["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(out["hookSpecificOutput"]["hookEventName"], "PostToolUse")
-        self.assertIn("수정필요_대기.md", out["systemMessage"])
+        self.assertIn("tracker_pending.md", out["systemMessage"])
         self.assertIn("쪼개진 꼬리", out["systemMessage"])
         # 고치면 조용합니다
         pend.write_text(pend.read_text(encoding="utf-8").replace("쪼개진 꼬리 |\n", ""), encoding="utf-8", newline="\n")
-        r = hook("post", self.edit_payload(p, "수정필요_대기.md", "e2"), p)
+        r = hook("post", self.edit_payload(p, "tracker_pending.md", "e2"), p)
         self.assertEqual(r.stdout.strip(), "")
         # 셸 도구 경로 — 지문이 바뀐 추적 파일을 찾아 같은 알림. PowerShell 도 Bash 와 같이 봅니다
         pend.write_text(pend.read_text(encoding="utf-8").replace(good, good + "다시 쪼개진 꼬리 |\n"), encoding="utf-8", newline="\n")
@@ -278,7 +278,7 @@ class HookTests(Fixture):
 
     def test_pre_hook_accepts_powershell_without_alerts(self):
         p = self.project("훅PS")
-        r = hook("pre", {"tool_name": "PowerShell", "tool_input": {"command": "Get-Content 수정필요_대기.md"}, "cwd": str(p), "tool_use_id": "pp1"}, p)
+        r = hook("pre", {"tool_name": "PowerShell", "tool_input": {"command": "Get-Content tracker_pending.md"}, "cwd": str(p), "tool_use_id": "pp1"}, p)
         self.assertEqual(r.stdout.strip(), "")
 
 

@@ -4,10 +4,10 @@ r"""번호 전수 점검 — Figure · Table · 참고문헌
 각 장의 본문 수정을 마칠 때마다 한 번 돌립니다. 고치지 않고 **진단만** 합니다.
 
 사용법  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> 도구/번호점검.py                 # 초안_소스/ 를 기준으로 점검 (기본)
-    <py> 도구/번호점검.py <초안_소스 경로>
+    <py> tools/check_numbers.py                 # 설정의 원고 폴더(manuscript.source_dir)를 기준으로 점검 (기본)
+    <py> tools/check_numbers.py <원고 폴더 경로>
 
-G 드라이브 미러에서는 셸이 폴더에 닿지 않습니다(수정필요_목록.md F11). 그때는
+셸이 폴더에 닿지 않는 동기화 미러에서는
 `ch1~4.md`, `references.md`, `build_tpl.py`, 이 파일을 스테이징해 사본에 대해 돌립니다.
 
 점검 항목
@@ -41,13 +41,6 @@ def _콘솔_UTF8():
 
 
 _콘솔_UTF8()
-
-def _본문폴더():
-    """기본값은 프로젝트 루트의 `초안_소스\\`. 스크립트는 `도구\\` 안에 있습니다."""
-    d = os.path.dirname(os.path.abspath(__file__))
-    root = os.path.dirname(d) if os.path.basename(d) == '도구' else d
-    cand = os.path.join(root, '초안_소스')
-    return cand if os.path.isdir(cand) else root
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

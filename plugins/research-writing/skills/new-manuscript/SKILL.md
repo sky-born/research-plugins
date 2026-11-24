@@ -10,7 +10,7 @@ description: 새 논문·원고 프로젝트를 만듭니다. 도구(번호 점�
 
 ## 먼저 확인합니다
 
-**대상 폴더에 이미 `수정필요_목록.md` 나 `.manuscript/project.json`(구 `.writing/`) 이 있으면 기존 프로젝트입니다.**
+**대상 폴더에 이미 `.manuscript/project.json`(구 `.writing/`) 이나 추적 색인(`tracker_index.md` · 옛 이름 `수정필요_목록.md`)이 있으면 기존 프로젝트입니다.**
 초기화하지 말고 그 사실을 알립니다. (스크립트도 이미 있는 파일은 건너뛰지만, 먼저 확인하는 편이 낫습니다.)
 
 ## 물어볼 것 — 모르면 묻고, 알면 묻지 않습니다
@@ -21,7 +21,7 @@ description: 새 논문·원고 프로젝트를 만듭니다. 도구(번호 점�
 | 논문 이름 | — | `--name`. 한글 가능 |
 | 종류 | `journal` | 학위논문이면 `--kind dissertation` |
 | 장 구성 | `ch1.md` `ch2.md` | `--chapters intro.md methods.md results.md` 또는 `--chapter-count 4` |
-| 원고 폴더 | `manuscript` | 학위논문 관례를 따르려면 `--source-dir 초안_소스` |
+| 원고 폴더 | `manuscript_src` | `--source-dir manuscript` 처럼 바꿀 수 있습니다 |
 | 참고문헌 | `references.md` | `--references bib.md` |
 | 빌드 스크립트 | 없음 | 학교 서식으로 빌드한다면 `--build-script build_tpl.py`. 스크립트를 만들 때는 [build-technical.md](../manuscript-workflow/references/build-technical.md) 를 따릅니다 |
 
@@ -51,13 +51,13 @@ python -X utf8 "<이 스킬 폴더>/init_manuscript.py" "<대상폴더>" --name 
   .manuscript/project.json   챕터·파일명·트리거. 도구가 읽습니다
   .claude/settings.json      Pre · PostToolUse 훅 등록(Edit · Write · Bash) — 완료기록 덮어쓰기 거부 · 새 미결 ID 손 등록 거부 · 동기화 가드 · 쓰기 후 스냅샷
   .claude/hooks/guard_write.py  그 훅의 본체 (hooks/ 에서 복사). 플러그인 설치본의 hooks/hooks.json 도 같은 본체를 등록합니다
-  도구/                       _config.py · _위치.py · _동기화.py · 번호점검.py · 수정필요_정리.py · 완료기록_색인.py · 완료기록_새항목.py · 미결_새항목.py · 동기화_점검.py · 문법기준.py
-  수정필요_목록.md             색인 (자동 생성 구간의 마커 포함)
-  수정필요_대기.md             미결 항목 표 — 기본 A·B·C·D(글자는 프로젝트가 정함)
-  수정필요_색인.md             완료 기록 색인 (빈 상태)
-  수정필요_문헌.md             F·G 표
-  수정필요_제안.md             H 표
-  완료기록/                   README.md (형식 규약) · 이관_DB.md
+  tools/                       _config.py · _location.py · _sync.py · check_numbers.py · tidy_tracker.py · index_records.py · new_record.py · new_pending.py · check_sync.py · grammar_baseline.py
+  tracker_index.md           색인 (자동 생성 구간의 마커 포함)
+  tracker_pending.md         미결 항목 표 — 기본 A·B·C·D(글자는 프로젝트가 정함)
+  tracker_records_index.md   완료 기록 색인 (빈 상태)
+  tracker_literature.md      F·G 표
+  tracker_proposals.md       H 표
+  records/                   README.md (형식 규약) · archive.md
   <원고폴더>/                 챕터 md 뼈대 + 참고문헌
 ```
 
@@ -66,16 +66,16 @@ python -X utf8 "<이 스킬 폴더>/init_manuscript.py" "<대상폴더>" --name 
 **1) 도구가 도는지 확인합니다.**
 
 ```text
-python -X utf8 도구/번호점검.py
-python -X utf8 도구/수정필요_정리.py
-python -X utf8 도구/동기화_점검.py
+python -X utf8 tools/check_numbers.py
+python -X utf8 tools/tidy_tracker.py
+python -X utf8 tools/check_sync.py
 ```
 
 셋째는 공용 파일 동기화 점검입니다 — 여러 컴퓨터가 클라우드 동기화 폴더에서 같은 프로젝트를 쓸 때의 안전장치
 (규약은 [tracker-workflow.md](../manuscript-workflow/references/tracker-workflow.md) 「동기화」). 세션 시작마다 돌립니다.
 
 새 프로젝트에서는 경고가 나오는 것이 정상입니다 — 완료 기록 0건,
-미인용 문헌(뼈대의 예시 항목). `수정필요_정리.py`의 종료 코드 `1`은 진단 경고이며, 위의 빈
+미인용 문헌(뼈대의 예시 항목). `tidy_tracker.py`의 종료 코드 `1`은 진단 경고이며, 위의 빈
 기록 경고인지 실제 내용을 확인합니다. 누락 파일·실행 오류를 같은 경고로 간주하지 않습니다.
 미결 항목 0건은 경고가 아니라 안내입니다 — 표 구조가 정상이면 목록의 표를 빈 상태로 만듭니다.
 
@@ -100,17 +100,18 @@ python -X utf8 도구/동기화_점검.py
 
 ## 기존 프로젝트의 도구를 정본에 맞출 때 — `update_tools.py`
 
-초기화는 새 프로젝트에만 씁니다. 이미 있는 프로젝트의 `도구/` · 훅이 정본과 다르면(플러그인을 갱신한 뒤) 같은 폴더의
+초기화는 새 프로젝트에만 씁니다. 이미 있는 프로젝트의 도구 · 훅이 정본과 다르면(플러그인을 갱신한 뒤) 같은 폴더의
 `update_tools.py` 로 맞춥니다. 원본은 **이 파일이 든 플러그인 사본**이고, 관리 대상은 `managed_files.json` 입니다.
 
 ```text
-python -X utf8 "<이 스킬 폴더>/update_tools.py" "<프로젝트>"            # 판정만 — 같음 · 옛 정본 판 · 로컬 수정 · 없음
+python -X utf8 "<이 스킬 폴더>/update_tools.py" "<프로젝트>"            # 판정만 — 같음 · 옛 정본 판 · 로컬 수정 · 없음 · 옛 이름
 python -X utf8 "<이 스킬 폴더>/update_tools.py" "<프로젝트>" --apply    # 옛 정본 판을 바꿈. 로컬 수정판은 --force <파일>, 없는 파일은 --add <파일>
 python -X utf8 "<이 스킬 폴더>/update_tools.py" --scan "<상위 폴더>"     # 자매 프로젝트 전체의 상태표
 ```
 
 설정 파일(`.manuscript/project.json`)은 쓰지 않습니다 — 기본값에 기대는 키를 보고만 하므로, 필요한 값은 사용자에게 보인 뒤 Edit 으로
-적습니다. 로컬 수정판을 바꾸기 전 원본은 `.manuscript/도구_백업/<날짜>/` 에 둡니다. 훅 등록이 다르면 `hooks/settings.example.json` 의
+적습니다. 0.12 이하가 만든 프로젝트(한글 기본 이름)는 설정에 적을 옛 이름을 보이고, 적기 전에는 적용하지 않습니다 —
+규약은 [project-config.md](../manuscript-workflow/references/project-config.md). 로컬 수정판을 바꾸기 전 원본은 `.manuscript/tools_backup/<날짜>/` 에 둡니다. 훅 등록이 다르면 `hooks/settings.example.json` 의
 `hooks` 블록을 손으로 합칩니다. 배포 전 자매 프로젝트에 무엇이 바뀌는지는 저장소의 `scripts/preview_projects.py` 로 미리 봅니다.
 
 ## 공통 규칙

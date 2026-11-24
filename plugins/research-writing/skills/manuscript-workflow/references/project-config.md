@@ -6,33 +6,38 @@
 **챕터 개수, 파일 이름, 폴더 구조, 트리거 값이 프로젝트마다 다르기 때문**입니다.
 
 `templates/project.example.json` 을 복사해 값만 바꾸면 됩니다.
-`new-manuscript/tools/_config.py`가 이 파일을 읽는 로더이며 초기화 때 프로젝트 `도구/`로 복사됩니다.
+`new-manuscript/tools/_config.py`가 이 파일을 읽는 로더이며 초기화 때 프로젝트의 도구 폴더(`tools_dir`)로 복사됩니다.
 
 ## 무엇이 들어가나
 
 | 키 | 쓰는 도구 | 없으면 |
 |---|---|---|
-| `manuscript.source_dir` | 번호 점검, 빌드 | `초안_소스`, 없으면 프로젝트 루트 |
+| `tools_dir` | 훅 · `update_tools` · 도구의 안내 문구 | `tools`. 관리 도구를 두는 폴더(루트 바로 아래) |
+| `manuscript.source_dir` | 번호 점검, 빌드 | `manuscript_src`, 없으면 프로젝트 루트 |
 | `manuscript.chapters` | 번호 점검, 빌드 | `ch1.md` ~ `ch4.md` |
 | `manuscript.references` | 번호 점검 | `references.md` |
 | `manuscript.build_script` | 번호 점검 | `build_tpl.py`. **없는 프로젝트면 그 점검을 건너뜁니다** |
-| `tracker.*` | 미결 항목 정리·색인 | 이 프로젝트의 기본 이름. 다섯 파일(`index` · `pending` · `record_index` · `literature` · `proposals`)은 루트 기준 경로라 하위 폴더(`추적/수정필요_목록.md`)도 됩니다 — 도구 · 훅은 이 값만 보고, 옮기면 `markers` 도 함께 바꿉니다 |
+| `tracker.*` | 미결 항목 정리·색인 | `tracker_index.md` · `tracker_pending.md` · `tracker_records_index.md` · `tracker_literature.md` · `tracker_proposals.md` · `records/` · `records/archive.md`. 다섯 파일(`index` · `pending` · `record_index` · `literature` · `proposals`)은 루트 기준 경로라 하위 폴더(`tracking/tracker_index.md`)도 됩니다 — 도구 · 훅은 이 값만 보고, 옮기면 `markers` 도 함께 바꿉니다 |
 | `tracker.triggers` | 정리 도구 | 공통 다섯 — `지금` · `해당 절 작업 시` · `사용자 판단` · `자료 확보 후` · `최종 제출 직전`. 일정에 걸린 값은 프로젝트가 더합니다. **목록에 없는 값을 쓰면 경고합니다** |
 | `tracker.movable_prefixes` | 정리 도구 · 동기화 점검(S7) | `["A","B","C","D"]`. 대기 파일의 절 글자 — 절 제목 `## X.` 와 행 ID 의 머리글자. 글자를 줄여도 옛 ID 의 글자는 목록에 남깁니다(`tracker-workflow.md` 「미결 표의 분류 글자」) |
 | `tracker.section_markers` | 위치 문법(정리 · 색인 · 새 기록 검사) | 빈 목록. 프로젝트만의 절 표기(정규식 목록) |
 | `tracker.record_index_exclude` | 완료 색인 | 빈 목록. 완료 색인 §1 에서 뺄 파일 · 폴더의 글롭(루트 기준, 폴더는 끝 `/`) |
 | `tracker.checkpoint` | 동기화 점검 | 없음. 인수인계 파일(루트 기준) — 공용 파일로 스냅샷하되, 갈아쓰는 문서라 손실 보고에서 뺍니다 |
-| `sync.*` | 동기화 점검 · 훅 · 정리 · 색인 · 새항목 · `update_tools` | 전부 기본값으로 돕니다. `shared_extra`(공용 파일 추가 글롭) · `snapshot_dir`(`보관/추적_백업`) · `conflict_patterns` · `exclude` · `stale_days`(2) · `snapshot_days`(30) · `snapshot_days_others`(90) · `snapshot_min`(10) · `snapshot_max`(20) · `snapshot_max_local`(100) · `ack_hours`(4) · `known_gaps` · `rewrite_ok` · `survival_pct`(70). 뜻은 `tracker-workflow.md` 「동기화」 |
+| `sync.*` | 동기화 점검 · 훅 · 정리 · 색인 · 새항목 · `update_tools` | 전부 기본값으로 돕니다. `shared_extra`(공용 파일 추가 글롭) · `snapshot_dir`(`archive/tracker_backup`) · `conflict_patterns` · `exclude` · `stale_days`(2) · `snapshot_days`(30) · `snapshot_days_others`(90) · `snapshot_min`(10) · `snapshot_max`(20) · `snapshot_max_local`(100) · `ack_hours`(4) · `known_gaps` · `rewrite_ok` · `survival_pct`(70). 뜻은 `tracker-workflow.md` 「동기화」 |
 | `manuscript.output_pattern` | 완료 색인, 초기화 | 없음. 빌드 산출물 이름 글롭(`원고_v*.docx`) — 완료 색인에서 뺍니다 |
-| `grammar.*` | 문법기준 | 범위는 `manuscript.source_dir` 의 `chapters`(참고문헌 파일 제외). `sources`(기본 범위에 **더하는** 원본) · `exclude_prefixes`(`["@NOTE"]`) · `avoid_lists`(없음). 아래 「`grammar`」 |
+| `grammar.*` | grammar_baseline | 범위는 `manuscript.source_dir` 의 `chapters`(참고문헌 파일 제외). `sources`(기본 범위에 **더하는** 원본) · `exclude_prefixes`(`["@NOTE"]`) · `avoid_lists`(없음). 아래 「`grammar`」 |
 | `markers` | `manuscript` 진입 스킬과 프로젝트 로컬 스킬의 가드 | — |
 | `procedure` | `manuscript` 진입 스킬 | **그 단계를 건너뜁니다** |
 
 **설정 파일이 없어도 도구는 돕니다.** 기본값이 들어갑니다.
 
+**0.12 이하가 만든 프로젝트는 한글 기본 이름(`도구/` · `수정필요_*.md` · `완료기록/` 등 — 값은 `_config.LEGACY_DEFAULTS`)을 씁니다.**
+그 이름을 설정에 적어 두면 그대로 돕니다. 적지 않은 채 옛 이름만 디스크에 있으면 도구는 멈추고 훅은 설정 파일 말고는 쓰기를 막으며,
+둘 다 설정에 더할 값을 보입니다 — `update_tools.py` 도 같은 값을 보이고 적기 전에는 적용하지 않습니다.
+
 ## `grammar` — 제출 전 문법 점검의 범위
 
-`도구/문법기준.py` 가 읽습니다(규약은 `revision-protocol.md` 「제출 전 문법 점검」). **키가 없으면 범위는 원고 폴더의 장 파일입니다** —
+`tools/grammar_baseline.py` 가 읽습니다(규약은 `revision-protocol.md` 「제출 전 문법 점검」). **키가 없으면 범위는 원고 폴더의 장 파일입니다** —
 초록 · 빌드 스크립트 안의 글 · 목차용 짧은 제목처럼 장 파일 밖에 있는 영문만 `sources` 로 더합니다.
 
 | 키 | 값 |
@@ -103,21 +108,22 @@ python <플러그인>/skills/new-manuscript/init_manuscript.py <대상폴더> --
 
 **이미 있는 파일은 건너뜁니다.** 두 번 돌려도 안전합니다.
 
-도구의 정본은 `skills/new-manuscript/tools/` 에 있고, 초기화 때 각 프로젝트의 `도구/` 로
+도구의 정본은 `skills/new-manuscript/tools/` 에 있고, 초기화 때 각 프로젝트의 도구 폴더로
 **복사**됩니다. 프로젝트가 독립적으로 돌고, 필요하면 그 프로젝트에서만 손볼 수 있습니다.
 관리 대상 목록의 원본은 `new-manuscript/managed_files.json` 하나입니다. **정본이 바뀌면 각 프로젝트 사본은
 `new-manuscript/update_tools.py` 로 맞춥니다** — `--check`(판정) · `--apply`(교체 — 로컬 수정판은 `--force`, 없는 파일은 `--add`) ·
 `--scan <폴더>`(자매 프로젝트 전체). 원본은 그 도구가 든 플러그인 사본이고, 정본 이력의 해시(`tool_hashes.json`)로 옛 판을 알아봅니다.
+0.12 이하의 한글 이름 사본(`managed_files.json` 의 `old`)은 `--apply` 가 새 이름으로 옮깁니다.
 
 ```
-도구/_config.py          설정 로더 · 공유 정의(도판 표지 · 상태 어휘) — 그대로 씁니다
-도구/_위치.py             「파일 · 절」 위치 문법 — 색인 · 위치 표 · 포커스 · 새 기록 검사가 함께 씁니다
-도구/번호점검.py           Figure·Table·참고문헌 번호 전수 대조
-도구/수정필요_정리.py       미결 항목 이관·색인 생성
-도구/완료기록_색인.py       완료 기록 역색인 생성 (`--검사` 로 옛 기록의 확인 못 한 이름)
-도구/완료기록_새항목.py     완료 기록 번호 할당 · 대상 검사 · 색인 재생성(`--no-index` 로 끔)
-도구/미결_새항목.py        새 미결 항목 번호 할당 — 대기 글자 표 · 제안 표(쓰기 잠금 안에서 다시 읽어 정함)
-도구/_동기화.py            공용 파일 동기화 안전장치 본체 — 검사 · 스냅샷 · 쓰기 잠금 · `replace_once`
-도구/동기화_점검.py         세션 시작 점검 · `--ack` · `--restore` · `--snapshots`
-도구/문법기준.py           제출 전 문법 점검의 기준 — 바뀐 단위만 골라냄(changed) · 본 단위를 찍음(clean · resolve) · 후보 원문 대조(verify)
+tools/_config.py            설정 로더 · 공유 정의(도판 표지 · 상태 어휘) — 그대로 씁니다
+tools/_location.py          「파일 · 절」 위치 문법 — 색인 · 위치 표 · 포커스 · 새 기록 검사가 함께 씁니다
+tools/check_numbers.py      Figure·Table·참고문헌 번호 전수 대조
+tools/tidy_tracker.py       미결 항목 이관·색인 생성
+tools/index_records.py      완료 기록 역색인 생성 (`--검사` 로 옛 기록의 확인 못 한 이름)
+tools/new_record.py         완료 기록 번호 할당 · 대상 검사 · 색인 재생성(`--no-index` 로 끔)
+tools/new_pending.py        새 미결 항목 번호 할당 — 대기 글자 표 · 제안 표(쓰기 잠금 안에서 다시 읽어 정함)
+tools/_sync.py              공용 파일 동기화 안전장치 본체 — 검사 · 스냅샷 · 쓰기 잠금 · `replace_once`
+tools/check_sync.py         세션 시작 점검 · `--ack` · `--restore` · `--snapshots`
+tools/grammar_baseline.py   제출 전 문법 점검의 기준 — 바뀐 단위만 골라냄(changed) · 본 단위를 찍음(clean · resolve) · 후보 원문 대조(verify)
 ```

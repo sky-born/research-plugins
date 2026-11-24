@@ -194,6 +194,7 @@ research-plugins/
 │   ├── sync_codex_manifests.py      plugin.json 에서 나오는 생성물 만들기 · 어긋남 검사
 │   ├── validate_shared_plugins.py   두 앱의 공통 배포 구성 검증
 │   ├── tool_hashes.py               관리 파일 해시 목록 생성
+│   ├── check_public.py              올릴 내용에서 개인 정보를 찾음
 │   └── preview_projects.py          실제 프로젝트의 사본에 새 도구를 미리 적용
 ├── tests/                           배포 전 시험 (unittest)
 └── plugins/
@@ -303,12 +304,13 @@ python scripts/release.py publish -m "paper-index v0.10.0: short summary"
 
 `check` 가 순서대로 하는 일:
 
-1. 기준선의 원격을 `git fetch` 하고 기준선 `origin/main` 확인
-2. 두 앱의 공통 배포 구성과 생성물이 원본과 같은지 검증 (`validate_shared_plugins.py`), 관리 파일 해시 목록이 최신인지 확인 (`tool_hashes.py --check`)
-3. `claude plugin validate` 로 마켓플레이스 · 플러그인 매니페스트 검증 — 쓴 실행 파일과 판을 출력합니다
-4. 기준선과 비교해 **바뀐 플러그인**을 판정하고, 그 플러그인마다 `version` 이 올라갔는지 확인 — 아니면 **중단**
-5. 올린 버전마다 `CHANGELOG.md` 에 항목이 있는지 확인 — 없으면 **중단**
-6. 시험 전체 (`tests/`)
+1. 기준선의 원격을 `git fetch` 하고 기준선 `origin/main` 확인, 파일 이름이 모두 ASCII 인지 확인 — 아니면 **중단**
+2. 파일 · 경로 · 올릴 커밋 · 다음 커밋의 작성자 정보에서 개인 정보를 찾음 (`check_public.py`) — 걸리면 **중단**. 개인 금지어는 저장소 밖 목록에서 읽습니다(`--deny-list` · `RESEARCH_PLUGINS_DENYLIST` · 클론의 `git config research-plugins.denylist <file>`). 목록이 없으면 일반 패턴만 보고 경고합니다
+3. 두 앱의 공통 배포 구성과 생성물이 원본과 같은지 검증 (`validate_shared_plugins.py`), 관리 파일 해시 목록이 최신인지 확인 (`tool_hashes.py --check`)
+4. `claude plugin validate` 로 마켓플레이스 · 플러그인 매니페스트 검증 — 쓴 실행 파일과 판을 출력합니다
+5. 기준선과 비교해 **바뀐 플러그인**을 판정하고, 그 플러그인마다 `version` 이 올라갔는지 확인 — 아니면 **중단**
+6. 올린 버전마다 `CHANGELOG.md` 에 항목이 있는지 확인 — 없으면 **중단**
+7. 시험 전체 (`tests/`)
 
 push 할 때마다 GitHub Actions(`.github/workflows/check.yml`)가 Windows · macOS · Linux 에서 같은 `check` 를 돌립니다. `claude plugin validate` 단계만 빠집니다.
 

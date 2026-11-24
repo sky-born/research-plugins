@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-r"""수정필요 목록 4파일 정리·검사 도구
+r"""추적 파일 정리·검사 도구. 파일 이름은 `.manuscript/project.json` 을 따르고, 아래는 기본값입니다.
 
-    수정필요_목록.md        색인·규칙·상시 제약. 매 세션 통독. §3~§5 는 이 도구가 생성
-    수정필요_대기.md        미결 항목 본문 A·B·C·D. 색인에서 ID 를 얻어 그 항목만 읽습니다
-    수정필요_색인.md        완료 기록 색인 — 도구\완료기록_색인.py 가 생성
-    완료기록\E*.md          완료 기록 본문. 항목당 한 파일
-    완료기록\이관_DB.md     D·B 에서 이관한 완료 항목
-    수정필요_문헌.md        문헌 라이브러리 F, 참고문헌 대조 G
-    수정필요_제안.md        채택 여부 결정 대기 제안 H
+    tracker_index.md          색인·규칙·상시 제약. 매 세션 통독. §3~§5 는 이 도구가 생성
+    tracker_pending.md        미결 항목 본문 A·B·C·D. 색인에서 ID 를 얻어 그 항목만 읽습니다
+    tracker_records_index.md  완료 기록 색인 — tools/index_records.py 가 생성
+    records/E*.md             완료 기록 본문. 항목당 한 파일
+    records/archive.md        D·B 에서 이관한 완료 항목
+    tracker_literature.md     문헌 라이브러리 F, 참고문헌 대조 G
+    tracker_proposals.md      채택 여부 결정 대기 제안 H
 
-2026-08-17 — 완료 기록을 한 파일에서 `완료기록\` 폴더로 나눴습니다.
-2026-08-18 — 미결 항목 본문을 `수정필요_대기.md` 로 내리고 `수정필요_목록.md` 를 색인으로 바꿨습니다.
-             §3 위치 표·§4 트리거 표·§5 지금 손댈 수 있는 항목은 전부 이 도구가 본문에서 만듭니다.
+§3 위치 표·§4 트리거 표·§5 지금 손댈 수 있는 항목은 전부 이 도구가 본문에서 만듭니다.
 
 세션을 마칠 때 돌립니다. 완료된 항목을 대기 파일에서 완료기록으로 넘기고,
-`수정필요_목록.md` 가 매 세션 읽어도 부담 없는 색인으로 남게 유지합니다.
+색인 파일이 매 세션 읽어도 부담 없는 크기로 남게 유지합니다.
 
 사용법  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> 도구/수정필요_정리.py                 진단만. 파일을 고치지 않습니다
-    <py> 도구/수정필요_정리.py --apply         고칠 수 있는 것을 반영합니다
-    <py> 도구/수정필요_정리.py --dir <경로>    파일이 있는 폴더 지정
-                                               (기본: `도구/` 의 상위 = 프로젝트 루트)
+    <py> tools/tidy_tracker.py                 진단만. 파일을 고치지 않습니다
+    <py> tools/tidy_tracker.py --apply         고칠 수 있는 것을 반영합니다
+    <py> tools/tidy_tracker.py --dir <경로>    파일이 있는 폴더 지정
+                                               (기본: 도구 폴더의 상위 = 프로젝트 루트)
 
 G 드라이브 미러처럼 셸이 폴더에 닿지 않는 환경에서는(F11) 네 파일을 스테이징한
 사본에 대해 돌린 뒤 되돌려 씁니다.
@@ -29,7 +27,7 @@ G 드라이브 미러처럼 셸이 폴더에 닿지 않는 환경에서는(F11) 
 돌려도 안전합니다 — 두 번 돌리면 두 번째는 아무것도 바꾸지 않습니다(멱등).
 
 `--apply` 의 순서는 「잠금 → 읽기 → 계산 → 읽은 뒤 바뀌었는지 전체 검사 → 저장」입니다. 다른 세션이 열려 있어도 돌립니다 —
-잠금(`_동기화.WriteLock`)은 이 한 번의 실행 동안만 잡고, 읽은 뒤 바뀐 파일이 하나라도 있으면 **아무것도 저장하지 않고** 처음부터
+잠금(`_sync.WriteLock`)은 이 한 번의 실행 동안만 잡고, 읽은 뒤 바뀐 파일이 하나라도 있으면 **아무것도 저장하지 않고** 처음부터
 한 번 더 읽어 시도합니다(일부만 저장하면 이관하던 행이 대기 · 이관 어디에도 없게 됩니다). 완료 색인은 기록 파일에서 통째로 다시
 만드는 파일이라 계산 도중에 바로 씁니다.
 
@@ -53,30 +51,25 @@ def _콘솔_UTF8():
 _콘솔_UTF8()
 
 
-def _루트():
-    """이 스크립트는 `도구\\` 안에 있고, 대상 파일은 그 상위(프로젝트 루트)에 있습니다.
-    루트에 그대로 두고 돌려도 같게 동작합니다."""
-    d = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(d) if os.path.basename(d) == '도구' else d
-
 HDR = re.compile(r'^\|\s*ID\s*\|')
 # 완료기록 §3 본문은 2026-08-16부터 표가 아니라 소제목입니다.
 # 내용 열이 최장 5,232자여서 표로 렌더하면 마지막 열이 화면 밖으로 밀렸습니다.
 HEAD = re.compile(r'^###\s+([A-Z][0-9]+(?:-[0-9]+)?)\s+—\s+(.*)$')
 DATE = re.compile(r'^\*\*완료일\*\*\s*(.*)$')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _config import (load as _load_cfg, state_is_closed, STATE_KNOWN,                       # noqa: E402  — 상태 어휘는 _config.py 한 곳
+from _config import (load as _load_cfg, project_root, state_is_closed, STATE_KNOWN,                       # noqa: E402  — 상태 어휘는 _config.py 한 곳
                      TABLE_ROW_RE as ROW, TABLE_SEP_RE, split_cells as cells, unescape_cell,    # 표 행 문법도 _config.py 한 곳 —
                      table_problems, describe_table_problem, is_orphan_after, row_like_id,      # 동기화(S7 · replace_once) · 훅과 같은 정의
                      id_key as numkey, list_block_ids)                                          # ID 정렬 · 목록의 ID 자리 — 동기화 S3 과 같은 정의
-from _위치 import Grammar, section_key                                 # noqa: E402  — 위치 문법은 _위치.py 한 곳
-from _동기화 import Sync, refuse_if_alert                                # noqa: E402  — 동기화 안전장치는 _동기화.py 한 곳
+from _location import Grammar, section_key                                 # noqa: E402  — 위치 문법은 _location.py 한 곳
+from _sync import Sync, refuse_if_alert                                # noqa: E402  — 동기화 안전장치는 _sync.py 한 곳
 
 # 파일 이름·트리거 값은 `.manuscript/project.json` 이 정합니다. 없으면 기본값이 쓰입니다.
 _CFG = _load_cfg()
 FILES = _CFG.tracker_files
 TRIGGERS = _CFG.triggers        # 표의 묶음 순서도 이 순서입니다
 REC = _CFG.archive              # 이관분
+REC_SHOW = REC.replace('/', '\\')  # 생성 문구 속 표기 — 운영체제와 무관하게 같은 글자
 HOT_LIMIT = _CFG.index_limit    # 목록 파일이 이 크기를 넘으면 구조를 다시 살펴봅니다
 MOVABLE = _CFG.movable          # 목록에서 완료기록으로 넘길지 판정할 때 쓰는 분류
 
@@ -202,7 +195,7 @@ def cls_of(rid):
     return re.match(r'^[A-Z]+', rid).group(0)
 
 
-# 위치 키는 `_위치.py` 의 문법이 정합니다 — 완료 색인 §1 · 여기 §3 위치 표 · 포커스가 같은 정의를 씁니다.
+# 위치 키는 `_location.py` 의 문법이 정합니다 — 완료 색인 §1 · 여기 §3 위치 표 · 포커스가 같은 정의를 씁니다.
 _GRAMMAR = None
 
 
@@ -355,9 +348,9 @@ class Tidy:
                 continue
             ids = sorted([i for i in now if i.startswith(cls)], key=numkey)
             if not ids:
-                body = [f'> 완료·종결로 `완료기록\\이관_DB.md` 로 옮긴 {cls} 항목은 아직 없습니다.']
+                body = [f'> 완료·종결로 `{REC_SHOW}` 로 옮긴 {cls} 항목은 아직 없습니다.']
             else:
-                body = [f'> 완료·종결된 {cls} 항목 {len(ids)}건은 `완료기록\\이관_DB.md` 로 옮겼습니다 —',
+                body = [f'> 완료·종결된 {cls} 항목 {len(ids)}건은 `{REC_SHOW}` 로 옮겼습니다 —',
                         '> **' + ' · '.join(ids) + '**.']
             r = self.pend.set_block(f'이관목록:{cls}', body)
             if r:
@@ -367,13 +360,13 @@ class Tidy:
     _idx_mod = None
 
     def 색인모듈(self):
-        """색인 규칙은 `도구\\완료기록_색인.py` 한 곳에만 둡니다. 여기서는 불러 씁니다."""
+        """색인 규칙은 `index_records.py` 한 곳에만 둡니다. 여기서는 불러 씁니다."""
         if Tidy._idx_mod is None:
             import importlib.util
-            p = os.path.join(os.path.dirname(os.path.abspath(__file__)), '완료기록_색인.py')
+            p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'index_records.py')
             if not os.path.exists(p):
                 return None
-            spec = importlib.util.spec_from_file_location('완료기록_색인', p)
+            spec = importlib.util.spec_from_file_location('index_records', p)
             m = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(m)
             Tidy._idx_mod = m
@@ -382,17 +375,17 @@ class Tidy:
     def reindex(self):
         m = self.색인모듈()
         if m is None:
-            self.warn('도구\\완료기록_색인.py 가 없어 색인을 다시 만들지 못했습니다.')
+            self.warn(f'{_CFG.tool("index_records.py")} 가 없어 색인을 다시 만들지 못했습니다.')
             return
         text, ents, _ = m.render_index()
         if text is None:
-            self.warn('완료기록\\E*.md 를 찾을 수 없습니다. 색인 재생성을 건너뜁니다.')
+            self.warn(f'{_CFG.records_dir}/E*.md 를 찾을 수 없습니다. 색인 재생성을 건너뜁니다.')
             return
         cur = open(m.IDX, encoding='utf-8').read() if os.path.exists(m.IDX) else ''
         if cur == text:
-            self.notes.append(f'수정필요_색인.md 최신 — 완료기록 {len(ents)}건')
+            self.notes.append(f'{_CFG.record_index_file} 최신 — 완료기록 {len(ents)}건')
             return
-        self.act(f'수정필요_색인.md 재생성 (완료기록 {len(ents)}건)')
+        self.act(f'{_CFG.record_index_file} 재생성 (완료기록 {len(ents)}건)')
         if self.apply:
             open(m.IDX, 'w', encoding='utf-8', newline='').write(text)
             self.sync.after_write(_CFG.record_index_file.replace('\\', '/'))
@@ -412,7 +405,7 @@ class Tidy:
                     src[rid] = self.lit.lines[i]
         miss = [i for i in want_ids if i not in src]
         if miss:
-            self.warn(f'상시 F 항목 {miss} 가 `수정필요_문헌.md` §F에 없습니다.')
+            self.warn(f'상시 F 항목 {miss} 가 `{_CFG.literature_file}` §F에 없습니다.')
             return
         # 표 헤더 두 줄을 그대로 두고 그 아래만 갈아 끼웁니다.
         # 블록이 비어 있으면 a+2 가 닫는 줄(b)이 되므로 b 를 넘지 않게 자릅니다 —
@@ -453,7 +446,7 @@ class Tidy:
             if dup:
                 self.warn(f'{label}: ID 중복 ' + ', '.join(f'{k}({v}행)' for k, v in dup.items()))
 
-        # 완료기록 항목 파일 — 대상 미기재·E 결번 (규칙은 완료기록_색인.py 에 있습니다)
+        # 완료기록 항목 파일 — 대상 미기재·E 결번 (규칙은 index_records.py 에 있습니다)
         m = self.색인모듈()
         if m is not None:
             for w in m.warnings_for(m.read_entries()):
@@ -592,7 +585,7 @@ class Tidy:
         if not rows:
             self.notes.append('미결 항목 0건 — 대기 · 제안 파일의 표 구조가 정상이라 목록의 표를 빈 상태로 다시 만듭니다.')
 
-        # §3 위치 표 — (파일, 절) 한 행. 키는 _위치.py 문법(완료 색인 §1 과 같은 정의)
+        # §3 위치 표 — (파일, 절) 한 행. 키는 _location.py 문법(완료 색인 §1 과 같은 정의)
         g = grammar()
         bucket = {}
         for rid, _t, loc, _g, _st in rows:
@@ -642,7 +635,7 @@ class Tidy:
             for rid, t, loc, st in sorted(now, key=lambda x: numkey(x[0])):
                 body.append(f'| **{rid}** | {t} | {loc} | {st} |')
             body.append('')
-            body.append('> 본문은 `수정필요_대기.md` 의 같은 ID 행에 있습니다.')
+            body.append(f'> 본문은 `{_CFG.pending_file}` 의 같은 ID 행에 있습니다.')
         r = self.hot.set_block('지금', body)
         if r is None:
             self.warn('목록에 `<!-- 지금 -->` 블록이 없습니다.')
@@ -677,7 +670,7 @@ class Tidy:
         target = self._focus_target()
         if target is None:
             body = ['> 지금 지정된 장이 없습니다. 한 장을 붙잡고 작업할 때 켜십시오 —',
-                    '> `<py> 도구/수정필요_정리.py --focus ch3 --apply`',
+                    f'> `<py> {_CFG.tool("tidy_tracker.py")} --focus ch3 --apply`',
                     '>   (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)',
                     '>',
                     '> 그 장에 걸린 미결 항목·제안의 **본문**이 여기 복사돼, 대기 파일을 열지 않아도 됩니다.']
@@ -703,10 +696,10 @@ class Tidy:
         rows.sort(key=lambda r: (min((section_key(s) for _p, s in hits(r[2])), default=(9,)), numkey(r[0])))
         today = datetime.date.today().isoformat()
         body = [f'**작업 중인 장** {target} — {today} 설정 · {len(rows)}건',
-                '> 끄기 `<py> 도구/수정필요_정리.py --focus off --apply`',
+                f'> 끄기 `<py> {_CFG.tool("tidy_tracker.py")} --focus off --apply`',
                 '>   (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)',
                 '>',
-                '> **아래는 `수정필요_대기.md`·`수정필요_제안.md` 의 사본입니다.** 고치려면 원본을 고치십시오 —',
+                f'> **아래는 `{_CFG.pending_file}`·`{_CFG.proposals_file}` 의 사본입니다.** 고치려면 원본을 고치십시오 —',
                 '> 이 블록은 정리 스크립트가 매번 다시 만들므로 여기서 고친 것은 지워집니다.',
                 '']
         for rid, title, loc, trig, st in rows:
@@ -734,12 +727,12 @@ class Tidy:
     # --- 5) 크기 ---
     def sizes(self):
         print('\n크기')
-        d = os.path.join(self.d, '완료기록')
+        d = os.path.join(self.d, _CFG.records_dir)
         if os.path.isdir(d):
             n = sum(os.path.getsize(os.path.join(d, f)) for f in os.listdir(d)
                     if os.path.isfile(os.path.join(d, f)))
             c = len([f for f in os.listdir(d) if re.fullmatch(r'E\d+\.md', f)])
-            label = '완료기록\\ (E %d건)' % c
+            label = '%s\\ (E %d건)' % (_CFG.records_dir, c)
             print(f'  {label:24s} {n/1024:7.1f} KB')
         for f in FILES:
             p = os.path.join(self.d, f)
@@ -772,11 +765,11 @@ class Tidy:
 
     def docs(self):
         """이 도구가 읽고 쓰는 다섯 파일 — (Doc, 보고에 쓰는 이름)."""
-        return [(self.hot, '수정필요_목록.md'), (self.pend, '수정필요_대기.md'), (self.rec, REC),
-                (self.lit, '수정필요_문헌.md'), (self.pro, '수정필요_제안.md')]
+        return [(self.hot, _CFG.index_file), (self.pend, _CFG.pending_file), (self.rec, REC),
+                (self.lit, _CFG.literature_file), (self.pro, _CFG.proposals_file)]
 
     def run(self):
-        if not refuse_if_alert(self.sync, self.apply, '수정필요_정리'):
+        if not refuse_if_alert(self.sync, self.apply, 'tidy_tracker'):
             return 3
         self.migrate()
         self.reindex()
@@ -825,10 +818,8 @@ class Tidy:
             self.warns.append(f'동시 편집 감지 — {", ".join(blocked)} 을 덮어쓰지 않았습니다')
             changed = [c for c in changed if c not in blocked]
         if self.apply:
-            rels = {'수정필요_목록.md': _CFG.index_file, '수정필요_대기.md': _CFG.pending_file, REC: REC,
-                    '수정필요_문헌.md': _CFG.literature_file, '수정필요_제안.md': _CFG.proposals_file}
             for name in changed:
-                self.sync.after_write(rels.get(name, name).replace('\\', '/'))
+                self.sync.after_write(name.replace('\\', '/'))
             findings, removed = self.sync.session_end()       # 세션 끝 — 드라이브 스냅샷 · 보존 정리
             print('\n동기화 — 세션 경계 스냅샷 갱신 · 보존 정리 %d개 삭제%s' % (removed, ' · ERROR 남음(확인 필요)' if findings else ''))
             for f in findings:
@@ -842,7 +833,7 @@ class Tidy:
 def main():
     ap = argparse.ArgumentParser(add_help=True)
     ap.add_argument('--apply', action='store_true', help='진단만 하지 않고 파일에 반영합니다')
-    ap.add_argument('--dir', default=_루트())
+    ap.add_argument('--dir', default=project_root())
     ap.add_argument('--focus', metavar='ch3|off',
                     help='한 장을 붙잡고 작업할 때. 그 장에 걸린 항목 본문을 목록 §6 에 싣습니다')
     a = ap.parse_args()
@@ -856,7 +847,7 @@ def main():
     sync = Sync(_CFG)
     if not a.apply:
         return Tidy(a.dir, False, a.focus, sync).run()
-    with sync.write_lock('수정필요_정리') as lock:
+    with sync.write_lock('tidy_tracker') as lock:
         if lock.busy:
             print('! ' + lock.busy_message())
             return RC_REFUSED

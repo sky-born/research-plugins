@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-r"""_위치.py — 「파일 · 절」 위치 문법. 완료기록의 `대상` 과 미결 · 제안의 `위치` 를 (파일, 절) 로 가릅니다.
+r"""_location.py — 「파일 · 절」 위치 문법. 완료기록의 `대상` 과 미결 · 제안의 `위치` 를 (파일, 절) 로 가릅니다.
 
-한 정의를 세 곳이 씁니다 — 완료 색인 §1(`완료기록_색인.py`) · 목록 §3 위치 표와 포커스(`수정필요_정리.py`) ·
-새 기록의 검사(`완료기록_새항목.py`). 쓰는 법의 규약은 플러그인 문서
+한 정의를 세 곳이 씁니다 — 완료 색인 §1(`index_records.py`) · 목록 §3 위치 표와 포커스(`tidy_tracker.py`) ·
+새 기록의 검사(`new_record.py`). 쓰는 법의 규약은 플러그인 문서
 `manuscript-workflow/references/tracker-workflow.md` 「대상 · 위치 문법」에 있습니다.
 
-    from _위치 import Grammar
+    from _location import Grammar
     g = Grammar(cfg)                     # cfg 는 _config.load()
     p = g.parse('`manuscript/results.md` ③ · ④b · `도판소스/INDEX.md`')
     p.files       -> OrderedDict  'manuscript/results.md': ['③', '④b'],  '도판소스/INDEX.md': []
@@ -136,7 +136,7 @@ class Grammar(object):
 
     def _resolve_glob(self, t, ctx):
         """글롭은 내용을 해석하지 않고, 폴더만 같은 순서(앞 경로 → 루트 → 원고 폴더)로 찾아 `ch*.md` 와
-        `초안_소스/ch*.md` 가 한 행이 되게 합니다. 어디에도 맞는 파일이 없으면 쓴 그대로."""
+        `manuscript_src/ch*.md` 가 한 행이 되게 합니다. 어디에도 맞는 파일이 없으면 쓴 그대로."""
         if t.startswith('../'):
             return t
         import glob as _glob
@@ -356,7 +356,7 @@ class Excluder(object):
         t = cfg.raw['tracker']
         self.files = {t[k].replace('\\', '/') for k in ('index', 'pending', 'record_index', 'archive') if t.get(k)}
         self.files.add('수정필요_완료기록.md')                      # 항목당 파일로 나누기 전의 옛 통합 파일
-        self.dirs = [t.get('records_dir', '완료기록').replace('\\', '/').rstrip('/') + '/']
+        self.dirs = [cfg.records_dir.replace('\\', '/').rstrip('/') + '/']
         self.globs = list(cfg.record_index_exclude) + ([cfg.output_pattern] if cfg.output_pattern else [])
 
     def _one(self, p):

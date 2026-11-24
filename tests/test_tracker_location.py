@@ -1,4 +1,4 @@
-"""위치 문법(_위치.py) · 완료 색인 · 위치 표 · 포커스 · 새 기록 검사 · 갱신 도구 · 미리보기 — 합성 표본으로 검증합니다.
+"""위치 문법(_location.py) · 완료 색인 · 위치 표 · 포커스 · 새 기록 검사 · 갱신 도구 · 미리보기 — 합성 표본으로 검증합니다.
 
 표본은 OS 임시 폴더에 만들고(저널형 · 학위논문형), 연구 파일은 건드리지 않습니다. 이 스위트는 프로젝트 파일을
 지우거나 재귀 삭제하지 않습니다. 기대 행은 한 저널 원고 프로젝트의 색인 생성기 계획(2026-09-30, W1)의
@@ -26,7 +26,7 @@ PY = [sys.executable, "-X", "utf8", "-B"]
 
 sys.path.insert(0, str(TOOLS))
 _config = importlib.import_module("_config")
-_위치 = importlib.import_module("_위치")
+_location = importlib.import_module("_location")
 
 
 SYNC_STATE = Path(tempfile.mkdtemp(prefix="tracker-sync-state-"))
@@ -76,31 +76,31 @@ class Fixtures(unittest.TestCase):
             write(p / "manuscript" / f, "@NOTE 표본\n")
         write(p / "README.md", "표본\n")
         write(p / "도판소스" / "INDEX.md", "| 도판 |\n")
-        write(p / "보관" / "CHECKPOINT_로그.md", "옛 로그\n")
+        write(p / "archive" / "CHECKPOINT_로그.md", "옛 로그\n")
         write(p / "조사" / "CHECKPOINT.md", "인수인계\n")
         write(p / "조사" / "README.md", "조사\n")
         write(p / "journal_manuscript_v28.docx", "")
-        (p / "완료기록" / "스냅샷").mkdir(parents=True, exist_ok=True)
-        set_cfg(p, tracker__record_index_exclude=["보관/", "조사/CHECKPOINT.md"],
+        (p / "records" / "스냅샷").mkdir(parents=True, exist_ok=True)
+        set_cfg(p, tracker__record_index_exclude=["archive/", "조사/CHECKPOINT.md"],
                 manuscript__output_pattern="journal_manuscript_v*.docx")
         return p
 
     def dissertation(self, name: str) -> Path:
         p = self.scratch / name
         run(PY + [str(INITIALIZER), str(p), "--name", "학위논문 표본", "--kind", "dissertation",
-                  "--source-dir", "초안_소스", "--chapters", "ch1.md", "ch2.md", "ch3.md", "ch4.md", "ch5.md",
+                  "--source-dir", "manuscript_src", "--chapters", "ch1.md", "ch2.md", "ch3.md", "ch4.md", "ch5.md",
                   "--references", "references.md", "--build-script", "build_tpl.py"], cwd=self.scratch)
-        write(p / "초안_소스" / "build_tpl.py", "APPROVE_DATE = ''\n")
-        write(p / "초안_소스" / "fig_src" / "C3_F11_shear.png", "")
+        write(p / "manuscript_src" / "build_tpl.py", "APPROVE_DATE = ''\n")
+        write(p / "manuscript_src" / "fig_src" / "C3_F11_shear.png", "")
         write(p / "도판소스" / "INDEX.md", "| 도판 |\n")
-        (p / "완료기록" / "스냅샷").mkdir(parents=True, exist_ok=True)
-        set_cfg(p, tracker__record_index_exclude=["보관/"],
+        (p / "records" / "스냅샷").mkdir(parents=True, exist_ok=True)
+        set_cfg(p, tracker__record_index_exclude=["archive/"],
                 manuscript__output_pattern="박사학위논문_초안_v*.docx")
         return p
 
     @staticmethod
     def grammar(project: Path):
-        return _위치.Grammar(_config.load(str(project)))
+        return _location.Grammar(_config.load(str(project)))
 
     @staticmethod
     def rows(g, text):
@@ -170,7 +170,7 @@ class GrammarTests(Fixtures):
             "`build_tpl.py` tail 블록 (`_Toc_ch5`)": {"build_tpl.py": ["tail"]},
             "`build_tpl.py` `pf()` = `PAGEREF` 필드": {"build_tpl.py": ["pf"]},
             "`build_tpl.py` tail 블록 / `abstract_src`": {"build_tpl.py": ["tail", "abstract_src"]},
-            "`초안_소스/build_tpl.py` `image_para()`·`data_table()`": {"build_tpl.py": ["image_para", "data_table"]},
+            "`manuscript_src/build_tpl.py` `image_para()`·`data_table()`": {"build_tpl.py": ["image_para", "data_table"]},
             "ch3.md §3.2.1, ch3.md §3.3(장 요약), Figure 3-2 캡션":              # E108 — 장-번호 도판
                 {"ch3.md": ["§3.2.1", "§3.3", "Figure 3-2"]},
             "`도판소스/INDEX.md` Figure 3-4 행 · Figure 4-3 · 4-10":            # E315 · 이어지는 장-번호
@@ -179,36 +179,36 @@ class GrammarTests(Fixtures):
             "`ch4.md` §4.2.6-§4.2.10": {"ch4.md": ["§4.2.6–§4.2.10"]},           # 하이픈은 양쪽이 온전할 때만 범위
             "ch4.md §4.2.7 (¶3 101행 신설 — Figure 4-10 캡션 99행 뒤, §4.2.8 제목 앞)":   # E251
                 {"ch4.md": ["§4.2.7", "¶3", "Figure 4-10", "§4.2.8"]},
-            "`초안_소스/ch*.md`": {"ch*.md": []},
+            "`manuscript_src/ch*.md`": {"ch*.md": []},
             "`ch*.md`": {"ch*.md": []},
-            "`초안_소스/fig_src` Figure 4-3 파일 2개 · `fig_src/`": {"fig_src/": ["Figure 4-3"]},
+            "`manuscript_src/fig_src` Figure 4-3 파일 2개 · `fig_src/`": {"fig_src/": ["Figure 4-3"]},
             "전 챕터 (문체)": {},
         }
         for text, want in cases.items():
             got, _ = self.rows(g, text)
             self.assertEqual(got, want, text)
         # 글롭 · 폴더는 쓴 모양이 달라도 같은 키
-        self.assertEqual(list(g.parse("`초안_소스/ch*.md`").files), list(g.parse("`ch*.md`").files))
-        self.assertEqual(list(g.parse("`초안_소스/fig_src`").files), list(g.parse("`fig_src/`").files))
+        self.assertEqual(list(g.parse("`manuscript_src/ch*.md`").files), list(g.parse("`ch*.md`").files))
+        self.assertEqual(list(g.parse("`manuscript_src/fig_src`").files), list(g.parse("`fig_src/`").files))
 
     def test_sort_order(self):
         g = self.grammar(self.dissertation("정렬"))
-        paths = ["zzz_없음.md", "../문헌인덱스/", "CLAUDE.md", "초안_소스/fig_src/", "초안_소스/references.md",
-                 "초안_소스/ch5.md", "초안_소스/ch1.md"]
+        paths = ["zzz_없음.md", "../문헌인덱스/", "CLAUDE.md", "manuscript_src/fig_src/", "manuscript_src/references.md",
+                 "manuscript_src/ch5.md", "manuscript_src/ch1.md"]
         got = sorted(paths, key=lambda p: g.sort_key(p))
-        self.assertEqual(got, ["초안_소스/ch1.md", "초안_소스/ch5.md", "초안_소스/references.md", "초안_소스/fig_src/",
+        self.assertEqual(got, ["manuscript_src/ch1.md", "manuscript_src/ch5.md", "manuscript_src/references.md", "manuscript_src/fig_src/",
                                "CLAUDE.md", "../문헌인덱스/", "zzz_없음.md"])
         secs = ["abstract_src", "「절」", "Table 1", "Figure 3-2", "Figure 1", "§3.2.1", "¶2", "④b", "①", "", "⑪–⑮"]
-        self.assertEqual(sorted(secs, key=_위치.section_key),
+        self.assertEqual(sorted(secs, key=_location.section_key),
                          ["", "①", "④b", "⑪–⑮", "¶2", "§3.2.1", "Figure 1", "Figure 3-2", "Table 1", "「절」", "abstract_src"])
 
     def test_excluder_matches_resolved_and_written_names(self):
         p = self.journal("제외")
-        ex = _위치.Excluder(_config.load(str(p)))
-        for hit in ("보관/CHECKPOINT_로그.md", "조사/CHECKPOINT.md", "수정필요_대기.md", "완료기록/E1.md",
-                    "완료기록/", "journal_manuscript_v12.docx"):
+        ex = _location.Excluder(_config.load(str(p)))
+        for hit in ("archive/CHECKPOINT_로그.md", "조사/CHECKPOINT.md", "tracker_pending.md", "records/E1.md",
+                    "records/", "journal_manuscript_v12.docx"):
             self.assertTrue(ex.hit(hit, hit), hit)
-        for miss in ("조사/README.md", "manuscript/results.md", "수정필요_제안.md", "도판소스/INDEX.md"):
+        for miss in ("조사/README.md", "manuscript/results.md", "tracker_proposals.md", "도판소스/INDEX.md"):
             self.assertFalse(ex.hit(miss, miss), miss)
         self.assertTrue(ex.hit("zzz.md", "journal_manuscript_v9.docx"))     # 쓴 이름에도 대조
 
@@ -217,20 +217,20 @@ class GrammarTests(Fixtures):
 class RecordIndexTests(Fixtures):
     def test_reverse_index_rows_and_state_heads(self):
         p = self.journal("색인")
-        rec = p / "완료기록"
+        rec = p / "records"
         items = {
-            1: ("`manuscript/results.md` ③ · `수정필요_대기.md` A1", "확정 — 사용자 「좋아」"),
+            1: ("`manuscript/results.md` ③ · `tracker_pending.md` A1", "확정 — 사용자 「좋아」"),
             2: ("`manuscript/results.md` ③ · ⑫b", "확정 — 사용자 「확정」. **2026-09-24 부분 갱신 [E5](E5.md)**"),
-            3: ("`수정필요_대기.md` A2 · `조사/CHECKPOINT.md`", "종결"),
+            3: ("`tracker_pending.md` A2 · `조사/CHECKPOINT.md`", "종결"),
             4: ("전체", "반영 (확정 대기)"),
-            5: ("`journal_manuscript_v12.docx` · `보관/정리/`", "확정"),
+            5: ("`journal_manuscript_v12.docx` · `archive/정리/`", "확정"),
             6: ("`도판소스/INDEX.md` Figure 3 · `zzz_없는파일.md`", "대체됨 E2 (2026-09-15) — 다시 만듦"),
         }
         for n, (tgt, st) in items.items():
             write(rec / f"E{n}.md", f"# E{n} — 항목 {n}\n\n**완료일** 2026-09-{10 + n:02d}\n**대상** {tgt}\n**상태** {st}\n\n본문.\n")
-        tool = p / "도구" / "완료기록_색인.py"
+        tool = p / "tools" / "index_records.py"
         run(PY + [str(tool)], cwd=p)
-        idx = (p / "수정필요_색인.md").read_text(encoding="utf-8")
+        idx = (p / "tracker_records_index.md").read_text(encoding="utf-8")
         for line in ("| 파일 | 절 | 항목 |",
                      "| `results.md` | ③ | E1 · E2 |",
                      "| `results.md` | ⑫b | E2 |",
@@ -244,10 +244,10 @@ class RecordIndexTests(Fixtures):
                      "| E6 | 항목 6 | 2026-09-16 | 대체됨 E2 |"):
             self.assertIn(line, idx, line)
         self.assertNotIn("| 대상 |", idx)
-        self.assertNotIn("보관/", idx.split("## 2.")[0])
-        first = (p / "수정필요_색인.md").read_bytes()
+        self.assertNotIn("archive/", idx.split("## 2.")[0])
+        first = (p / "tracker_records_index.md").read_bytes()
         run(PY + [str(tool)], cwd=p)
-        self.assertEqual(first, (p / "수정필요_색인.md").read_bytes(), "두 번 돌려도 같아야 합니다")
+        self.assertEqual(first, (p / "tracker_records_index.md").read_bytes(), "두 번 돌려도 같아야 합니다")
         self.assertNotIn(b"\r\n", first)
         out = run(PY + [str(tool), "--검사"], cwd=p).stdout
         self.assertIn("zzz_없는파일.md", out)
@@ -255,12 +255,12 @@ class RecordIndexTests(Fixtures):
 
     def test_new_record_warns_on_bad_target_but_creates(self):
         p = self.journal("새항목 검사")
-        tool = p / "도구" / "완료기록_새항목.py"
+        tool = p / "tools" / "new_record.py"
         body = self.scratch / "bad_target.md"
         write(body, "# E? — 절만 적은 기록\n\n**완료일** 2026-01-02\n**대상** ③ · ④b\n**상태** 확정\n\n본문.\n")
         out = run(PY + [str(tool), str(body)], cwd=p).stdout
         self.assertIn("대상을 해석할 수 없습니다", out)
-        self.assertTrue((p / "완료기록" / "E1.md").is_file())
+        self.assertTrue((p / "records" / "E1.md").is_file())
         write(body, "# E? — 확인 못 한 이름\n\n**완료일** 2026-01-02\n**대상** `zzz_없는파일.md` ③\n**상태** 확정\n\n본문.\n")
         out = run(PY + [str(tool), str(body)], cwd=p).stdout
         self.assertIn("확인하지 못한 이름", out)
@@ -268,7 +268,7 @@ class RecordIndexTests(Fixtures):
         write(body, "# E? — 정상\n\n**완료일** 2026-01-02\n**대상** `manuscript/results.md` ③\n**상태** 확정\n\n본문.\n")
         out = run(PY + [str(tool), str(body)], cwd=p).stdout
         self.assertNotIn("!", out.split("\n")[-2] if len(out.split("\n")) > 1 else out)
-        self.assertTrue((p / "완료기록" / "E3.md").is_file())
+        self.assertTrue((p / "records" / "E3.md").is_file())
 
 
 # ---------------------------------------------------------------- W3 위치 표 · 포커스 · W4 경고
@@ -283,17 +283,17 @@ class TrackerTablesTests(Fixtures):
     def test_location_table_focus_and_warnings_journal(self):
         p = self.journal("위치표")
         trig = json.loads((p / ".manuscript" / "project.json").read_text(encoding="utf-8"))["tracker"]["triggers"][1]
-        self.add_rows(p / "수정필요_대기.md",
+        self.add_rows(p / "tracker_pending.md",
                       f"| A1 | 두 절 | `manuscript/results.md` ③ · ④b | {trig} | 대기 | |\n"
                       f"| A2 | 추적 파일이 위치 | `완료기록/스냅샷/` | {trig} | 대기 | |\n"
                       f"| A3 | 범위 낱말 | 전체 | {trig} | 대기 | |\n"
                       f"| A4 | 절만 | ③ | {trig} | 대기 | |\n"
                       f"| A5 | 빈 칸 |  | {trig} | 대기 | |\n"
                       f"| A6 | 노트 | `manuscript/노트/results.md` ① | {trig} | 대기 | |\n")
-        self.add_rows(p / "수정필요_제안.md", f"| H1 | 제안 | `manuscript/results.md` ③ | {trig} | 대기 | 근거 |\n")
-        r = run(PY + [str(p / "도구" / "수정필요_정리.py"), "--focus", "ch3", "--apply"], cwd=p, codes=(0, 1))
+        self.add_rows(p / "tracker_proposals.md", f"| H1 | 제안 | `manuscript/results.md` ③ | {trig} | 대기 | 근거 |\n")
+        r = run(PY + [str(p / "tools" / "tidy_tracker.py"), "--focus", "ch3", "--apply"], cwd=p, codes=(0, 1))
         self.assertNotIn("Traceback", r.stderr)
-        listing = (p / "수정필요_목록.md").read_text(encoding="utf-8")
+        listing = (p / "tracker_index.md").read_text(encoding="utf-8")
         table = listing.split("<!-- 위치표 -->", 1)[1].split("<!-- /위치표 -->", 1)[0]
         for line in ("| 파일 | 절 | 걸린 항목 |",
                      "| `results.md` | ③ | A1 · H1 |",
@@ -314,16 +314,16 @@ class TrackerTablesTests(Fixtures):
         self.assertIn("A5: 위치를 해석할 수 없습니다", r.stdout)
         self.assertNotIn("A3: 위치를", r.stdout)
         self.assertNotIn("A2: 위치를", r.stdout)
-        before = (p / "수정필요_목록.md").read_bytes()
-        run(PY + [str(p / "도구" / "수정필요_정리.py"), "--apply"], cwd=p, codes=(0, 1))
-        self.assertEqual(before, (p / "수정필요_목록.md").read_bytes(), "두 번 돌려도 같아야 합니다")
+        before = (p / "tracker_index.md").read_bytes()
+        run(PY + [str(p / "tools" / "tidy_tracker.py"), "--apply"], cwd=p, codes=(0, 1))
+        self.assertEqual(before, (p / "tracker_index.md").read_bytes(), "두 번 돌려도 같아야 합니다")
 
     def test_single_letter_table_keeps_old_ids(self):
         """글자를 A 하나로 줄인 프로젝트 — 옛 B · C ID 가 A 절 아래 그대로 있어도 위치 표 · 이관 · 이관목록 블록이 돕니다."""
         import re
         p = self.journal("글자 하나")
         trig = json.loads((p / ".manuscript" / "project.json").read_text(encoding="utf-8"))["tracker"]["triggers"][1]
-        pend = p / "수정필요_대기.md"
+        pend = p / "tracker_pending.md"
         text = pend.read_text(encoding="utf-8")
         blocks = {c: re.search(r"<!-- 이관목록:%s -->\n.*?<!-- /이관목록:%s -->" % (c, c), text, re.S).group(0) for c in "BCD"}
         for c in "BCD":                                                   # B · C · D 절(제목 ~ 블록)을 지우고
@@ -335,10 +335,10 @@ class TrackerTablesTests(Fixtures):
                       f"| A1 | 남는 글자 | `manuscript/results.md` ③ | {trig} | 대기 | |\n"
                       f"| B2 | 옛 글자 · 열림 | `manuscript/intro.md` ¶1 | {trig} | 대기 | |\n"
                       f"| C1 | 옛 글자 · 닫힘 | `manuscript/references.md` | {trig} | 종결 (2026-10-06) | |\n")
-        r = run(PY + [str(p / "도구" / "수정필요_정리.py"), "--apply"], cwd=p, codes=(0, 1))
+        r = run(PY + [str(p / "tools" / "tidy_tracker.py"), "--apply"], cwd=p, codes=(0, 1))
         self.assertNotIn("Traceback", r.stderr)
         self.assertNotIn("블록이 없어", r.stdout)
-        listing = (p / "수정필요_목록.md").read_text(encoding="utf-8")
+        listing = (p / "tracker_index.md").read_text(encoding="utf-8")
         table = listing.split("<!-- 위치표 -->", 1)[1].split("<!-- /위치표 -->", 1)[0]
         self.assertIn("| `results.md` | ③ | A1 |", table)
         self.assertIn("| `intro.md` | ¶1 | B2 |", table, "옛 글자의 열린 행도 위치 표에")
@@ -346,25 +346,25 @@ class TrackerTablesTests(Fixtures):
         after = pend.read_text(encoding="utf-8")
         self.assertEqual(re.findall(r"^## ([A-Z])\. ", after, re.M), ["A"])
         self.assertNotIn("| C1 |", after)
-        self.assertIn("| C1 |", (p / "완료기록" / "이관_DB.md").read_text(encoding="utf-8"))
+        self.assertIn("| C1 |", (p / "records" / "archive.md").read_text(encoding="utf-8"))
         block_c = after.split("<!-- 이관목록:C -->", 1)[1].split("<!-- /이관목록:C -->", 1)[0]
         self.assertIn("C1", block_c, "옛 글자의 이관 흔적 줄")
-        before = (p / "수정필요_목록.md").read_bytes()
-        run(PY + [str(p / "도구" / "수정필요_정리.py"), "--apply"], cwd=p, codes=(0, 1))
-        self.assertEqual(before, (p / "수정필요_목록.md").read_bytes(), "두 번 돌려도 같아야 합니다")
+        before = (p / "tracker_index.md").read_bytes()
+        run(PY + [str(p / "tools" / "tidy_tracker.py"), "--apply"], cwd=p, codes=(0, 1))
+        self.assertEqual(before, (p / "tracker_index.md").read_bytes(), "두 번 돌려도 같아야 합니다")
 
     def test_focus_ch5_and_symbol_rows_dissertation(self):
         p = self.dissertation("포커스 ch5")
         trig = json.loads((p / ".manuscript" / "project.json").read_text(encoding="utf-8"))["tracker"]["triggers"][1]
-        self.add_rows(p / "수정필요_대기.md",
-                      f"| A1 | 다섯째 장 | `초안_소스/ch5.md` §5.1 | {trig} | 대기 | |\n"
+        self.add_rows(p / "tracker_pending.md",
+                      f"| A1 | 다섯째 장 | `manuscript_src/ch5.md` §5.1 | {trig} | 대기 | |\n"
                       f"| A2 | 심볼 | `build_tpl.py` `APPROVE_DATE` | {trig} | 대기 | |\n"
                       f"| A3 | 심볼 둘 | `build_tpl.py` `SEQ`/`REF` 필드 | {trig} | 대기 | |\n"
-                      f"| A4 | 글롭 | `초안_소스/ch*.md` | {trig} | 대기 | |\n"
+                      f"| A4 | 글롭 | `manuscript_src/ch*.md` | {trig} | 대기 | |\n"
                       f"| A5 | 글롭 짧게 | `ch*.md` | {trig} | 대기 | |\n")
-        r = run(PY + [str(p / "도구" / "수정필요_정리.py"), "--focus", "ch5", "--apply"], cwd=p, codes=(0, 1))
+        r = run(PY + [str(p / "tools" / "tidy_tracker.py"), "--focus", "ch5", "--apply"], cwd=p, codes=(0, 1))
         self.assertNotIn("Traceback", r.stderr)
-        listing = (p / "수정필요_목록.md").read_text(encoding="utf-8")
+        listing = (p / "tracker_index.md").read_text(encoding="utf-8")
         table = listing.split("<!-- 위치표 -->", 1)[1].split("<!-- /위치표 -->", 1)[0]
         for line in ("| `ch5.md` | §5.1 | A1 |", "| `build_tpl.py` | APPROVE_DATE | A2 |",
                      "| `build_tpl.py` | REF | A3 |", "| `build_tpl.py` | SEQ | A3 |", "| `ch*.md` | — | A4 · A5 |"):
@@ -380,26 +380,26 @@ class TrackerTablesTests(Fixtures):
 
     @classmethod
     def list_state(cls, p: Path):
-        t = (p / "수정필요_목록.md").read_text(encoding="utf-8")
+        t = (p / "tracker_index.md").read_text(encoding="utf-8")
         out = {n: t.split(f"<!-- {n} -->", 1)[1].split(f"<!-- /{n} -->", 1)[0] for n in cls.BLOCKS}
         out["스탬프"] = next(l for l in t.splitlines() if l.startswith("<!-- 생성스탬프 "))
         return out
 
     @staticmethod
     def tidy(p: Path, *args):
-        return run(PY + [str(p / "도구" / "수정필요_정리.py"), *args], cwd=p, codes=(0, 1))
+        return run(PY + [str(p / "tools" / "tidy_tracker.py"), *args], cwd=p, codes=(0, 1))
 
     @staticmethod
     def ack(p: Path):
         """행을 지우거나 가리면 동기화 점검(S3 · S7)이 ERROR 를 내고 정리 도구가 `--apply` 를 거부합니다 — 사용자 확인을 흉내 냅니다."""
-        run(PY + [str(p / "도구" / "동기화_점검.py"), "--quick"], cwd=p, codes=(0, 1, 2))
-        run(PY + [str(p / "도구" / "동기화_점검.py"), "--ack", "시험: 표본 행을 고쳤음"], cwd=p)
+        run(PY + [str(p / "tools" / "check_sync.py"), "--quick"], cwd=p, codes=(0, 1, 2))
+        run(PY + [str(p / "tools" / "check_sync.py"), "--ack", "시험: 표본 행을 고쳤음"], cwd=p)
 
     @staticmethod
     def single_letter(p: Path):
         """B · C · D 절을 지워 A 표 하나로 — 저널 원고 프로젝트의 대기 파일 모양(블록은 A 절 아래)."""
         import re
-        pend = p / "수정필요_대기.md"
+        pend = p / "tracker_pending.md"
         text = pend.read_text(encoding="utf-8")
         blocks = [re.search(r"<!-- 이관목록:%s -->\n.*?<!-- /이관목록:%s -->" % (c, c), text, re.S).group(0) for c in "BCD"]
         for c in "BCD":
@@ -411,27 +411,27 @@ class TrackerTablesTests(Fixtures):
         j = self.journal(f"영건_{tag}_저널")
         self.single_letter(j)
         d = self.dissertation(f"영건_{tag}_학위")
-        return [("journal", j, "`manuscript/results.md` ③", "ch3"), ("dissertation", d, "`초안_소스/ch3.md` §3.1", "ch3")]
+        return [("journal", j, "`manuscript/results.md` ③", "ch3"), ("dissertation", d, "`manuscript_src/ch3.md` §3.1", "ch3")]
 
     def test_zero_open_rows_rebuild_empty_blocks(self):
         """마지막 미결이 닫혀 이관되고 남은 제안도 종결되면 — 목록의 블록을 머리만 · 안내문으로 다시 만들고 스탬프를 지금 원본으로 찍습니다."""
         for kind, p, loc, ch in self.zero_fixtures("닫힘"):
             with self.subTest(kind=kind):
-                self.add_rows(p / "수정필요_대기.md", f"| A1 | 닫힐 항목 | {loc} | 지금 | 대기 | |\n")
-                self.add_rows(p / "수정필요_제안.md", f"| H1 | 버릴 제안 | {loc} | 지금 | 대기 | 근거 |\n")
+                self.add_rows(p / "tracker_pending.md", f"| A1 | 닫힐 항목 | {loc} | 지금 | 대기 | |\n")
+                self.add_rows(p / "tracker_proposals.md", f"| H1 | 버릴 제안 | {loc} | 지금 | 대기 | 근거 |\n")
                 self.tidy(p, "--focus", ch, "--apply")
                 before = self.list_state(p)
                 for n in ("위치표", "지금", "포커스"):
                     self.assertIn("A1", before[n], n)
-                for f, old, new in (("수정필요_대기.md", "| 지금 | 대기 |", "| 지금 | 완료 (2026-10-12) |"),
-                                    ("수정필요_제안.md", "| 지금 | 대기 |", "| 지금 | 종결 (2026-10-12) |")):
+                for f, old, new in (("tracker_pending.md", "| 지금 | 대기 |", "| 지금 | 완료 (2026-10-12) |"),
+                                    ("tracker_proposals.md", "| 지금 | 대기 |", "| 지금 | 종결 (2026-10-12) |")):
                     text = (p / f).read_text(encoding="utf-8")
                     self.assertEqual(text.count(old), 1, f)
                     (p / f).write_text(text.replace(old, new), encoding="utf-8")
                 r = self.tidy(p, "--apply")
                 self.assertNotIn(self.SKIPPED, r.stdout)
                 self.assertIn("미결 항목 0건", r.stdout)
-                self.assertIn("| A1 |", (p / "완료기록" / "이관_DB.md").read_text(encoding="utf-8"))
+                self.assertIn("| A1 |", (p / "records" / "archive.md").read_text(encoding="utf-8"))
                 after = self.list_state(p)
                 self.assertEqual(after["위치표"].strip().splitlines(), ["| 파일 | 절 | 걸린 항목 |", "|---|---|---|"])
                 self.assertEqual(after["트리거표"].strip().splitlines(), ["| 조건이 풀리면 | 꺼낼 항목 |", "|---|---|"])
@@ -439,30 +439,30 @@ class TrackerTablesTests(Fixtures):
                 self.assertIn(f"**작업 중인 장** {ch}", after["포커스"])
                 self.assertIn("0건", after["포커스"])
                 self.assertNotIn("####", after["포커스"])
-                ids, unknown = _config.list_block_ids((p / "수정필요_목록.md").read_text(encoding="utf-8"))
+                ids, unknown = _config.list_block_ids((p / "tracker_index.md").read_text(encoding="utf-8"))
                 self.assertEqual((sum(map(len, ids.values())), unknown), (0, []))
                 self.assertNotEqual(after["스탬프"], before["스탬프"])
-                r = run(PY + [str(p / "도구" / "동기화_점검.py"), "--quick"], cwd=p, codes=(0, 1))
+                r = run(PY + [str(p / "tools" / "check_sync.py"), "--quick"], cwd=p, codes=(0, 1))
                 self.assertNotIn(" S3 ", r.stdout)
                 self.assertNotIn(" S4 ", r.stdout)
-                once = (p / "수정필요_목록.md").read_bytes()
+                once = (p / "tracker_index.md").read_bytes()
                 self.tidy(p, "--apply")
-                self.assertEqual(once, (p / "수정필요_목록.md").read_bytes(), "두 번 돌려도 같아야 합니다")
+                self.assertEqual(once, (p / "tracker_index.md").read_bytes(), "두 번 돌려도 같아야 합니다")
 
     def test_unreadable_rows_keep_blocks_and_stamp(self):
         """미결을 하나도 읽지 못했는데 표 구조가 정상이 아니면(행을 읽지 못함) — 경고만 하고 블록 · 포커스 사본 · 스탬프를 그대로 둡니다."""
         variants = [
             # (이름, 고칠 파일, 바꿀 글, 바꿀 것, 경고에 들 까닭)
-            ("꾸민ID", "수정필요_대기.md", "| A1 |", "| **A1** |", "읽지 못한 줄 — 대기"),
-            ("머리바뀜", "수정필요_대기.md", "| ID | 항목 |", "| 번호 | 항목 |", "대기 분류 절에 `| ID |` 표 머리가 없음"),
-            ("절없음", "수정필요_대기.md", "\n## ", "\n### ", "대기 파일에 분류 절(`## X.`"),
-            ("쪼개진행", "수정필요_대기.md", "| A1 |", "A1 파이프를 잃은 행 |", "표 행 형식 결함 — 대기"),
-            ("제안꾸민ID", "수정필요_제안.md", "| H1 |", "| `H1` |", "읽지 못한 줄 — 제안"),
+            ("꾸민ID", "tracker_pending.md", "| A1 |", "| **A1** |", "읽지 못한 줄 — 대기"),
+            ("머리바뀜", "tracker_pending.md", "| ID | 항목 |", "| 번호 | 항목 |", "대기 분류 절에 `| ID |` 표 머리가 없음"),
+            ("절없음", "tracker_pending.md", "\n## ", "\n### ", "대기 파일에 분류 절(`## X.`"),
+            ("쪼개진행", "tracker_pending.md", "| A1 |", "A1 파이프를 잃은 행 |", "표 행 형식 결함 — 대기"),
+            ("제안꾸민ID", "tracker_proposals.md", "| H1 |", "| `H1` |", "읽지 못한 줄 — 제안"),
         ]
         for name, f, old, new, why in variants:
             for kind, p, loc, ch in self.zero_fixtures(name):
                 with self.subTest(kind=kind, variant=name):
-                    row = (f"| H1 | 남는 제안 | {loc} | 지금 | 대기 | 근거 |\n" if f == "수정필요_제안.md"
+                    row = (f"| H1 | 남는 제안 | {loc} | 지금 | 대기 | 근거 |\n" if f == "tracker_proposals.md"
                            else f"| A1 | 남는 항목 | {loc} | 지금 | 대기 | |\n")
                     self.add_rows(p / f, row)                # 그 파일의 행 하나만 — 다른 쪽은 비어 있음
                     self.tidy(p, "--focus", ch, "--apply")
@@ -502,33 +502,33 @@ class UpdateToolsTests(Fixtures):
         self.assertIn("기본값에 기대는 키", r.stdout)
         self.assertIn("manuscript.build_script", r.stdout)
         # 로컬 수정 · 옛 정본 판 · 없음 · 줄끝
-        tool = p / "도구" / "완료기록_색인.py"
+        tool = p / "tools" / "index_records.py"
         tool.write_text(tool.read_text(encoding="utf-8") + "\n# 로컬 수정\n", encoding="utf-8")
-        (p / "도구" / "_config.py").write_bytes(self.old_content("plugins/research-writing/skills/new-manuscript/tools/_config.py"))
-        (p / "도구" / "_위치.py").unlink()
-        eol = p / "도구" / "번호점검.py"
+        (p / "tools" / "_config.py").write_bytes(self.old_content("plugins/research-writing/skills/new-manuscript/tools/_config.py"))
+        (p / "tools" / "_location.py").unlink()
+        eol = p / "tools" / "check_numbers.py"
         eol.write_bytes(eol.read_bytes().replace(b"\n", b"\r\n"))
         r = run(PY + [str(UPDATE), str(p)], cwd=self.scratch, codes=(1,))
-        self.assertIn("도구/완료기록_색인.py", r.stdout); self.assertIn("로컬 수정", r.stdout)
+        self.assertIn("tools/index_records.py", r.stdout); self.assertIn("로컬 수정", r.stdout)
         self.assertIn("옛 정본 판", r.stdout)
         self.assertIn("없음", r.stdout)
         self.assertIn("같음 · 줄끝 다름", r.stdout)
         # --apply 만: 옛 판 · 줄끝은 바뀌고 로컬 수정 · 없음은 남음
         r = run(PY + [str(UPDATE), str(p), "--apply"], cwd=self.scratch, codes=(1,))
         self.assertIn("남김", r.stdout)
-        self.assertEqual((p / "도구" / "_config.py").read_bytes(), (TOOLS / "_config.py").read_bytes())
+        self.assertEqual((p / "tools" / "_config.py").read_bytes(), (TOOLS / "_config.py").read_bytes())
         self.assertNotIn(b"\r\n", eol.read_bytes())
-        self.assertFalse((p / "도구" / "_위치.py").exists())
+        self.assertFalse((p / "tools" / "_location.py").exists())
         self.assertIn("# 로컬 수정", tool.read_text(encoding="utf-8"))
         # --force · --add
-        r = run(PY + [str(UPDATE), str(p), "--apply", "--force", "도구/완료기록_색인.py", "--add", "도구/_위치.py"],
+        r = run(PY + [str(UPDATE), str(p), "--apply", "--force", "tools/index_records.py", "--add", "tools/_location.py"],
                 cwd=self.scratch)
         self.assertIn("모두 같음", r.stdout)
-        backups = list((p / ".manuscript" / "도구_백업").rglob("완료기록_색인.py"))
+        backups = list((p / ".manuscript" / "tools_backup").rglob("index_records.py"))
         self.assertEqual(len(backups), 1)
         self.assertIn("# 로컬 수정", backups[0].read_text(encoding="utf-8"))
-        self.assertEqual(tool.read_bytes(), (TOOLS / "완료기록_색인.py").read_bytes())
-        self.assertTrue((p / "도구" / "_위치.py").is_file())
+        self.assertEqual(tool.read_bytes(), (TOOLS / "index_records.py").read_bytes())
+        self.assertTrue((p / "tools" / "_location.py").is_file())
         # 설정 파일은 쓰지 않음
         self.assertNotIn("record_index_exclude_written", (p / ".manuscript" / "project.json").read_text(encoding="utf-8"))
         r = run(PY + [str(UPDATE), "--scan", str(self.scratch), "--depth", "1"], cwd=self.scratch, codes=(0, 1))
@@ -538,15 +538,15 @@ class UpdateToolsTests(Fixtures):
         p = self.journal("미리보기")
         trig = json.loads((p / ".manuscript" / "project.json").read_text(encoding="utf-8"))["tracker"]["triggers"][1]
         hdr = "|---|---|---|---|---|---|\n"
-        pend = p / "수정필요_대기.md"
+        pend = p / "tracker_pending.md"
         pend.write_text(pend.read_text(encoding="utf-8").replace(
             hdr, hdr + f"| A1 | 항목 | `manuscript/results.md` ③ | {trig} | 대기 | |\n", 1), encoding="utf-8")
-        write(p / "완료기록" / "E1.md", "# E1 — 표본\n\n**완료일** 2026-01-01\n**대상** `manuscript/results.md` ③\n**상태** 확정\n\n본문.\n")
+        write(p / "records" / "E1.md", "# E1 — 표본\n\n**완료일** 2026-01-01\n**대상** `manuscript/results.md` ③\n**상태** 확정\n\n본문.\n")
         before = snapshot(p)
         r = run(PY + [str(ROOT / "scripts" / "preview_projects.py"), str(p), "--focus", "ch3",
-                      "--set", 'tracker.record_index_exclude=["보관/"]'], cwd=ROOT)
+                      "--set", 'tracker.record_index_exclude=["archive/"]'], cwd=ROOT)
         self.assertIn("두 번 돌려도 같음: 예", r.stdout)
-        self.assertIn("수정필요_색인.md", r.stdout)
+        self.assertIn("tracker_records_index.md", r.stdout)
         self.assertEqual(before, snapshot(p), "미리보기는 원본에 쓰지 않습니다")
 
     def test_hash_list_is_fresh_and_manifest_is_the_source(self):

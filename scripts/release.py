@@ -231,6 +231,20 @@ def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
     if not git_ok(root, "rev-parse", "--verify", "--quiet", baseline):
         raise Stop(f"baseline {baseline} not found")
     ok(f"baseline {baseline} = {git(root, 'rev-parse', '--short', baseline)}")
+    paths = git(root, "ls-files", "-c", "-o", "--exclude-standard").splitlines()
+    non_ascii = [p for p in paths if not p.isascii()]
+    if non_ascii:
+        raise Stop("file and folder names must be ASCII (the repository is public):\n" + lines(non_ascii))
+    ok(f"{len(paths)} file names are ASCII")
+
+    step("Public content")
+    public = root / "scripts" / "check_public.py"
+    if public.is_file():
+        result = run([sys.executable, "-X", "utf8", "-B", public, "--baseline", baseline], cwd=root, check=False)
+        report = result.stdout.strip().splitlines()
+        if result.returncode != 0:
+            raise Stop("personal information would be published:\n" + lines(report))
+        (warn if report[0].startswith("no deny list") else ok)(report[0])
 
     step("Shared distribution")
     errors, skills = validate(root)
