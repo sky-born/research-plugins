@@ -1,4 +1,4 @@
-"""scripts/check_public.py — 일반 패턴 · 허용 값 · 금지어 · 값을 가린 보고."""
+"""scripts/check_public.py — generic patterns · allowed values · deny terms · masked reports."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class Findings(unittest.TestCase):
         return sorted(k for k, _ in C.findings(text, list(deny)))
 
     def test_generic_patterns(self):
-        # 시험 값은 이어 붙여 만듭니다 — 이 파일도 공개 검사 대상이라 그대로 적으면 걸립니다
+        # Test values are built by concatenation — this file is also a target of the public check, so writing them out would be flagged
         self.assertEqual(self.kinds("mail someone" + "@" + "gmail.com"), ["email"])
         self.assertEqual(self.kinds("C:" + "\\Users\\" + "alice\\Documents"), ["user folder"])
         self.assertEqual(self.kinds("/Users/" + "alice/dev"), ["home folder"])

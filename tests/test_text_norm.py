@@ -1,4 +1,4 @@
-"""Character normalization (paper-index 0.9.3): PDF ligatures and compatibility characters are unfolded
+"""Character normalization: PDF ligatures and compatibility characters are unfolded
 before full text, queries and index titles are compared — the cache files themselves stay as extracted.
 
 The `lib` package runs in a subprocess (fresh modules, like the other paper-index tests); the citation-check
@@ -126,7 +126,7 @@ class TextNormTest(unittest.TestCase):
     def test_title_comparisons(self):
         owned, how = self.out["scopus"]
         self.assertTrue(owned)
-        self.assertEqual(how, "제목 유사 1.00")
+        self.assertEqual(how, "title similarity 1.00")
         self.assertTrue(self.out["render"])
 
     def test_citation_check_template(self):

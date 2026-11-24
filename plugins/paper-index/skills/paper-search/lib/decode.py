@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""폰트 인코딩이 어긋난 PDF의 전문 복원.
+"""Restoring the full text of PDFs whose font encoding is off.
 
-임베디드 폰트에 ToUnicode CMap이 없으면 pdftotext 결과가 글자가 밀린 문자열로 나옵니다.
-서브셋 폰트의 글리프 순서가 일정해서, 코드포인트를 일정량 되돌리면 읽을 수 있습니다.
-문서 하나에 서브셋이 여러 개 섞여 있을 수 있어 줄 단위 → 토큰 단위로 최적 오프셋을 고릅니다.
+When an embedded font has no ToUnicode CMap, pdftotext returns text with every character shifted.
+The glyph order of a subset font is regular, so shifting the code points back by a fixed amount makes it readable.
+One document can mix several subsets, so the best offset is chosen per line, then per token.
 
-한계 — 서브셋이 섞인 구간은 완전히 복원되지 않습니다. 대소문자 정보가 사라지기도 합니다.
-복원본은 검색용이며, 인용은 반드시 원본 PDF를 보고 합니다.
+Limits — passages where subsets mix are not fully restored, and case information can be lost.
+The restored text is for searching; always cite from the source PDF.
 """
 import re, subprocess
 
@@ -59,7 +59,7 @@ def decode_text(raw):
 def decode_pdf(path, pdftotext="pdftotext"):
     raw = subprocess.run([pdftotext, "-q", path, "-"],
                          capture_output=True).stdout.decode("utf-8", "ignore")
-    # 제어문자가 공백 자리를 차지하는 경우가 있어 먼저 공백으로 바꿉니다.
+    # Control characters sometimes take the place of spaces, so turn them into spaces first.
     raw = CTRL.sub(" ", raw)
     return decode_text(raw)
 

@@ -1,39 +1,51 @@
-## 6. 문체 및 용어 규약
+<!-- toc -->
+**Contents**
 
-- **세미콜론을 쓰지 않습니다.** 두 절을 잇고 싶으면 문장을 나누거나 접속사를 씁니다. 수정안에도 들이지 않습니다.
-- 과도한 쉼표를 피합니다. 명사화 중첩보다 직접적인 구문과 능동태를 씁니다.
-- **시제는 대상에 따라 나눕니다.** 수행한 행위·측정은 **과거**(`XRD was performed on the solder powder`,
-  `it was measured on the same specimen geometry`), 도판·데이터가 보여 주는 것과 해석은 **현재**
+- Style and terminology
+- Academic style — expressions to avoid and their replacements
+  - Avoid — self-reference and meta-commentary
+  - Avoid — colloquialism, metaphor and rhetoric
+  - Usage
+  - Keep — do not change these
+- Consistent abbreviations and terms
+<!-- /toc -->
+
+## Style and terminology
+
+- **Do not use semicolons.** To join two clauses, split the sentence or use a conjunction. Do not put them in proposed revisions either.
+- Avoid excess commas. Prefer direct constructions and the active voice over stacked nominalizations.
+- **Choose the tense by what the sentence is about.** Actions performed and measurements are in the **past** (`XRD was performed on the solder powder`,
+  `it was measured on the same specimen geometry`). What a figure or data shows, and interpretation, are in the **present**
   (`Figure 3-4 shows`, `The J1 pattern contains`, `Comparison of the In maps shows that`).
-  **게재본이 이 구분을 씁니다** — `We used XRD to determine phases present in the samples` /
-  `The analysis shows that the constituent phases … change dynamically`. 한 문단 안에 둘이 섞이는 것은 정상입니다.
-  장 요약 절과 선행 연구 인용은 과거, 장 도입부의 구성 안내는 현재로 씁니다.
-- 그림 참조는 문장에 문법적으로 녹입니다. 괄호로 덧붙이기보다 `Figure X shows...` 형태를 선호합니다.
-- 복합 수식어·합금명에는 하이픈, 수치 범위에는 en dash를 씁니다 (`100–500 h`).
-- 열 이하 숫자는 원칙적으로 풀어 쓰되, 수식·측정값·통계·그림 캡션에서는 숫자를 씁니다. 선택한 규약을 일관 적용합니다.
-- 앞 문장을 되풀이하는 문장, 특히 불필요한 `indicating that...` 구문은 삭제하거나 고쳐 씁니다.
-- 텍스트를 넣거나 뺀 뒤에는 `all`, `both`, `these`, `measurements` 같은 단어의 문법적·논리적 범위가 바뀌지 않았는지 다시 확인합니다.
-- 같은 대상에는 확립된 표현을 재사용하고, 비슷한 용어는 역할을 갈라 고정합니다. 물성 대비는 짝을 맞춥니다:
-  `ductile` ↔ `brittle`, `soft` ↔ `hard`. 고정한 용어의 목록은 프로젝트 용어집입니다 (§6-B).
+  **The published version uses this split** — `We used XRD to determine phases present in the samples` /
+  `The analysis shows that the constituent phases … change dynamically`. It is normal for both to appear in one paragraph.
+  Write chapter summary sections and citations of earlier work in the past tense, and the outline of the chapter in the chapter introduction in the present.
+- Build figure references into the sentence grammatically. Prefer the form `Figure X shows...` to adding the reference in parentheses.
+- Use a hyphen in compound modifiers and alloy names, and an en dash in numeric ranges (`100–500 h`).
+- As a rule, spell out numbers up to ten, but use numerals in equations, measured values, statistics and figure captions. Apply the chosen convention consistently.
+- Delete or rewrite a sentence that repeats the previous sentence, especially an unnecessary `indicating that...` phrase.
+- After adding or removing text, check again that the grammatical and logical scope of words such as `all`, `both`, `these` and `measurements` has not changed.
+- Reuse the established wording for the same object, and fix similar terms to separate roles. Pair property contrasts:
+  `ductile` ↔ `brittle`, `soft` ↔ `hard`. The list of fixed terms is the project glossary ("Consistent abbreviations and terms").
 
 ---
 
-## 6-A. 학술 문체 — 금지 표현과 대체 표현
+## Academic style — expressions to avoid and their replacements
 
-**이 절은 전면 교정 과정에서 확정된 규약입니다. 새 문장을 쓰거나 기존 문장을 고칠 때 반드시 적용합니다.**
+**This section is a convention settled in a full revision pass. Apply it whenever you write a new sentence or edit an existing one.**
 
-학위논문은 저널의 압축된 서술을 "관찰 → 근거 → 해석 → 함의"로 풀어 씁니다. 그러나 **풀어 쓰는 것과
-구어체로 쓰는 것은 다릅니다.** 문단 구조와 논리 전개는 유지하되, 어휘와 구문은 분야 표준 학술 표현을 씁니다.
+A dissertation unfolds the compressed account of a journal paper into "observation → evidence → interpretation → implication". But **unfolding
+is not the same as writing colloquially.** Keep the paragraph structure and the logical development, but use the standard academic wording of the field for vocabulary and syntax.
 
-### 쓰지 않는 표현 — 자기언급·메타서술
+### Avoid — self-reference and meta-commentary
 
-문장이 "이 서술을 어떻게 읽어야 하는지"를 논평하면 학술 문체에서 벗어납니다. 판단은 독자에게 맡기고
-사실만 씁니다.
+A sentence that comments on "how this account should be read" departs from academic style. Leave the judgment to the reader
+and state only the facts.
 
-| 쓰지 않음 | 대신 |
+| Do not write | Write instead |
 |---|---|
-| `this should be stated plainly rather than smoothed over` | (삭제하고 사실만 서술) |
-| `requires comment rather than apology` | (삭제) |
+| `this should be stated plainly rather than smoothed over` | (delete and state only the fact) |
+| `requires comment rather than apology` | (delete) |
 | `should be noted rather than passed over` | `should be noted` |
 | `the reason should be recorded rather than glossed` | `the reason should be stated` |
 | `deserves to be stated explicitly` | `should be stated explicitly` |
@@ -42,15 +54,15 @@
 | `tells a different story` | `gives a different result` |
 | `is instructive` / `is instructive in two ways at once` | `is informative` / `is informative in two respects` |
 
-### 쓰지 않는 표현 — 구어·비유·수사
+### Avoid — colloquialism, metaphor and rhetoric
 
-| 쓰지 않음 | 대신 |
+| Do not write | Write instead |
 |---|---|
 | `attacks the problem at its origin` | `addresses the origin of the problem` |
 | `places a floor under X` | `imposes a lower bound on X` |
 | `populating a ladder of melting ranges` | `establishing a series of separated melting ranges` |
 | `sits at the opposite extreme` | `presents the opposite limitation` |
-| `That same softness is the difficulty.` | (앞 문장에 병합: `This compliance, however, is accompanied by ...`) |
+| `That same softness is the difficulty.` | (merge into the previous sentence: `This compliance, however, is accompanied by ...`) |
 | `handles poorly` | `the handling characteristics are poor` |
 | `how much of it an assembly can absorb` | `the extent to which it can be incorporated in an assembly` |
 | `undercuts SAC305 only modestly` | `offers only a modest reduction relative to SAC305` |
@@ -69,68 +81,69 @@
 | `wide scatter` | `considerable scatter` |
 | `by removing In from the picture` | `by considering a solder without In` |
 | `where the cuboids are` | `the spatial distribution of the cuboids` |
-| `the resemblance invites the wrong reading` | (삭제 — 뒤 문장이 이미 부정하고 있음) |
+| `the resemblance invites the wrong reading` | (delete — the next sentence already denies it) |
 | `mutually intelligible` | `mutually comparable` |
 | `is real but weak` | `is present but weak` |
 | `does not straightforwardly accommodate` | `is not readily accommodated by` |
 | `read off as` | `taken as` |
 | `Read through the SAC convention` | `Interpreted through the SAC convention` |
-| `The reason is that ...` (문단 첫머리) | `This is because ...` |
+| `The reason is that ...` (at the start of a paragraph) | `This is because ...` |
 | `matters because` | `is relevant because` / `bears on` |
 | `Separating the two matters` | `The distinction between the two is necessary` |
 
-### 어법
+### Usage
 
-- `brittlely`를 쓰지 않습니다. → `in a brittle manner` / `by brittle fracture`
-- 철자는 **미국식으로 통일**합니다. `behavior`, `color`, `neighboring`, `favorable`, `labeled`.
-  단, 인용 제목과 저널명에 포함된 영국식 철자는 원문 그대로 둡니다.
-- 수사적 질문은 각 장의 Introduction에서 **연구 질문을 제시할 때 한 번만** 허용합니다
-  (예: `what determines the mechanical reliability of the resulting joint?`).
-  Results and Discussion에서는 쓰지 않습니다.
-- 부정 대비 구문(`not A but B`, `rather than`)은 문단당 한 번을 넘기지 않습니다. 반복되면 문체가
-  논쟁적으로 읽힙니다.
-- **동사를 비운 병렬(gapping)을 쓰지 않습니다.** 걸리는 것은 뒷항에 주어가 남고 동사만 지워진 것입니다 —
+- Do not use `brittlely`. → `in a brittle manner` / `by brittle fracture`
+- **Use American spelling throughout.** `behavior`, `color`, `neighboring`, `favorable`, `labeled`.
+  Leave British spellings inside quoted titles and journal names as in the original.
+- Allow a rhetorical question **only once, where the Introduction of each chapter states the research question**
+  (for example `what determines the mechanical reliability of the resulting joint?`).
+  Do not use it in Results and Discussion.
+- Use a negative-contrast construction (`not A but B`, `rather than`) no more than once per paragraph. If it repeats, the style
+  reads as argumentative.
+- **Do not use gapping (a parallel with the verb left out).** What is caught is a later clause that keeps its subject and drops only the verb —
   `A lies in the low-ductility range, B in the range of highest ductility` ·
   `Equilibrium calculations were performed for the full set, and Scheil simulations for two alloys`.
-  나열은 둘 중 하나로 씁니다 — ① 항마다 동사를 반복하거나 ② `… correspond to X, Y, and Z, respectively` 로 묶습니다.
-  본문·캡션·제목·초록에 모두 같습니다. **주어가 하나뿐인 보어 병렬은 대상이 아닙니다** —
-  `The phase appears red in one map and dark in the other` 처럼 한 동사가 두 쌍의 보어를 거느리는 것은 표준 영어이고,
-  동사를 반복하면 오히려 나빠집니다. 명사구 목적어 쪽(`forms X on one pad and Y on the other`)은 문장마다 판단합니다.
-  수정안을 내기 전에 뒷항마다 주어와 동사가 있는지 한 번 훑습니다.
-- **접속 부사는 문두에 둡니다.** `However, …` · `Therefore, …` · `Thus, …` 로 문장을 열고 쉼표를 찍습니다.
-  `The transition, however, …` · `… was therefore directed …` 처럼 문장 안쪽에 넣지 않습니다. 동사구 안의 일반 부사
-  (`can also be detected`)는 대상이 아니고, 인과를 `so` 로 잇는 것은 별개의 선택입니다. 수정안을 내기 전에 접속 부사
-  위치를 한 번 훑고, 원고에 이미 있는 안쪽 배치는 그 문단 차례에 같은 기준으로 고쳐 냅니다.
-- **용례가 있다는 것은 문법이 맞다는 근거가 아닙니다.** 보유 문헌 · 코퍼스의 편 수는 그 표현이 분야에서 쓰인다는 근거일 뿐이고,
-  여러 편에 나와도 비영어권 저자의 같은 오류일 수 있습니다. 전치사 짝 · 관사 · 어순은 편 수와 관계없이 따로 판단하고,
-  판단이 편 수와 어긋나면 판단을 따르며 그 근거를 수정안 이유에 적습니다.
-- **걸러낸 표현은 `피할_표현` 목록에 쌓습니다.** 위치는 프로젝트 문서가 정합니다 — 같은 분야 프로젝트들은 공용 파일 하나를
-  함께 쓸 수 있고, 정하지 않았으면 프로젝트 루트의 `avoid_phrases.md` 하나입니다(라운드 트리마다 두지 않음). 열은
-  `표현 · 편 수 (도구 · 날짜) · 왜 · 대신 · 기록` 다섯, `왜` 는 `문헌에 없음` · `뜻이 다름` · `문법 오류(편 수 있음)` 가운데 하나,
-  `기록` 은 프로젝트 폴더부터 적은 링크 하나입니다. **통독하지 않습니다** — 새 표현을 쓰기 전에 `grep -F` 로 찾아 걸린 행만 읽고,
-  걸러낸 표현은 표 끝에 한 행을 더합니다.
+  Write a list in one of two ways — (1) repeat the verb in each clause, or (2) combine them as `… correspond to X, Y, and Z, respectively`.
+  This applies equally to the body, captions, titles and the abstract. **A complement parallel with only one subject is not covered** —
+  `The phase appears red in one map and dark in the other`, where one verb takes two pairs of complements, is standard English,
+  and repeating the verb would make it worse. For a noun-phrase object (`forms X on one pad and Y on the other`), judge sentence by sentence.
+  Before offering a proposed revision, scan once to see that each later clause has a subject and a verb.
+- **Put a conjunctive adverb at the start of the sentence.** Open the sentence with `However, …`, `Therefore, …` or `Thus, …` followed by a comma.
+  Do not put it inside the sentence, as in `The transition, however, …` or `… was therefore directed …`. Ordinary adverbs inside a verb phrase
+  (`can also be detected`) are not covered, and linking cause with `so` is a separate choice. Before offering a proposed revision, scan once for the position of conjunctive adverbs,
+  and when the manuscript already has the inside placement, fix it by the same standard when that paragraph's turn comes.
+- **Usage in the literature is not evidence that the grammar is correct.** The number of papers in the held literature or a corpus is evidence only that the expression is used in the field,
+  and even if it appears in many papers, it may be the same error made by non-native authors. Judge preposition pairs, articles and word order separately, regardless of the number of papers,
+  and when the judgment disagrees with the count, follow the judgment and give the reason in the reason for the proposed revision.
+- **Collect expressions you have screened out in the avoid list.** The project documents decide where it lives — projects in the same field can
+  share one file, and if none is set, it is a single `avoid_phrases.md` at the project root (not one per revision-round folder). It has five columns,
+  `expression · papers (tool · date) · why · instead · record`. `why` is one of `not in the literature` · `different meaning` · `grammar error (with count)`, and
+  `record` is a single link written from the project folder. A list that already exists keeps its own column names — add rows in its format.
+  **Do not read it end to end** — before using a new expression, look it up with `grep -F` and read only the rows that match,
+  and add one row at the end of the table for an expression you have screened out.
 
-### 유지하는 것 — 이것들은 고치지 않습니다
+### Keep — do not change these
 
-다음은 학술 문체 안에서 정상이며, 확장된 서술에 필요합니다.
+The following are normal in academic style and are needed in an expanded account.
 
-- 근거 등급별 헤지 (`indicating`, `appears to`, `can be inferred`, `suggests`, `consistent with`) — `evidence-hedging.md`
-- 단락 도입의 논리 연결문 (`Two conclusions follow, and they should be kept separate.`)
-- 한계 명시 (`This is a bounded negative result rather than a proof of absence.`)
-- 방법론적 각주 성격의 문단 (`A methodological observation follows from ...`)
-- 절 간 참조 (`for the reason given in Section 2.5`)
+- Hedging by evidence grade (`indicating`, `appears to`, `can be inferred`, `suggests`, `consistent with`) — `evidence-hedging.md`
+- Logical linking sentences at the start of a paragraph (`Two conclusions follow, and they should be kept separate.`)
+- Statements of limits (`This is a bounded negative result rather than a proof of absence.`)
+- Paragraphs in the nature of a methodological note (`A methodological observation follows from ...`)
+- References between sections (`for the reason given in Section 2.5`)
 
 ---
 
-## 6-B. 약칭과 용어의 일관성
+## Consistent abbreviations and terms
 
-- **약칭은 첫 등장에서 한 번 정의하고 그 뒤는 약칭으로 씁니다.** 정의 형식은 `풀어쓰기 (약칭[, 장비])` —
-  `differential scanning calorimetry (DSC, Seiko Exstar 6000)`. 정의 뒤에는 **본문·캡션·제목 모두 약칭**입니다.
-  캡션에서 다시 풀어 쓰는 관례를 따르지 않습니다.
-- **절차 자체를 가리키는 자리에는 약칭에 행위·결과물 명사를 붙입니다** — `SEM analysis of the solder ball` ·
-  `DSC measurements confirmed` · `XRD analysis of the powders`. 약칭만 홀로 주어·목적어가 되게 두지 않습니다.
-- **이 규칙에서 빼는 것은 프로젝트 용어집이 정합니다** — 약칭 없이 풀어 쓰기로 정한 용어, 초록에서 정의하지 않는
-  분야 표준 약칭, 조성의 정식 표기와 별칭처럼 약칭이 아닌 것.
-- **용어를 도중에 바꾸지 않습니다.** 같은 대상을 가리키는 말이 이미 원고에 있으면 그것을 씁니다. 동의어로 바꾸면
-  읽는 사람에게 다른 것을 가리키는 신호가 됩니다. 새 문장을 쓸 때도 같습니다.
-- **프로젝트 고유 용어와 `A`(not `B`) 꼴의 고정 표기는 프로젝트 문서의 용어집에 둡니다.** 이 문서에는 적지 않습니다.
+- **Define an abbreviation once at its first appearance and use the abbreviation after that.** The form of the definition is `spelled-out form (abbreviation[, instrument])` —
+  `differential scanning calorimetry (DSC, Seiko Exstar 6000)`. After the definition, **use the abbreviation in the body, captions and titles alike.**
+  Do not follow the habit of spelling it out again in a caption.
+- **Where the text refers to the procedure itself, attach a noun for the action or result to the abbreviation** — `SEM analysis of the solder ball` ·
+  `DSC measurements confirmed` · `XRD analysis of the powders`. Do not leave an abbreviation alone as a subject or object.
+- **What the project glossary decides is excluded from this rule** — terms set to be spelled out without an abbreviation, field-standard abbreviations not defined in the abstract,
+  and things that are not abbreviations, such as the formal notation of a composition and its alias.
+- **Do not change a term midway.** If the manuscript already has a word for the same object, use it. Switching to a synonym
+  signals to the reader that something different is meant. The same holds when writing new sentences.
+- **Project-specific terms and fixed notations of the form `A` (not `B`) go in the glossary of the project documents.** Do not write them in this document.

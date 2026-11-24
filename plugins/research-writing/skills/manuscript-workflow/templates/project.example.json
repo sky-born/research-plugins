@@ -1,7 +1,7 @@
 {
-  "project": "논문 이름",
+  "project": "Paper title",
   "kind": "journal",
-  "description": "한 줄 설명",
+  "description": "One-line description",
 
   "manuscript": {
     "source_dir": "manuscript",
@@ -12,29 +12,29 @@
     "references": "bib.md",
     "build_script": "build.py",
     "figure_dir": "figures",
-    "output_pattern": "원고_v*.docx"
+    "output_pattern": "manuscript_v*.docx"
   },
 
   "tracker": {
-    "index": "수정필요_목록.md",
-    "pending": "수정필요_대기.md",
-    "record_index": "수정필요_색인.md",
-    "literature": "수정필요_문헌.md",
-    "proposals": "수정필요_제안.md",
-    "records_dir": "완료기록",
-    "archive": "완료기록/이관_DB.md",
+    "index": "tracker_index.md",
+    "pending": "tracker_pending.md",
+    "record_index": "tracker_records_index.md",
+    "literature": "tracker_literature.md",
+    "proposals": "tracker_proposals.md",
+    "records_dir": "records",
+    "archive": "records/archive.md",
     "record_prefix": "E",
     "movable_prefixes": ["A", "B", "C", "D"],
     "index_size_limit_kb": 40,
-    "triggers": ["지금", "해당 절 작업 시", "사용자 판단", "자료 확보 후", "최종 제출 직전"],
+    "triggers": ["now", "when working on the section", "user decision", "when data is available", "before final submission"],
     "section_markers": [],
     "record_index_exclude": [],
-    "checkpoint": "조사/CHECKPOINT.md"
+    "checkpoint": "notes/CHECKPOINT.md"
   },
 
   "sync": {
-    "shared_extra": ["도판소스/INDEX.md"],
-    "snapshot_dir": "보관/추적_백업",
+    "shared_extra": ["figures/INDEX.md"],
+    "snapshot_dir": "archive/tracker_backup",
     "stale_days": 2,
     "snapshot_days": 30,
     "snapshot_days_others": 90,
@@ -47,7 +47,7 @@
     "survival_pct": 70
   },
 
-  "markers": ["수정필요_목록.md", "manuscript/build.py"],
+  "markers": ["tracker_index.md", "manuscript/build.py"],
 
-  "procedure": ".claude/skills/<프로젝트 스킬>/SKILL.md"
+  "procedure": ".claude/skills/<project skill>/SKILL.md"
 }

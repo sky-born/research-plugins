@@ -28,7 +28,7 @@ AI 코딩 도구(Claude Code · Codex)를 활용해 개발합니다.
 | `paper-index` | `paper-search` | PDF 문헌 인덱싱 · 전문 검색 · Scopus 결과와 보유 문헌 대조 | `/paper-index:paper-search` |
 
 Codex 에서는 스킬 선택기에 보이는 같은 이름의 스킬을 고릅니다.
-스킬 본문은 한국어입니다.
+스킬 본문과 도구, 도구가 프로젝트에 만드는 모든 파일은 영어입니다. research-writing 0.14 이전에 만든 프로젝트의 한국어 표기도 도구가 계속 읽습니다.
 앱마다 호출 문법은 달라도 **읽는 본문과 실행 도구는 같습니다** ([공통 원본과 앱별 등록](#공통-원본과-앱별-등록)).
 
 ---
@@ -200,7 +200,7 @@ research-plugins/
     ├── research-writing/
     │   ├── .claude-plugin/plugin.json   이름 · 버전 · 설명의 원본
     │   ├── .codex-plugin/plugin.json    Codex 용 (생성물)
-    │   ├── README.md
+    │   ├── README.md · README.ko.md
     │   ├── hooks/hooks.json             원고 프로젝트의 공용 파일 보호 훅
     │   └── skills/
     │       ├── manuscript/              SKILL.md
@@ -209,7 +209,7 @@ research-plugins/
     └── paper-index/
         ├── .claude-plugin/plugin.json
         ├── .codex-plugin/plugin.json    Codex 용 (생성물)
-        ├── README.md
+        ├── README.md · README.ko.md
         └── skills/paper-search/         SKILL.md · papertool.py · lib/ · presets/ · references/ · templates/
 ```
 
@@ -306,10 +306,10 @@ python scripts/release.py publish -m "paper-index v0.10.0: short summary"
 
 1. 기준선의 원격을 `git fetch` 하고 기준선 `origin/main` 확인, 파일 이름이 모두 ASCII 인지 확인 — 아니면 **중단**
 2. 파일 · 경로 · 올릴 커밋 · 다음 커밋의 작성자 정보에서 개인 정보를 찾음 (`check_public.py`) — 걸리면 **중단**. 개인 금지어는 저장소 밖 목록에서 읽습니다(`--deny-list` · `RESEARCH_PLUGINS_DENYLIST` · 클론의 `git config research-plugins.denylist <file>`). 목록이 없으면 일반 패턴만 보고 경고합니다
-3. 두 앱의 공통 배포 구성과 생성물이 원본과 같은지 검증 (`validate_shared_plugins.py`), 관리 파일 해시 목록이 최신인지 확인 (`tool_hashes.py --check`)
+3. 두 앱의 공통 배포 구성과 생성물이 원본과 같은지 검증 (`validate_shared_plugins.py`), 관리 파일 해시 목록이 최신인지 확인 (`tool_hashes.py --check`). 100줄이 넘는 스킬 참조 문서는 머리 목차가 머리글과 맞아야 함. 한국어는 데이터로만 — Markdown 본문(`README.<언어>.md` 번역본 제외) · 파이썬 주석 · 이름 · 설명문에서 코드 표기 밖이면 **중단**하고, 플러그인 · 스크립트 코드의 한국어 문자열은 옛 표기 표(`LEGACY*`)나 `가-힣` 문자 범위에만 둘 수 있음
 4. `claude plugin validate` 로 마켓플레이스 · 플러그인 매니페스트 검증 — 쓴 실행 파일과 판을 출력합니다
 5. 기준선과 비교해 **바뀐 플러그인**을 판정하고, 그 플러그인마다 `version` 이 올라갔는지 확인 — 아니면 **중단**
-6. 올린 버전마다 `CHANGELOG.md` 에 항목이 있는지 확인 — 없으면 **중단**
+6. 올린 버전마다 `CHANGELOG.md` 에 항목이 있고 플러그인 아닌 절이 없는지 확인 — 아니면 **중단**
 7. 시험 전체 (`tests/`)
 
 push 할 때마다 GitHub Actions(`.github/workflows/check.yml`)가 Windows · macOS · Linux 에서 같은 `check` 를 돌립니다. `claude plugin validate` 단계만 빠집니다.

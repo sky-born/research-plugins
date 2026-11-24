@@ -1,38 +1,44 @@
 # -*- coding: utf-8 -*-
-r"""update_tools.py — 기존 원고 프로젝트의 관리 파일(도구 · 위치 문법 · 훅)을 정본과 맞춥니다.
+r"""update_tools.py — brings the managed files (tools · location syntax · hook) of an existing manuscript project in line with the canonical copies.
 
-원본은 **이 파일이 든 플러그인 사본**입니다 — 배포 전에는 작업 클론의 것을, 배포 뒤에는 설치본의 것을 돌립니다.
-관리 대상은 `managed_files.json`, 정본 이력의 해시는 `tool_hashes.json`(둘 다 이 폴더)입니다.
+The source is **the plugin copy that contains this file** — before a release run the working clone's, after a release the installed one's.
+The managed files are listed in `managed_files.json`, and the hashes of the canonical history are in `tool_hashes.json` (both in this folder).
 
-사용법  (`<py>` 는 이 컴퓨터의 Python 3 — 윈도 `python` · 맥 `python3`)
-    <py> -X utf8 update_tools.py <프로젝트>                       판정만 (기본, = --check)
-    <py> -X utf8 update_tools.py <프로젝트> --apply               같지 않은 정본 판을 바꿈
-    <py> -X utf8 update_tools.py <프로젝트> --apply --force tools/index_records.py   로컬 수정판도 바꿈(백업 뒤)
-    <py> -X utf8 update_tools.py <프로젝트> --apply --add tools/_location.py         없는 파일을 새로 넣음
-    <py> -X utf8 update_tools.py --scan <폴더> [--depth N]        아래 프로젝트들의 상태표
+Usage  (`<py>` is this computer's Python 3 — `python` on Windows, `python3` on macOS)
+    <py> -X utf8 update_tools.py <project>                       verdicts only (default, = --check)
+    <py> -X utf8 update_tools.py <project> --apply               replaces canonical versions that differ
+    <py> -X utf8 update_tools.py <project> --apply --force tools/index_records.py   also replaces a locally edited file (after a backup)
+    <py> -X utf8 update_tools.py <project> --apply --add tools/_location.py         adds a missing file
+    <py> -X utf8 update_tools.py --scan <folder> [--depth N]        status table of the projects below
 
-판정 — 파일마다 다음 가운데 하나. 해시는 줄끝을 LF 로 정규화한 내용으로 냅니다(맥 · 동기화 사본의 줄끝 차이를
-로컬 수정으로 잘못 보지 않기 위한 방어).
-    같음            정본과 같음 (줄끝만 다르면 「같음 · 줄끝 다름」 — --apply 가 정본 바이트로 맞춤)
-    옛 정본 판 vX   정본 이력에 있는 판 (--apply 가 바꿈)
-    로컬 수정       정본 이력에 없음 (--force <dst> 로만, 바꾸기 전 .manuscript/tools_backup/<날짜>/ 에 원본)
-    없음            프로젝트에 없음 (--add <dst> 로만 — 도구 세트를 안 쓰는 프로젝트에 새로 깔지 않음)
-    옛 이름         0.12 이하의 이름(`managed_files.json` 의 old)으로만 있음 — 정본 판이면 --apply 가 새 이름으로 옮기고,
-                    로컬 수정이면 --force <dst> 로만(백업 뒤)
+Verdicts — one per file. Hashes are taken of the content with line endings normalized to LF (so that line-ending differences on macOS or in sync
+copies are not mistaken for local edits).
+    same                        same as the canonical copy (if only line endings differ: "same · line endings differ" — --apply aligns it to the canonical bytes)
+    older canonical version vX  a version found in the canonical history (--apply replaces it)
+    locally modified            not in the canonical history (only with --force <dst>; the original goes to .manuscript/tools_backup/<date>/ first)
+    missing                     not in the project (only with --add <dst> — the tool set is not installed into projects that do not use it)
+    old name                    present only under its 0.12-or-earlier name (`LEGACY_TOOL_NAMES` in `tools/_config.py`) — a canonical version is moved to the new name by --apply;
+                                a locally modified copy only with --force <dst> (after a backup)
 
-dst 의 `{tools_dir}` 는 그 프로젝트 설정의 도구 폴더입니다. 설정 없이 옛 기본 이름(한글)을 쓰는 프로젝트는 설정에 적을 값을
-보이고 --apply 를 거부합니다 — 설정 파일은 이 도구가 쓰지 않습니다(세션이 사용자에게 보인 뒤 Edit 으로 적습니다).
-함께 보고만 하는 것 — 기본값에 기대는 설정 키 · 훅 등록(.claude/settings.json)이 예시와 같은지.
-종료 코드 — 0 모두 같음 · 1 다른 파일이 있음(또는 --apply 뒤에도 남음) · 2 인자 · 입력 오류 · 옛 이름 설정 없음
+`{tools_dir}` in dst is the tools folder in that project's settings. For a project that uses the old default (Korean) names without settings, the tool shows
+the values to add to the settings and refuses --apply — this tool never writes the settings file (the session shows the values to the user, then writes them with Edit).
+Also reported, without changes — settings keys that rely on defaults · whether the hook registration (.claude/settings.json) matches the example.
+
+Format — a project whose tracker anchors still use the pre-0.14 Korean spellings is migrated in the same run (`migrate_format.py`): the check
+mode previews it, and --apply rewrites the anchors once every managed tool copy is current, then rebuilds the generated files with the
+project's tools (`index_records.py` · `tidy_tracker.py --apply`). The new tool copies write English only, so tools and format move together.
+Exit codes — 0 all same · 1 some files differ, or the format needs migrating (or still does after --apply) · 2 argument or input error ·
+old names without settings
 """
 import argparse, datetime, hashlib, io, json, os, shutil, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, 'tools'))
-import _config                                      # noqa: E402  — 이 플러그인 사본의 로더
+import _config                                      # noqa: E402  — the loader of this plugin copy
+import migrate_format                               # noqa: E402  — the anchor rewrite of this plugin copy
 
 
-def _콘솔_UTF8():
+def _utf8_console():
     for _s in (sys.stdout, sys.stderr):
         try:
             _s.reconfigure(encoding='utf-8', errors='replace')
@@ -41,7 +47,7 @@ def _콘솔_UTF8():
 
 
 def norm_hash(data):
-    """줄끝을 LF 로 정규화한 sha256 — tool_hashes.json 과 같은 정의."""
+    """sha256 with line endings normalized to LF — the same definition as tool_hashes.json."""
     return hashlib.sha256(data.replace(b'\r\n', b'\n')).hexdigest()
 
 
@@ -60,51 +66,52 @@ def plugin_version():
         return '?'
 
 
-# ---------------------------------------------------------------- 판정
+# ---------------------------------------------------------------- verdicts
 def project_names(project):
-    """(도구 폴더, 설정에 적을 옛 이름 {…} 또는 {}) — 옛 이름을 설정에 적지 않은 프로젝트는 옛 도구 폴더로 판정합니다."""
+    """(tools folder, old names to add to the settings {…} or {}) — a project that has not written its old names into the settings is judged by its old tools folder."""
     cfg = _config.load(project, strict=False)
     pins = _config.legacy_pins(project, cfg.raw_file)
     return pins.get('tools_dir') or cfg.tools_dir, pins
 
 
 def _verdict(sb, db, known):
-    """(판정, 설명) — 같음 · 같음 · 줄끝 다름 · 옛 정본 판 · 로컬 수정."""
+    """(verdict, note) — same · same · line endings differ · older canonical version · locally modified."""
     if norm_hash(sb) == norm_hash(db):
-        return ('같음' if sb == db else '같음 · 줄끝 다름'), ''
+        return ('same' if sb == db else 'same · line endings differ'), ''
     if norm_hash(db) in known:
-        return '옛 정본 판', 'v' + ' · v'.join(known[norm_hash(db)])
-    return '로컬 수정', '정본 이력에 없는 내용'
+        return 'older canonical version', 'v' + ' · v'.join(known[norm_hash(db)])
+    return 'locally modified', 'content not in the canonical history'
 
 
 def classify(project, manifest, hist):
-    """[(dst, 판정, 설명, src경로, dst경로, 옛 이름 사본)] — 판정은 '같음' '같음 · 줄끝 다름' '옛 정본 판' '로컬 수정' '없음' '옛 이름'.
-    옛 이름 사본은 None 또는 (경로, 로컬 수정인가). 옛 이름의 설명은 그 사본의 판정입니다."""
+    """[(dst, verdict, note, src path, dst path, old-name copy)] — verdict is 'same' 'same · line endings differ' 'older canonical version' 'locally modified' 'missing' 'old name'.
+    The old-name copy is None or (path, is locally modified). The note of 'old name' is the verdict of that copy."""
     tools_dir = project_names(project)[0]
     out = []
     for item in manifest['files']:
         rel = item['dst'].replace('{tools_dir}', tools_dir)
         src = os.path.join(HERE, *item['src'].split('/'))
         dst = os.path.join(project, *rel.split('/'))
-        path = os.path.join(os.path.dirname(dst), item['old']) if item.get('old') else None
+        old_name = _config.LEGACY_TOOL_NAMES.get(item['src'])      # its 0.12-or-earlier name, if any
+        path = os.path.join(os.path.dirname(dst), old_name) if old_name else None
         if not os.path.isfile(src):
-            out.append((rel, '정본 없음', item['src'], src, dst, None)); continue
+            out.append((rel, 'canonical copy missing', item['src'], src, dst, None)); continue
         sb, known = io.open(src, 'rb').read(), hist['files'].get(item['src'], {})
         old_v, old_note = _verdict(sb, io.open(path, 'rb').read(), known) if path and os.path.isfile(path) else (None, '')
-        old = (path, old_v == '로컬 수정') if old_v else None
+        old = (path, old_v == 'locally modified') if old_v else None
         if os.path.isfile(dst):
             v, note = _verdict(sb, io.open(dst, 'rb').read(), known)
             out.append((rel, v, note, src, dst, old))
         elif old:
-            out.append((rel, '옛 이름', '%s — %s%s' % (item['old'], old_v, (' ' + old_note) if old_v == '옛 정본 판' else ''),
+            out.append((rel, 'old name', '%s — %s%s' % (old_name, old_v, (' ' + old_note) if old_v == 'older canonical version' else ''),
                         src, dst, old))
         else:
-            out.append((rel, '없음', '', src, dst, None))
+            out.append((rel, 'missing', '', src, dst, None))
     return out
 
 
 def config_report(project):
-    """기본값에 기대는 설정 키 — 설정 파일에 없어 도구가 `_config.DEFAULTS` 를 쓰는 키."""
+    """Settings keys that rely on defaults — keys missing from the settings file, for which the tools use `_config.DEFAULTS`."""
     raw, path = {}, None
     for rel in (_config.CONFIG_REL, _config.CONFIG_REL_OLD):
         p = os.path.join(project, rel)
@@ -113,10 +120,10 @@ def config_report(project):
             try:
                 raw = json.load(io.open(p, encoding='utf-8'))
             except ValueError as e:
-                return None, ['설정 파일을 읽지 못했습니다: %s' % e]
+                return None, ['Could not read the settings file: %s' % e]
             break
     if path is None:
-        return None, ['설정 파일이 없습니다 — 모든 값이 기본값입니다']
+        return None, ['No settings file — every value is a default']
     missing = []
     if 'kind' not in raw:
         missing.append('kind')
@@ -126,10 +133,10 @@ def config_report(project):
                 missing.append(sec)
             continue
         if sec == 'sync':
-            # 동기화 설정은 기본값으로 도는 것이 정상입니다 — 키마다 늘어놓지 않고 한 줄로만
+            # sync settings normally run on defaults — one line instead of listing every key
             n = sum(1 for k in keys if k not in (raw.get(sec) or {}))
             if n:
-                missing.append('sync(기본값으로 도는 키 %d개%s)' % (n, '' if 'sync' in raw else ' — 절 없음'))
+                missing.append('sync (keys on defaults: %d%s)' % (n, '' if 'sync' in raw else ' — no section'))
             continue
         for k in keys:
             if k not in (raw.get(sec) or {}):
@@ -138,31 +145,31 @@ def config_report(project):
 
 
 def sync_gate(project, apply_, override):
-    """S10 — 적용 직전 동기화 점검(S1 신선도 · S2 E 연속 · S5 충돌 사본). 낡은 미러에 정본을 덮어 쓰는 것이 이번 사고의 첫 쓰기였습니다.
-    ERROR(S2)가 있으면 적용을 거부합니다(--sync-override 로만 통과). WARN(S1 · S5)은 보이고 진행합니다 — 갱신 전후의 드라이브 스냅샷과
-    해시 대조(옛 정본 판만 바꿈)가 안전망입니다. 판정만 할 때는 보이기만 합니다."""
+    """S10 — sync check right before applying (S1 freshness · S2 record continuity · S5 conflict copies). Writing canonical copies onto a stale mirror can be the
+    first write of an overwrite. With an ERROR (S2) applying is refused (passes only with --sync-override). WARNs (S1 · S5) are shown and it proceeds — the drive
+    snapshots before and after the update and the hash comparison (only older canonical versions are replaced) are the safety net. For verdicts only, it just shows them."""
     try:
-        import _sync                              # 이 플러그인 사본(설치본)의 점검 — 프로젝트 사본이 낡아도 최신 코드
+        import _sync                              # the check of this plugin copy (the installed one) — current code even when the project copy is old
     except ImportError as e:
-        print('  동기화  점검 모듈을 불러오지 못했습니다(%s) — 건너뜁니다' % e)
+        print('  sync      could not load the check module (%s) — skipped' % e)
         return True
     try:
         findings = _sync.Sync(_config.load(project)).check('tools')
-    except Exception as e:                            # 점검의 결함이 갱신을 막지 않게 — 알리고 통과
-        print('  동기화  점검 중 오류(%r) — 건너뜁니다' % (e,))
+    except Exception as e:                            # a fault in the check must not block the update — report it and pass
+        print('  sync      error during the check (%r) — skipped' % (e,))
         return True
     bad = [f for f in findings if f.level in ('ERROR', 'WARN')]
     if not bad:
-        print('  동기화  이상 없음 (S1 신선도 · S2 E 연속 · S5 충돌 사본)')
+        print('  sync      no problems (S1 freshness · S2 record continuity · S5 conflict copies)')
         return True
     for f in bad:
-        print('  동기화  ! ' + f.line())
+        print('  sync      ! ' + f.line())
     if apply_ and not override and any(f.level == 'ERROR' for f in bad):
-        print('  → 미러가 옛 판으로 되돌아간 증거(ERROR)가 있어 적용을 거부합니다. 드라이브가 최신인지 확인한 뒤 다시 돌리거나, '
-              '사용자 확인을 받았으면 --sync-override 를 붙이십시오.')
+        print('  → Evidence that the mirror went back to an old version (ERROR), so applying is refused. Check that the drive is up to date and run again, or, '
+              'with the user\'s confirmation, add --sync-override.')
         return False
     if apply_ and any(f.level == 'WARN' for f in bad):
-        print('  → WARN 만이라 진행합니다(갱신 전후 스냅샷 · 해시 대조가 안전망).')
+        print('  → Only WARNs, so proceeding (snapshots before and after the update and the hash comparison are the safety net).')
     return True
 
 
@@ -170,37 +177,46 @@ def hook_report(project, manifest):
     ex = os.path.join(HERE, *manifest.get('settings_example', 'hooks/settings.example.json').split('/'))
     tg = os.path.join(project, *manifest.get('settings_target', '.claude/settings.json').split('/'))
     if not os.path.isfile(tg):
-        return '없음'
+        return 'missing'
     try:
         want = json.load(io.open(ex, encoding='utf-8')).get('hooks')
         have = json.load(io.open(tg, encoding='utf-8')).get('hooks')
     except (OSError, ValueError) as e:
-        return '읽지 못함 (%s)' % e
+        return 'unreadable (%s)' % e
     if have is None:
-        return '등록 없음 — settings.example.json 의 hooks 블록을 합쳐 넣으십시오'
-    return '같음' if have == want else '다름 — 예시와 대조해 손으로 맞추십시오'
+        return 'not registered — merge in the hooks block of settings.example.json'
+    return 'same' if _without_status(have) == _without_status(want) else 'differs — compare with the example and align it by hand'
+
+
+def _without_status(value):
+    """The hooks block without `statusMessage` — it is display text, so a project keeps any wording it has."""
+    if isinstance(value, dict):
+        return {k: _without_status(v) for k, v in value.items() if k != 'statusMessage'}
+    if isinstance(value, list):
+        return [_without_status(v) for v in value]
+    return value
 
 
 def print_report(project, rows, cfg, hook):
-    print('프로젝트  %s' % project)
-    print('정본      %s (research-writing %s)' % (HERE, plugin_version()))
+    print('project   %s' % project)
+    print('canonical %s (research-writing %s)' % (HERE, plugin_version()))
     w = max(len(r[0]) for r in rows) if rows else 10
     for dst, verdict, note, _s, _d, old in rows:
-        if old and verdict != '옛 이름':
-            note = (note + ' · ' if note else '') + '옛 이름 사본도 있음(%s%s)' % (os.path.basename(old[0]), ' · 로컬 수정' if old[1] else '')
+        if old and verdict != 'old name':
+            note = (note + ' · ' if note else '') + 'old-name copy also present (%s%s)' % (os.path.basename(old[0]), ' · locally modified' if old[1] else '')
         print('  %-*s  %s%s' % (w, dst, verdict, ('  ' + note) if note else ''))
     path, missing = cfg
     if path is None:
-        print('  설정      ' + missing[0])
+        print('  settings  ' + missing[0])
     elif missing:
-        print('  설정      %s — 기본값에 기대는 키 %d개: %s' % (path, len(missing), ', '.join(missing)))
-        print('            (설정 파일은 이 도구가 쓰지 않습니다. 필요한 값은 사용자에게 보인 뒤 Edit 으로 적으십시오)')
+        print('  settings  %s — keys that rely on defaults (%d): %s' % (path, len(missing), ', '.join(missing)))
+        print('            (this tool never writes the settings file. Show the needed values to the user, then write them with Edit)')
     else:
-        print('  설정      %s — 기본값에 기대는 키 없음' % path)
-    print('  훅 등록   ' + hook)
+        print('  settings  %s — no keys rely on defaults' % path)
+    print('  hooks     ' + hook)
 
 
-# ---------------------------------------------------------------- 적용
+# ---------------------------------------------------------------- applying
 def backup(project, rel, path):
     day = datetime.date.today().isoformat()
     folder = os.path.join(project, _config.TOOLS_BACKUP, day)
@@ -216,45 +232,46 @@ def backup(project, rel, path):
         with os.fdopen(fd, 'wb') as f:
             f.write(io.open(path, 'rb').read())
         return cand
-    raise SystemExit('백업 이름을 잡지 못했습니다: %s' % folder)
+    raise SystemExit('Could not find a free backup name: %s' % folder)
 
 
 def apply(project, rows, force, add):
-    """옛 이름 사본은 새 이름을 정본으로 쓴 뒤 지웁니다 — 정본 판이 아닌(로컬 수정) 옛 사본은 백업한 뒤에만."""
+    """An old-name copy is deleted after the canonical copy is written under the new name — an old copy that is not a canonical version (locally modified) only after a backup."""
     changed, left = [], []
     for dst, verdict, note, src, dpath, old in rows:
         old_path, old_local = old if old else (None, False)
-        if verdict == '정본 없음':
+        if verdict == 'canonical copy missing':
             continue
-        if verdict == '없음' and dst not in add:
-            left.append((dst, verdict, '--add 로만 넣습니다')); continue
-        if (verdict == '로컬 수정' or old_local) and dst not in force:
-            why = '옛 이름 사본이 로컬 수정이라 ' if old_local and verdict != '로컬 수정' else ''
-            left.append((dst, verdict, why + '--force 로만 바꿉니다')); continue
-        if verdict == '로컬 수정':
-            print('  백업      %s → %s' % (dst, os.path.relpath(backup(project, dst, dpath), project)))
+        if verdict == 'missing' and dst not in add:
+            left.append((dst, verdict, 'added only with --add')); continue
+        if (verdict == 'locally modified' or old_local) and dst not in force:
+            why = 'the old-name copy is locally modified, so ' if old_local and verdict != 'locally modified' else ''
+            left.append((dst, verdict, why + 'replaced only with --force')); continue
+        if verdict == 'locally modified':
+            print('  backup    %s → %s' % (dst, os.path.relpath(backup(project, dst, dpath), project)))
         if old_local:
-            print('  백업      %s → %s' % (os.path.relpath(old_path, project), os.path.relpath(backup(project, old_path, old_path), project)))
-        if verdict != '같음':
+            print('  backup    %s → %s' % (os.path.relpath(old_path, project), os.path.relpath(backup(project, old_path, old_path), project)))
+        if verdict != 'same':
             d = os.path.dirname(dpath)
             if not os.path.isdir(d):
                 os.makedirs(d)
             shutil.copyfile(src, dpath)
             if norm_hash(io.open(dpath, 'rb').read()) != norm_hash(io.open(src, 'rb').read()):
-                raise SystemExit('쓴 뒤 해시가 다릅니다: %s' % dst)
+                raise SystemExit('Hash differs after writing: %s' % dst)
             changed.append((dst, verdict))
         if old_path:
             os.remove(old_path)
-            changed.append((os.path.relpath(old_path, project).replace(os.sep, '/'), '옛 이름 사본 지움'))
+            changed.append((os.path.relpath(old_path, project).replace(os.sep, '/'), 'old-name copy removed'))
     for dst, verdict in changed:
-        print('  바꿈      %-30s (%s)' % (dst, verdict if verdict.endswith('지움') else verdict + ' → 정본'))
+        print('  replaced  %-30s (%s)' % (dst, verdict if verdict.endswith('removed') else verdict + ' → canonical'))
     for dst, verdict, why in left:
-        print('  남김      %-30s %s — %s' % (dst, verdict, why))
+        print('  kept      %-30s %s — %s' % (dst, verdict, why))
     return left
 
 
-# ---------------------------------------------------------------- 훑기
-SKIP_DIRS = {'.git', '__pycache__', 'node_modules', '보관', 'archive', '.manuscript', '.claude'}
+# ---------------------------------------------------------------- scan
+SKIP_DIRS = {'.git', '__pycache__', 'node_modules', 'archive', '.manuscript', '.claude',
+             _config.LEGACY_DEFAULTS['sync']['snapshot_dir'].split('/')[0]}      # the old archive folder name
 
 
 def find_projects(folder, depth):
@@ -277,7 +294,7 @@ def find_projects(folder, depth):
 def scan(folder, depth, manifest, hist):
     projects = find_projects(folder, depth)
     if not projects:
-        print('프로젝트를 찾지 못했습니다: %s (깊이 %d)' % (folder, depth)); return 1
+        print('No projects found: %s (depth %d)' % (folder, depth)); return 1
     rc = 0
     for p in projects:
         rows = classify(p, manifest, hist)
@@ -288,29 +305,67 @@ def scan(folder, depth, manifest, hist):
             counts[v.split(' ')[0]] = counts.get(v.split(' ')[0], 0) + 1
         summary = ' · '.join('%s %d' % (k, v) for k, v in counts.items())
         name = os.path.relpath(p, folder) or '.'
-        # 도구 세트를 안 쓰는 프로젝트(훅만 등록)의 「없음」은 차이가 아닙니다 — 새로 깔지 않습니다.
-        if not any(v != '없음' for d, v, *_ in rows if d in tool_dsts):
-            print('%s\n    도구 세트 없음 — 훅만 (파일 %s) | 훅 등록 %s' % (name, summary, hook_report(p, manifest)))
+        # "missing" in a project that does not use the tool set (hook only) is not a difference — nothing is installed there.
+        if not any(v != 'missing' for d, v, *_ in rows if d in tool_dsts):
+            print('%s\n    no tool set — hook only (files %s) | hooks %s' % (name, summary, hook_report(p, manifest)))
             continue
-        print('%s\n    파일 %s | 훅 등록 %s%s' % (name, summary, hook_report(p, manifest),
-                                              ' | 옛 이름 설정 없음 — 적용 전에 설정에 적어야 합니다' if pins else ''))
-        if pins or any(v != '같음' for _d, v, *_ in rows):
+        fmt = format_state(p) if not pins else '?'
+        print('%s\n    files %s | hooks %s | format %s%s' % (name, summary, hook_report(p, manifest), fmt,
+                                                           ' | old names not in the settings — add them before applying' if pins else ''))
+        if pins or fmt in ('ko', 'mixed') or any(v != 'same' for _d, v, *_ in rows):
             rc = 1
     return rc
 
 
-# ---------------------------------------------------------------- 진입
+def format_state(project):
+    """'en' · 'ko' · 'mixed' · 'none' — the tracker anchors (_config.project_format)."""
+    try:
+        return _config.project_format(_config.load(project))[0]
+    except (SystemExit, OSError, ValueError):
+        return '?'
+
+
+def migrate_and_rebuild(project, tools_dir):
+    """--apply's format step: rewrite the anchors, then rebuild the generated files with the project's own (now current) tools.
+    Returns True when the project ends with English anchors."""
+    import subprocess
+    rc, lines, written = migrate_format.migrate(project, True)      # refuses on an open non-S9 ERROR; drops the S9 record afterwards
+    for line in lines:
+        print('  ' + line)
+    if rc != 0:
+        print('  format    not migrated' + (' — confirm the open ERRORs with the user first' if rc == 3 else
+                                             ' — run again (the migration is idempotent)'))
+        return False
+    if written:
+        print('  format    rewritten: ' + ', '.join(written))
+    ok = True
+    for tool, args, fine in (('index_records.py', [], (0,)), ('tidy_tracker.py', ['--apply'], (0, 1))):   # tidy: 1 = warnings only
+        path = os.path.join(project, tools_dir, tool)
+        r = subprocess.run([sys.executable, '-X', 'utf8', '-B', path] + args, cwd=project,
+                           capture_output=True, text=True, encoding='utf-8', errors='replace')
+        tail = [l for l in (r.stdout + r.stderr).splitlines() if l.strip()][-3:]
+        print('  rebuild   %s%s (rc=%d)%s' % (tool, (' ' + ' '.join(args)) if args else '', r.returncode,
+                                            ''.join('\n            ' + l for l in tail)))
+        ok = ok and r.returncode in fine
+    state = format_state(project)
+    print('  format    now %s' % state)
+    if not ok:
+        print('  rebuild   not finished — fix what the tool reported, then run the tidy tool (or this command) again')
+    return ok and state in ('en', 'none')
+
+
+# ---------------------------------------------------------------- entry
 def main(argv=None):
-    _콘솔_UTF8()
-    ap = argparse.ArgumentParser(description='기존 프로젝트의 관리 파일을 정본과 맞춥니다.')
-    ap.add_argument('project', nargs='?', help='프로젝트 루트 (없으면 --scan)')
-    ap.add_argument('--check', action='store_true', help='판정만 (기본)')
-    ap.add_argument('--apply', action='store_true', help='같지 않은 정본 판을 바꿉니다')
-    ap.add_argument('--force', action='append', default=[], metavar='DST', help='로컬 수정판도 바꿉니다 (백업 뒤)')
-    ap.add_argument('--add', action='append', default=[], metavar='DST', help='없는 파일을 새로 넣습니다')
-    ap.add_argument('--scan', metavar='FOLDER', help='아래 프로젝트들의 상태표')
+    _utf8_console()
+    ap = argparse.ArgumentParser(description='Brings the managed files of an existing project in line with the canonical copies.')
+    ap.add_argument('project', nargs='?', help='project root (or use --scan)')
+    ap.add_argument('--check', action='store_true', help='verdicts only (default)')
+    ap.add_argument('--apply', action='store_true', help='replace canonical versions that differ')
+    ap.add_argument('--force', action='append', default=[], metavar='DST', help='also replace a locally edited file (after a backup)')
+    ap.add_argument('--add', action='append', default=[], metavar='DST', help='add a missing file')
+    ap.add_argument('--scan', metavar='FOLDER', help='status table of the projects below')
     ap.add_argument('--depth', type=int, default=3)
-    ap.add_argument('--sync-override', action='store_true', help='동기화 점검(S10)에 ERROR 가 있어도 적용합니다 — 사용자 확인 뒤에만')
+    ap.add_argument('--sync-override', action='store_true', help='apply even with an ERROR in the sync check (S10) — only after the user confirms')
     a = ap.parse_args(argv)
     manifest, hist = load_manifest()
     if a.scan:
@@ -319,27 +374,43 @@ def main(argv=None):
         ap.print_usage(); return 2
     project = os.path.abspath(a.project)
     if not os.path.isdir(project):
-        print('프로젝트 폴더가 없습니다: %s' % project); return 2
+        print('Project folder missing: %s' % project); return 2
     rows = classify(project, manifest, hist)
     force = [x.replace('\\', '/') for x in a.force]
     add = [x.replace('\\', '/') for x in a.add]
     print_report(project, rows, config_report(project), hook_report(project, manifest))
     pins = project_names(project)[1]
     if pins:
-        print('  옛 이름   ' + _config.legacy_message(pins).replace('\n', '\n            '))
+        print('  old names ' + _config.legacy_message(pins).replace('\n', '\n            '))
         if a.apply:
-            print('적용하지 않았습니다 — 위 값을 설정에 적은 뒤 다시 돌리십시오.')
+            print('Not applied — add the values above to the settings and run again.')
         return 2
     ok = sync_gate(project, a.apply, a.sync_override)
+    plans = migrate_format.plan(_config.load(project))
+    needs_format = any(p[4] for p in plans)
+    for line in migrate_format.report(plans):
+        print('  ' + line)
     if not a.apply:
-        return 0 if all(v == '같음' and not old for _d, v, _n, _s, _p, old in rows) else 1
+        same = all(v == 'same' and not old for _d, v, _n, _s, _p, old in rows)
+        return 0 if same and not needs_format else 1
     if not ok:
         return 1
-    print('적용')
+    print('Applying')
     apply(project, rows, force, add)
     rows2 = classify(project, manifest, hist)
-    bad = [(d, v) for d, v, _n, _s, _p, old in rows2 if v != '같음' or old]
-    print('적용 뒤   ' + ('모두 같음' if not bad else '남은 차이 — ' + ', '.join('%s(%s)' % x for x in bad)))
+    bad = [(d, v) for d, v, _n, _s, _p, old in rows2 if v != 'same' or old]
+    print('after     ' + ('all same' if not bad else 'differences left — ' + ', '.join('%s(%s)' % x for x in bad)))
+    if needs_format:
+        tools_dir = project_names(project)[0]
+        # an existing copy that is not current blocks (it would write Korean over English anchors); a tool the project never installed does not
+        tool_bad = [d for d, v in bad if d.startswith(tools_dir + '/') and v != 'missing']
+        if tool_bad:
+            # old tool copies would rewrite the generated files in Korean over English anchors — tools and format move together
+            print('  format    not migrated — these tool copies are not current: %s (replace them first, e.g. --force after checking)'
+                  % ', '.join(tool_bad))
+            return 1
+        if not migrate_and_rebuild(project, tools_dir):
+            return 1
     return 1 if bad else 0
 
 

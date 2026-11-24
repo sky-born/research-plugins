@@ -1,32 +1,30 @@
-## 7. 근거·논리·헤지
+## Evidence, logic and hedging
 
-관찰된 사실을 먼저, 추론된 원인을 나중에 씁니다. 시간적 선후나 상관은 그 자체로 기구를 입증하지 않습니다.
+State the observed fact first and the inferred cause after it. Temporal order or correlation does not by itself establish a mechanism.
 
-| 근거 유형 | 표현 |
+| Type of evidence | Wording |
 |---|---|
-| 직접 측정·확인된 사실 | 단정 서술 |
-| 간접적 정량 근거 | `indicating` |
-| 이미지 기반 형상 해석 | `appears to` |
-| 종합해 도출한 결론 | `can be inferred` |
-| 기구적 함의 | `suggests` |
-| 인과 귀속 | `likely results from`, `can be attributed to`, `may be attributed to` |
-| 해석을 뒷받침하는 독립 근거 | `consistent with` |
-| 인과는 미확정인 연관 | `appears closely related to` |
+| Directly measured or confirmed fact | Plain statement |
+| Indirect quantitative evidence | `indicating` |
+| Image-based interpretation of a shape | `appears to` |
+| Conclusion drawn by combining evidence | `can be inferred` |
+| Mechanistic implication | `suggests` |
+| Causal attribution | `likely results from`, `can be attributed to`, `may be attributed to` |
+| Independent evidence that supports an interpretation | `consistent with` |
+| Association with causation not yet established | `appears closely related to` |
 
-- 하나의 추론 단계에 헤지는 하나만 씁니다. `appear to ... may ...` 같은 중첩을 피합니다.
-  **근거가 충분함을 표시하는 부사는 헤지 중첩이 아닙니다.** `reasonably`·`clearly`·`directly` 는 불확실성을
-  더하는 것이 아니라 추론의 근거 수준을 밝히는 것이므로 위 표의 표현과 함께 쓸 수 있습니다 —
-  `can reasonably be attributed to` 는 정상입니다. 중첩으로 막아야 할 것은 `appear to ... may ...` 처럼
-  **불확실성 장치를 겹쳐 쌓는 경우**입니다. **실제로 위 표만 보고 `reasonably` 를 헤지 중첩으로 잘못 걸러낸 적이 있습니다.**
-  `supposed to` 는 쓰지 않습니다 — 기술 문서에서 "가정에 불과하다"로 읽혀 의도보다 약해집니다.
-- 개별 단계를 적절히 한정했다면 마무리 문장까지 다시 약화시키지 않습니다. `can explain`으로 논리를 닫아도 됩니다.
-- 앞에서 이미 확립한 정보를 뒤에서 다시 강하게 헤지하지 않습니다. 해당 그림·절을 참조하고 새 추론만 한정합니다.
-- 절대 부정과 근거 없는 단정을 피합니다. `X is absent`보다 `no distinct X was observed`를 씁니다.
-  범위 서술은 `remain limited`, `remain largely unexplored` 같은 보정된 표현을 쓰되, 인근 인용과 모순되지 않는지 확인합니다.
-- 방법이나 이미지로 확인할 수 없는 세부는 뺍니다. 형용사 강도가 결과에 영향을 주면 강·중·약 세 가지 안을 제시해 사용자가 고르게 합니다.
-- Abstract의 주장은 본문에서 확보한 근거 범위 안에 둡니다.
-- 화학적·구조적·열적·기계적으로 다른 계의 파괴 물성·기구·인과 결론을 그대로 옮기지 않습니다.
-  계의 차이를 명시하고, 필요하면 정성적 유비나 대조로만 씁니다.
-- 이론 모델을 적용하기 전에 가정과 예측을 구분합니다. 데이터가 희소하거나 산포가 크면 여러 해석을 병렬 제시하고 하나로 단정하지 않습니다.
+- Use one hedge per inference step. Avoid nesting such as `appear to ... may ...`.
+  **An adverb that marks the evidence as sufficient is not a stacked hedge.** `reasonably`, `clearly` and `directly` do not add uncertainty. They state how strong the basis of the inference is, so they may be used together with the wording in the table above —
+  `can reasonably be attributed to` is normal. What nesting must block is **stacking uncertainty devices**, as in `appear to ... may ...`.
+  Do not use `supposed to` — in technical writing it reads as "merely assumed", which is weaker than intended.
+- If each step has been qualified properly, do not weaken the closing sentence again. Closing the argument with `can explain` is acceptable.
+- Do not hedge strongly again what was already established earlier. Refer to the figure or section and qualify only the new inference.
+- Avoid absolute negation and unsupported assertion. Write `no distinct X was observed` rather than `X is absent`.
+  For statements about scope, use calibrated wording such as `remain limited` or `remain largely unexplored`, and check that it does not contradict nearby citations.
+- Leave out details that the method or the images cannot confirm. If the strength of an adjective affects the result, offer three versions (strong, medium, weak) so that the user can choose.
+- Keep the claims in the Abstract within the range of evidence secured in the body.
+- Do not carry over fracture properties, mechanisms or causal conclusions from a system that differs chemically, structurally, thermally or mechanically.
+  State the difference between the systems, and use it only as a qualitative analogy or contrast where needed.
+- Before applying a theoretical model, separate its assumptions from its predictions. If data are sparse or scatter is large, present several interpretations in parallel and do not settle on one.
 
 ---

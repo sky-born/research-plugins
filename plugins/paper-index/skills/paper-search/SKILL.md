@@ -1,412 +1,428 @@
 ---
 name: paper-search
-description: PDF 문헌 라이브러리 인덱싱·전문 검색. 보유 문헌과 웹을 동시에 찾아 [보유]/[외부]로 구분해 보고합니다. "문헌 찾아줘", "근거 있는지 확인해줘", "논문 검색", "인덱스 갱신", "새 PDF 추가했어", "파일명 바뀌었어" 등의 요청에 사용.
+description: Indexes a PDF literature library and searches its full text. Searches the owned papers, Scopus and the web together and labels each result by where it came from ([Owned] · [Scopus · OA fetched] · [Scopus] · [Web]). Use for requests such as "find papers on this", "check whether there is evidence for this", "search the literature", "update the index", "I added new PDFs" or "the file names changed".
 ---
 
-# paper-search — 문헌 검색·인덱싱
+# paper-search — literature search and indexing
 
-PDF 문헌 라이브러리를 전문(full text)까지 인덱싱해 두고 검색합니다.
-분야에 매이지 않습니다. 라이브러리마다 설정 파일 하나(`paperindex.config.json`)만 있으면 됩니다.
+Indexes a PDF literature library down to the full text and searches it.
+It is not tied to any field. Each library needs only one config file (`paperindex.config.json`).
 
-**원본 라이브러리는 절대 수정하지 않습니다.** 읽기·텍스트 추출만 합니다.
+**Never modify the source library.** Only read it and extract text.
 
-## 도구 위치 찾기
+## Finding the tools
 
-이 `SKILL.md` 를 읽은 **등록된 스킬 디렉토리**를 기준으로, 같은 폴더의 `papertool.py` 를
-사용합니다. Claude Code·Codex가 같은 내용과 도구를 사용하며 설치 위치만 다릅니다.
-앱이 제공한 스킬 경로가 확인되지 않으면 설치 목록이나 연결된 폴더에서 이 스킬을 찾습니다.
-다른 앱의 캐시를 검색해 첫 파일을 고르거나 전체 디스크를 탐색하지 않습니다.
+Use `papertool.py` in the same folder, taking as the base the **registered skill directory** this `SKILL.md` was read from.
+Claude Code and Codex use the same content and tools; only the install location differs.
+If the skill path the app gives cannot be confirmed, find this skill in the install list or a connected folder.
+Do not search other apps' caches and pick the first file found, and do not search the whole disk.
 
-먼저 [실행 환경·전환·검증](references/portability.md)을 읽어 Python 3 실행기와 프로젝트 설정을
-확인합니다. 아래 명령의 `python` 은 **확인한 Python 3 실행기**로 바꿉니다
-(`python`·`python3`·`py -3` 또는 앱이 제공한 경로). 실행기 이름을 운영체제만 보고 가정하지 않습니다.
-Windows에서 한글 출력을 확인할 때는 `-X utf8` 을 붙이고 모든 경로를 인용합니다.
+First read [Environments, moving an existing index and verification](references/portability.md) to confirm the Python 3 interpreter and the
+project config. Replace `python` in the commands below with **the confirmed Python 3 interpreter**
+(`python`, `python3`, `py -3` or a path the app gives). Do not assume the interpreter name from the operating system alone.
+On Windows, add `-X utf8` when checking output that contains Korean or other non-ASCII text, and quote every path.
 
-설정은 사용자 지정 경로, 해당 프로젝트의 `AGENTS.md`·`CLAUDE.md`, 확인된
-`paperindex.config.json` 순으로 찾습니다. 현재 폴더에서 상위로 자동 탐색할 수도 있지만,
-공유 프로필이나 여러 설정이 있으면 **`--config "<확인한 설정 파일>"` 을 하위 명령 앞에 명시**합니다.
-선택된 원본 경로와 인덱스 경로를 확인하고, 원본과 출력 폴더를 분리합니다.
-등록된 도구는 어디서든 호출할 수 있으나 원본·설정·캐시 접근 가능 여부는 실행 환경마다 확인해야 합니다.
+Look for the config in this order: a path the user gives, the project's `AGENTS.md` or `CLAUDE.md`, a confirmed
+`paperindex.config.json`. The tool can also search upward from the current folder, but with a shared profile or several configs,
+**put `--config "<confirmed config file>"` before the subcommand**.
+Confirm the chosen source path and index path, and keep the source and output folders apart.
+The registered tool can be called from anywhere, but access to the source, config and cache must be confirmed in each environment.
 
-기존 `research-pdf-library` 의 `manifest.json`·`corpus.txt` 는 새 형식과 다릅니다.
-기존 설정·캐시를 자동 변환하거나 덮어쓰지 않습니다. 기존 `paperindex.config.json` 이 검증돼 있으면
-재사용하고, 새 형식 구축이 필요하면 별도 출력 위치에서 진행합니다.
+The `manifest.json` and `corpus.txt` of the earlier `research-pdf-library` differ from the new format.
+Do not convert or overwrite old configs and caches automatically. Reuse an existing `paperindex.config.json` if it has been
+verified; if a build in the new format is needed, do it in a separate output location.
 
 ---
 
-## A-0. 얼마나 깊이 팔지 — 검색하기 전에 정합니다
+## A-0. How deep to dig — decide before searching
 
-**검색처를 고르기 전에 깊이부터 정합니다.** 질문에 답하는 데 필요한 만큼만 봅니다.
-적중한 문헌을 전부 본문과 함께 꺼내 놓는 것은 대부분의 질문에서 **낭비**입니다.
-스캔 자체는 어차피 전수로 돌아가므로 "몇 편 중 몇 편"이라는 통계는 어느 깊이에서든 정확합니다.
-깊이가 정하는 것은 **본문을 몇 편이나 펼쳐 볼 것인가** 입니다.
+**Decide the depth before choosing where to search.** Look only as far as the question needs.
+Laying out every matching paper with its text is **waste** for most questions.
+The scan covers everything anyway, so "n of N papers" statistics are exact at any depth.
+What the depth decides is **how many papers' text gets opened**.
 
-| 깊이 | 언제 | 명령 |
+| Depth | When | Command |
 |---|---|---|
-| **빠른 확인** | 표현·용어가 실제로 쓰이는지(용례 · 빈도). **대표 사례 몇 개면 답이 되는 질문** | `--depth quick`, 빈도만 필요하면 `--count-only` |
-| **집중 검색** | 논문의 주장, 인용 근거, 리뷰어 대응. **제한된 범위의 원문 검증이 필요한 질문** | `--depth focus` (기본값) |
-| **포괄 검색** | 사용자가 **명시적으로** 체계적·전수 조사를 요청했을 때, 또는 "최초·없다·보고된 바 없다" 같은 **부재·신규성 주장**을 검토할 때 | `--depth full` |
+| **Quick check** | Whether an expression or term is actually used (usage, frequency). **Questions a few representative cases answer** | `--depth quick`; `--count-only` if only the frequency is needed |
+| **Focused search** | Claims in the paper, citation evidence, reviewer replies. **Questions that need the original text checked within a limited scope** | `--depth focus` (default) |
+| **Exhaustive search** | When the user **explicitly** asks for a systematic or exhaustive survey, or when checking a **claim of absence or novelty** such as "first", "none" or "not reported" | `--depth full` |
 
-### 빠른 확인 — 여기서 끊습니다
+### Quick check — stop here
 
-- "이 표현 학계에서 자주 쓰니?", "이 용어를 이렇게 쓰는 논문이 있어?"
-- 특정 용어의 표기 관행 확인 (`Ni3Sn4` vs `Ni₃Sn₄`)
-- "이 개념이 우리 라이브러리에 다뤄지고 있나" 정도의 유무 확인
+- "Is this expression common in the field?", "Is there a paper that uses this term this way?"
+- Checking the spelling convention of a term (`Ni3Sn4` vs `Ni₃Sn₄`)
+- Checking only whether "our library covers this concept"
 
-**용어·표현 문제는 `--count-only` 로 시작합니다.** "40편 중 28편에서 152회" 라는 한 줄이면
-"자주 쓰냐"는 질문에 이미 답이 됩니다. 용례가 궁금하면 그때 `--depth quick` 으로 대표 2~3편만 봅니다.
-**편 수는 쓰임만 답합니다.** 「맞는 표현이야?」 · 「자연스러워?」에는 용례를 보이되 문법은 따로 판단해 답합니다 —
-원칙은 `research-writing` `style-guide.md` 「어법」.
-**여기서 전 문헌의 본문을 꺼내는 것은 묻지 않은 것에 답하는 것입니다.**
+**Start term and expression questions with `--count-only`.** One line such as "Searched 40 papers · matched 28 of them (70%) · 152 occurrences in total"
+already answers "is it common?". If usage examples are wanted, look at 2–3 representative papers with `--depth quick` then.
+**Paper counts answer only usage.** For "Is this expression correct?" or "Does it sound natural?", show usage examples but judge the grammar separately —
+the principle is in `research-writing` `style-guide.md` "Usage".
+**Pulling out the text of every paper here answers a question nobody asked.**
 
-### 집중 검색 — 기본값
+### Focused search — the default
 
-- 원고의 특정 문장에 근거가 있는지 확인
-- 수치·조건·실험 결과를 원문에서 대조
-- 리뷰어 지적에 대응할 근거 문헌 찾기
+- Checking whether a sentence in the manuscript has evidence
+- Checking numbers, conditions and experimental results against the original text
+- Finding evidence papers for a reply to a reviewer
 
-상위 8편을 본문과 함께, 그 뒤 20편을 한 줄 목록으로 보여 줍니다.
-**목록에 있는 문헌 중 필요한 것만 골라** `--max-docs` 나 `--tag`·`--year` 로 좁혀 다시 봅니다.
-처음부터 전부 펼치지 않습니다.
+Shows the top 8 papers with text, then the next 20 as one-line entries.
+**Pick only what is needed from that list** and look again, narrowed with `--max-docs`, `--tag` or `--year`.
+Do not open everything from the start.
 
-### 포괄 검색 — 요청받았을 때만
+### Exhaustive search — only when asked
 
-- "이 주제 문헌 전수 조사해 줘", "빠짐없이 확인해 줘"
-- "이 조성은 보고된 바 없다" / "본 연구가 최초다" 를 쓰기 전 확인
-- 미보유 목록 갱신, 인용 대조(citation-check)
+- "Survey all the literature on this topic", "Check without missing any"
+- Checking before writing "this composition has not been reported" / "this study is the first"
+- Updating the missing-papers list, citation check (citation-check)
 
-**부재·신규성 주장은 얕게 확인하면 안 됩니다.** "없다"는 결론은 전수 조사로만 나옵니다.
-이때는 `--depth full` 을 쓰고, 표기 변형까지 `--or` 로 함께 넣습니다.
-로컬에서 0건이면 Scopus로 넘어가 밖에도 없는지 확인해야 결론이 섭니다.
+**Do not check claims of absence or novelty shallowly.** A "none" conclusion comes only from an exhaustive survey.
+Use `--depth full` and add spelling variants with `--or`.
+If the local search finds 0, go on to Scopus and confirm there is none outside either before the conclusion stands.
 
-### 판단이 서지 않으면
+### When unsure
 
-**얕은 쪽에서 시작해 올립니다.** 얕게 돌려 보고 부족하면 깊이를 올리는 비용은 작지만,
-처음부터 전부 펼친 비용은 되돌릴 수 없습니다. 출력 마지막 줄에 미표시 편수가 나오므로
-더 봐야 할지 판단할 수 있습니다. 사용자에게는 **"n편 더 있는데 마저 볼까요?"** 라고 한 줄 물으면 됩니다.
+**Start shallow and go deeper.** Running shallow and deepening if needed costs little,
+but opening everything from the start cannot be undone. The last line of the output gives the number of papers not shown,
+so you can judge whether to look further. Ask the user in one line: **"There are n more papers — shall I go through them?"**
 
-초대형 라이브러리에서 스캔 시간 자체가 문제라면 `--stop-after N` 으로 스캔을 끊습니다.
-다만 이때 통계는 하한값이 되므로, **빈도·비율을 보고할 때는 쓰지 마십시오.**
+If the scan time itself is a problem in a very large library, cut the scan with `--stop-after N`.
+The statistics then become lower bounds, so **do not use it when reporting frequencies or ratios.**
 
 ---
 
-## A. 어디서 찾을지 — 로컬이 먼저, 나머지는 판단해서
+## A. Where to look — local first, the rest by judgement
 
-검색처가 셋입니다. **항상 로컬부터 봅니다.** 나머지는 자동이 아니라 판단해서 씁니다.
-사용자나 적용되는 상위 지침·프로젝트 지침이 검색 범위를 지정했다면 그 범위를 우선합니다.
+There are three places to search. **Always look locally first.** The others are used by judgement, not automatically.
+If the user or applicable higher-level or project instructions set a search scope, that scope takes precedence.
 
-| 검색처 | 무엇에 강한가 | 언제 |
+| Source | Strong at | When |
 |---|---|---|
-| **로컬 인덱스** | 전문(full text). 초록에 없는 근거 문장까지 | 기본값. 보유 현황·근거 확인·인용 대조 |
-| **Scopus** | 서지 정확도. DOI·저자·연도·저널·피인용수 | 체계적 문헌 조사, 참고문헌 확정, 놓친 논문 찾기 |
-| **웹 검색** | 표준 문서·기술자료·회색문헌·최신 소식 | Scopus에 없는 것. JEDEC/IPC 규격, 제조사 자료, 블로그 |
+| **Local index** | Full text. Evidence sentences that are not in the abstract | Default. Holdings, checking evidence, citation check |
+| **Scopus** | Bibliographic accuracy. DOI, authors, year, journal, citation count | Systematic literature surveys, confirming references, finding missed papers |
+| **Web search** | Standards, technical data, grey literature, recent news | What Scopus does not have. JEDEC/IPC standards, manufacturer data, blogs |
 
-### 로컬만 보는 경우 — 다른 데를 돌지 않습니다
+### Local only — do not look elsewhere
 
-- **보유 현황 자체가 질문일 때** — "내가 이거 갖고 있나", "미보유 목록 갱신해 줘",
-  "인용한 문헌 다 들어 있는지 확인", "다 넣은 것 같은데 확인 좀"
-- 원고의 인용과 라이브러리를 대조할 때 (citation-check)
-- 인덱스 상태·중복·파일명·전문 추출 점검
-- 이미 아는 문헌의 본문에서 근거 문장이나 수치를 찾을 때
-- 사용자가 범위를 보유 문헌으로 한정했을 때
+- **When the holdings themselves are the question** — "Do I have this?", "Update the missing-papers list",
+  "Check that every cited paper is in there", "I think I added them all, please check"
+- Matching the manuscript's citations against the library (citation-check)
+- Checking index state, duplicates, file names, full-text extraction
+- Finding evidence sentences or numbers in the text of a paper already known
+- When the user limits the scope to owned papers
 
-이런 요청에 밖을 뒤지면 **묻지 않은 것에 답하는 것**입니다. 하지 마십시오.
+Searching outside for such requests **answers a question nobody asked**. Do not do it.
 
-### Scopus 로 넘어가는 경우
+### When to go to Scopus
 
-- 주제를 **망라**해야 할 때 — "이 주제 문헌 조사해 줘", "놓친 논문 없나"
-- 참고문헌의 **서지사항을 확정**해야 할 때 (DOI·권호·연도)
-- 특정 저자·저널·연도 범위를 정확히 훑어야 할 때
-- 피인용수로 중요도를 가늠해야 할 때
-- 로컬에 없어서 "밖에 있는지" 확인해야 할 때
+- When a topic must be **covered comprehensively** — "Survey the literature on this topic", "Did I miss any papers?"
+- When the **bibliographic details** of references must be confirmed (DOI, volume and issue, year)
+- When a specific author, journal or year range must be scanned exactly
+- When importance must be gauged by citation count
+- When something is not local and you must check "whether it exists outside"
 
-### 웹으로 가는 경우
+### When to go to the web
 
-- Scopus 범위 밖 — **규격·표준(JEDEC, IPC, ASTM), 제조사 데이터시트, 학회 공지, 뉴스**
-- Scopus 결과가 0건이거나 주제가 학술 색인에 잘 안 잡힐 때
-- 빠른 사실 확인 한 건이면 충분할 때
+- Outside the scope of Scopus — **standards (JEDEC, IPC, ASTM), manufacturer datasheets, conference announcements, news**
+- When Scopus returns 0 or the topic is poorly covered by academic indexes
+- When one quick fact check is enough
 
-### 애매하면
+### When in doubt
 
-로컬을 먼저 돌리고 **결과를 보고 정합니다.** 로컬로 답이 되면 거기서 멈추고,
-필요해 보이면 **"Scopus에서도 찾아볼까요?"라고 한 줄 덧붙입니다.**
-미리 다 돌아 놓고 결과를 늘리지 않습니다. 판단이 서지 않으면 시작 전에 한 번 묻는 편이 낫습니다.
+Run the local search first and **decide from the result.** If the local search answers it, stop there;
+if more seems needed, **add one line: "Shall I search Scopus too?"**
+Do not run everything in advance and pad the results. If unsure, asking once before starting is better.
 
-### 1단계 — 로컬 검색
+### Step 1 — local search
 
 ```bash
-cd "<인덱스 폴더>"
-python -X utf8 "<도구>/papertool.py" search "Ni3P" "fracture"        # AND, 기본 깊이 focus
-python -X utf8 "<도구>/papertool.py" search --or "Scheil" "nonequilibrium"
-python -X utf8 "<도구>/papertool.py" search --tag "ENIG" "shear"
-python -X utf8 "<도구>/papertool.py" search --year 2019-2026 "Sn-Bi-In"
+cd "<index folder>"
+python -X utf8 "<tool>/papertool.py" search "Ni3P" "fracture"        # AND, default depth focus
+python -X utf8 "<tool>/papertool.py" search --or "Scheil" "nonequilibrium"
+python -X utf8 "<tool>/papertool.py" search --tag "ENIG" "shear"
+python -X utf8 "<tool>/papertool.py" search --year 2019-2026 "Sn-Bi-In"
 
-# 깊이 조절
-python -X utf8 "<도구>/papertool.py" search --count-only "significantly"      # 편수·횟수만
-python -X utf8 "<도구>/papertool.py" search --depth quick "in situ"           # 대표 3편
-python -X utf8 "<도구>/papertool.py" search --depth full --or "Sn-Bi-In" "SnBiIn"   # 전수
-python -X utf8 "<도구>/papertool.py" search --max-docs 2 -n 5 -c 200 "cuboid" # 개별 지정
+# depth control
+python -X utf8 "<tool>/papertool.py" search --count-only "significantly"      # paper and occurrence counts only
+python -X utf8 "<tool>/papertool.py" search --depth quick "in situ"           # 3 representative papers
+python -X utf8 "<tool>/papertool.py" search --depth full --or "Sn-Bi-In" "SnBiIn"   # everything
+python -X utf8 "<tool>/papertool.py" search --max-docs 2 -n 5 -c 200 "cuboid" # individual settings
 ```
 
-`--depth` 는 프리셋이고 `--max-docs`·`--brief-docs`·`-n`·`-c` 로 개별 항목만 덮어쓸 수 있습니다.
+`--depth` is a preset; `--max-docs`, `--brief-docs`, `-n` and `-c` override single items.
+`--tag` matches part of a tag name, ignoring case, and also accepts a tag's old name (the preset's `renamed`, below in B).
 
-검색어는 정규식이고 대소문자를 무시합니다. 전문과 검색어는 **글자 정규화**를 거쳐 대조합니다(v0.9.3, `lib/textnorm.py`) —
-PDF 합자(`reﬂow` · `Eﬀect`)는 `reflow` · `Effect` 로, `µm` 은 `μm` 으로, `℃` 는 `°C` 로, en dash · 하이픈 변종은 `-` 로 풉니다.
-캐시 파일은 그대로이므로 **`_fulltext/` 를 직접 grep 하면 합자 낱말을 놓칩니다**(`re(fl|ﬂ)ow` 처럼 씁니다).
+Search terms are regexes and ignore case. Full text and search terms are compared after **character normalization** (`lib/textnorm.py`) —
+PDF ligatures (`reﬂow` · `Eﬀect`) become `reflow` · `Effect`, `µm` becomes `μm`, `℃` becomes `°C`, and en dashes and hyphen variants become `-`.
+The cache files stay as extracted, so **grepping `_fulltext/` directly misses words with ligatures** (write `re(fl|ﬂ)ow` and the like).
 
-**표기 변형을 함께 넣습니다.** `Sn-Bi-In` / `SnBiIn`, `Ni3Sn4` / `Ni 3 Sn 4`(en dash `Sn–Bi–In` 은 정규화로 `Sn-Bi-In` 이 찾습니다).
-PDF 추출 텍스트는 하이픈·아래첨자·공백이 원문과 다를 수 있습니다.
-**여러 단어로 된 구(句)로 검색해 0건이면 단어를 하나씩 떼어 다시 시도합니다.**
-인코딩을 복원한 문서는 단어가 붙어 있어 구 검색이 실패할 수 있기 때문입니다.
+**Add spelling variants.** `Sn-Bi-In` / `SnBiIn`, `Ni3Sn4` / `Ni 3 Sn 4` (an en dash `Sn–Bi–In` is found by `Sn-Bi-In` through normalization).
+Text extracted from PDFs can differ from the original in hyphens, subscripts and spaces.
+**If a multi-word phrase finds 0, try again with the words one at a time.**
+Documents whose encoding was restored can have words run together, so phrase searches can fail.
 
-### 2단계 — Scopus (필요하다고 판단한 경우에만)
+### Step 2 — Scopus (only when judged necessary)
 
-**결과에는 초록이 함께 옵니다.** 도구가 COMPLETE view(초록·전체 저자·저자 키워드)를 기본으로
-받고, 키에 권한이 없으면 STANDARD(서지만)로 자동 폴백합니다. 저장되는 `.md` 의
-「항목별 초록」을 읽고 **내용으로 선별하십시오** — 제목·피인용수만 보고 고르지 않습니다.
+**Results come with abstracts.** The tool asks for the COMPLETE view (abstract, all authors, author keywords) by default
+and falls back to STANDARD (bibliographic data only) automatically if the key has no access. Read the
+`Per-entry abstracts` section of the saved `.md` (`항목별 초록` in files saved by older versions) and **select by content** —
+do not pick by title or citation count alone.
 
-**먼저 그냥 실행해 봅니다.** 키가 설정된 컴퓨터에서 네트워크가 닿으면(로컬 Claude Code 등)
-그 자리에서 결과가 나옵니다. 네트워크·환경변수 접근 여부는 환경마다 다릅니다.
-직접 호출이 막혀 도구가 아래 (a)의 안내를 내면 그때 2단계 구조로 갑니다.
+**Just run it first.** On a computer where the key is set and the network is reachable (local Claude Code, for example),
+results come right there. Network and environment-variable access differ by environment.
+Only when direct calls are blocked and the tool prints the note in (a) below, switch to the two-step route.
 
 ```bash
-# 성공하면 바로 결과. 막힌 환경이면 무엇을 어디서 돌려야 하는지 안내가 나옵니다
+# On success, results right away. In a blocked environment, a note says what to run where
 python -X utf8 "$TOOL" scopus "TITLE-ABS-KEY(Sn-Bi-In AND solder)" --count 25 --fetch-oa
 ```
 
-`--fetch-oa` 는 **검색 범위를 바꾸지 않습니다.** 전체 결과를 대조한 뒤에 미보유 오픈액세스 논문만
-임시 폴더에 받아 전문 텍스트를 만듭니다 (아래 「OA 는 받아서 전문으로 봅니다」). 기본으로 붙이십시오.
+`--fetch-oa` **does not change the search scope.** After matching all the results, it fetches only the missing open-access papers
+into the staging folder and makes their full text (below, "Open-access papers are fetched and read in full"). Add it by default.
 
-**(a) 직접 호출이 막힌 환경 — 질의를 만들어 사용자에게 실행을 부탁합니다.**
+**(a) An environment where direct calls are blocked — build the query and ask the user to run it.**
 
-같은 명령을 **키가 설정된 컴퓨터의 터미널**에서 실행해 달라고 부탁합니다. 도구가 막혔을 때 내는 안내에
-그대로 붙여 넣을 한 줄이 들어 있습니다. 키는 어느 파일에도 들어가지 않습니다 — 실행 시점에 환경변수에서 읽습니다.
-
-```bash
-python -X utf8 "<도구>/papertool.py" scopus "TITLE-ABS-KEY(...)" --count 25 --name <이름>
-```
-
-결과는 `<인덱스>/_scopus/<이름>.json` 에 저장되고, 그 파일을 아래 (b)로 대조합니다.
-
-**질의는 Scopus 문법으로 정확히 만들어 줍니다.** 사용자가 문법을 외우게 하지 마십시오.
-
-- 필드: `TITLE-ABS-KEY(...)`, `TITLE(...)`, `AUTHOR-NAME(...)`, `SRCTITLE(...)`, `DOI(...)`
-- 연산자: `AND` `OR` `AND NOT`, 구는 `{정확히 이 구}` 또는 `"근접"`, 절단은 `*`
-- 범위: `PUBYEAR > 2018`, `PUBYEAR IS 2024`
-- 예: `TITLE-ABS-KEY({Sn-Bi-In} AND solder) AND PUBYEAR > 2015`
-
-### 다성분 계(합금·화합물) 질의 — 구문 나열이 아니라 원소 AND 뼈대로
-
-표기는 연구자마다 제각각입니다 — 원소 순서 · 하이픈 종류 · 숫자 삽입형(`A-40B-10C`) · 붙여쓰기(`ABC`) · 철자명.
-특정 표기를 구(phrase)로 쫓아가면 반드시 놓칩니다. 이렇게 갑니다.
-
-1. **뼈대 — 명확한 원소 기호를 AND 로, 맥락어와 함께.** `TITLE-ABS-KEY(A AND B AND solder*)`.
-   Scopus 는 구두점을 공백처럼 토큰화하므로 순서 바꿈·하이픈 종류·숫자 삽입형이 전부 자동으로 걸립니다.
-2. **영어 단어와 겹치는 기호는 질의에 넣지 않습니다** — 넣어도 거의 아무것도 거르지 못합니다.
-   해당: `In`(=전치사 in), `As`, `At`, `Be`, `No`, 그리고 한 글자 기호 전부(B C H I K N O P S U V W Y).
-3. **모호한 원소는 수신한 뒤 `scopus-sift` 로 판별합니다.** 초록에는 철자명이나 화학식 토큰이 반드시 찍히므로
-   정규식으로 정밀도를 회복합니다. `--require` 는 **기본 대소문자 구분**입니다 — 원소 기호 패턴에는 필수입니다
-   (`-i` 로 해제). 아래첨자 마크업(`X<inf>2</inf>O<inf>3</inf>`)은 `X<` 로 잡습니다.
-4. **붙여쓰기만 쓰는 논문 보완.** 전체 계 permutation 과 **이원 부분조합**을 뼈대 질의에 OR 로 보탭니다 —
-   이원 붙임을 빼면 두 이원계를 함께 다룬 논문이 빠집니다.
-5. **모호 원소의 철자명 질의를 병행해 합칩니다.** TITLE-ABS-KEY 는 색인어(INDEXTERMS)까지 보지만 sift 는
-   제목·초록·저자 키워드만 보므로, **색인어로만 걸린 항목은 sift 에서 떨어집니다** — 철자명 질의가 그 구멍을 메웁니다.
-   결과는 DOI/EID 로 합칩니다.
-6. **함정** — 와일드카드 구문을 한 질의에 여러 개 넣으면 HTTP 500. 큰 OR 질의에 와일드카드를 섞으면 결과가
-   **경고 없이** 줄어듭니다(보강 질의는 따로 돌려 합칩니다). 모호 기호가 앞에 오는 구문은 전치사와 충돌해 무관한
-   논문이 쏟아집니다. 특정 조성의 존재 확인은 정확 구문으로(`TITLE-ABS-KEY("A 19B 19C")`).
-7. **규모 절차.** 먼저 count 를 작게 던져 전체 건수를 확인하고 `--all` 로 받습니다(페이지네이션 상한 5,000건 —
-   넘으면 연도 분할). 키가 큰 페이지를 거부하면(HTTP 400) 25건으로 다시 받으므로 손으로 나눌 필요가 없습니다.
-   호출당 할당량 1 이라 수백 건 스위프는 부담이 없습니다.
-
-**계마다 다른 정규식 · 실측치 · 예시 명령은 그 프로젝트의 문헌 파일에 둡니다.** 이 문서에는 적지 않습니다.
-
-**(b) 사용자가 결과 파일을 만들어 두면 대조합니다.** 이건 네트워크 없이 됩니다.
+Ask the user to run the same command **in a terminal on a computer where the key is set**. The note the tool prints when blocked
+contains the one line to paste. The key goes into no file — it is read from the environment variable at run time.
 
 ```bash
-python -X utf8 "$TOOL" scopus-merge "<인덱스>/_scopus/<이름>.json"
+python -X utf8 "<tool>/papertool.py" scopus "TITLE-ABS-KEY(...)" --count 25 --name <name>
 ```
 
-Scopus 결과를 보유 문헌과 자동 대조해 **어느 것이 이미 있고 어느 것이 없는지** 표로 냅니다
-(DOI 일치 우선, 없으면 제목 유사도). 결과는 `_scopus/<이름>.{json,md}` 에 저장되고,
-COMPLETE 로 받은 파일이면 `.md` 뒤쪽에 「항목별 초록」이 붙습니다.
+The result is saved in `<index>/_scopus/<name>.json`; match that file with (b) below.
 
-0.9 이하 판이 인덱스 폴더에 만들어 둔 실행 파일(`Scopus검색_*.bat` · `.query.txt`)이 남아 있으면
-`papertool.py scopus-tidy` 가 결과 JSON 이 있는 것만 `_scopus/_실행완료/` 로 옮깁니다. 지금 판은 실행 파일을 만들지 않습니다.
+**Write the query in exact Scopus syntax for the user.** Do not make the user memorize the syntax.
 
-**API 키를 절대 채팅에 적게 하지 마십시오.** 키는 사용자 컴퓨터의 환경변수에만 둡니다.
-키가 없거나 네트워크가 막히면 도구가 안내만 하고 조용히 끝납니다 — 크래시하지 않습니다.
+- Fields: `TITLE-ABS-KEY(...)`, `TITLE(...)`, `AUTHOR-NAME(...)`, `SRCTITLE(...)`, `DOI(...)`
+- Operators: `AND` `OR` `AND NOT`; phrases as `{exactly this phrase}` or `"loose phrase"`; truncation with `*`
+- Ranges: `PUBYEAR > 2018`, `PUBYEAR IS 2024`
+- Example: `TITLE-ABS-KEY({Sn-Bi-In} AND solder) AND PUBYEAR > 2015`
 
-### OA 는 받아서 전문으로 봅니다 (v0.8.0)
+### Multi-component systems (alloys, compounds) — an AND skeleton of elements, not a list of phrases
 
-`--fetch-oa`(또는 저장된 결과에 `oa-fetch <파일.json>`)가 미보유 항목을 OpenAlex 에 물어
-오픈액세스 PDF 가 있으면 **임시 폴더**(설정 `oa_staging`, 기본 `<인덱스>/_oa_inbox`)에 받고
-`_oa_inbox/_text/<DOI>.txt` 로 전문 텍스트를 만듭니다. 표에는 `OA ✔` 로 표시되고 「항목별 초록」에
-파일 경로가 붙습니다.
+Researchers write compositions in many ways — element order, hyphen type, inserted numbers (`A-40B-10C`), run together (`ABC`), spelled-out names.
+Chasing one spelling as a phrase always misses papers. Do this instead.
 
-- **받은 것은 전문을 읽고 보고합니다.** `_text` 를 grep 해 근거 문장을 확인하고, 초록만 본 항목과
-  구분해 적습니다 (4단계).
-- **임시 폴더는 라이브러리가 아닙니다.** 인덱스 대상도 아닙니다. 남길 PDF 는 사용자가 자기 문헌 관리
-  프로그램으로 라이브러리에 옮기고 `reindex` 합니다. **도구가 옮기지 않습니다** — 관리 프로그램의
-  동기화가 깨질 수 있어 사용자 결정입니다. 옮겨서 편입되면 짝이 되는 `_text` 는 다음 실행 때
-  `_text/_obsolete/` 로 치워집니다.
-- **같은 DOI 는 한 번만 받습니다** (v0.9.2). 다른 `--name` · 다른 질의 · 다른 컴퓨터가 받아 둔 것도 임시
-  폴더에 있으면 다시 받지 않고 `oa_file` · `oa_text` 만 채웁니다 (출력 「이미 받아 둔 N편」). 무엇을 받았는지는
-  `_oa_inbox/_manifest.json`(수신 목록)에 남고, 판정 순서와 형식은 `lib/oafetch.py` 머리말이 원본입니다.
-  내용이 같은 `<이름>_1.pdf` 사본이 생기면 도구 결함이므로 지우기 전에 사용자에게 보고합니다.
-- 회당 30편 상한(`--oa-limit`), 다운로드 사이 3–5초, OpenAlex 가 알려 준 주소만 씁니다.
-  구독 논문은 건드리지 않습니다.
-- 네트워크가 막힌 환경에서는 안내만 내고 결과 저장은 그대로 됩니다. 나중에 `oa-fetch` 로 받습니다.
-- 인용 출처는 원본 PDF 입니다. `_text` 를 출처로 적지 않습니다 (G).
+1. **Skeleton — unambiguous element symbols joined with AND, plus a context word.** `TITLE-ABS-KEY(A AND B AND solder*)`.
+   Scopus tokenizes punctuation like spaces, so reordering, hyphen types and inserted numbers are all caught automatically.
+2. **Leave symbols that are also English words out of the query** — they filter out almost nothing anyway.
+   These are `In` (= the preposition in), `As`, `At`, `Be`, `No`, and every one-letter symbol (B C H I K N O P S U V W Y).
+3. **Resolve ambiguous elements after fetching, with `scopus-sift`.** Abstracts always carry the spelled-out name or formula tokens,
+   so a regex restores the precision. `--require` is **case-sensitive by default** — required for element-symbol patterns
+   (turn it off with `-i`). Catch subscript markup (`X<inf>2</inf>O<inf>3</inf>`) with `X<`.
+4. **Cover papers that only write compositions run together.** Add permutations of the whole system and the **binary subsets**
+   to the skeleton query with OR — without the binary run-together forms, papers that treat two binary systems together are lost.
+5. **Also run a spelled-out-name query for the ambiguous elements, and merge.** TITLE-ABS-KEY also searches the index terms (INDEXTERMS), but sift
+   looks only at the title, abstract and author keywords, so **entries caught only through index terms drop out in sift** — the spelled-out query fills that gap.
+   Merge the results by DOI/EID.
+6. **Traps** — several wildcard phrases in one query give HTTP 500. Mixing wildcards into a large OR query shrinks the results
+   **without warning** (run supplementary queries separately and merge). Phrases that begin with an ambiguous symbol clash with the preposition and bring in
+   floods of unrelated papers. To check that a specific composition exists, use the exact phrase (`TITLE-ABS-KEY("A 19B 19C")`).
+7. **Procedure at scale.** First send a small count to see the total, then fetch with `--all` (pagination limit 5,000 results —
+   split by year beyond that). If the key refuses large pages (HTTP 400), the tool fetches again with 25, so no manual splitting is needed.
+   Each call uses 1 of the quota, so a sweep of a few hundred results is no burden.
 
-### 미보유 비-OA 문헌은 초록으로 추려 다운로드를 요청합니다
+**Keep system-specific regexes, measurements and example commands in that project's literature file.** Do not write them in this document.
 
-구독 논문의 전문을 API 로 받는 기능은 없습니다. **초록까지가 API 의 몫**이고, 전문은
-사용자가 브라우저(기관 구독·프록시)로 받아 라이브러리에 넣는 운영입니다.
-**프로젝트에 다운로드 목록 도구가 있으면 그것을 씁니다** — 프로젝트 `AGENTS.md`·`CLAUDE.md` 에서 확인합니다.
+**(b) If the user has made the result file, match it.** This works without a network.
 
-1. 「항목별 초록」을 읽고 **질문에 실제로 기여하는 것만** 고릅니다.
-   결과가 수백 건이면 먼저 `scopus-sift` 로 거른 뒤 읽습니다.
-2. 고른 미보유 문헌을 **다운로드 요청 목록**으로 제시합니다 — 항목마다 DOI 링크와
-   초록에서 확인한 이유 한 줄을 답니다. 많으면 우선순위를 나눕니다.
+```bash
+python -X utf8 "$TOOL" scopus-merge "<index>/_scopus/<name>.json"
+```
+
+The Scopus results are matched against the owned papers automatically, and a table shows **which are already owned and which are not**
+(DOI match first, otherwise title similarity). The results are saved in `_scopus/<name>.{json,md}`,
+and for a file fetched with COMPLETE the `.md` ends with a `Per-entry abstracts` section.
+Result files keep what they were written with; files from older versions have Korean headings and notes, and the tools still read them.
+
+If launcher files that versions 0.9 and earlier made in the index folder (`Scopus검색_*.bat`, "Scopus search" · `.query.txt`) remain,
+`papertool.py scopus-tidy` moves those that have a result JSON to `_scopus/_done/` (to `_scopus/_실행완료/`, "run done", instead, if that folder
+already exists). The current version makes no launcher files.
+
+**Never let the user type the API key into the chat** (G-0). The key stays only in an environment variable on the user's computer.
+If there is no key or the network is blocked, the tool only prints a note and ends quietly — it does not crash.
+
+### Open-access papers are fetched and read in full
+
+`--fetch-oa` (or `oa-fetch <file.json>` on saved results) asks OpenAlex about the missing entries and, if there is an
+open-access PDF, saves it in the **staging folder** (config `oa_staging`, default `<index>/_oa_inbox`) and
+makes its full text as `_oa_inbox/_text/<DOI>.txt`. The table marks it `OA ✔`, and the file path is added under
+`Per-entry abstracts`.
+
+- **Read the full text of what was fetched before reporting.** Grep `_text` to confirm evidence sentences, and report them apart from
+  entries seen only through abstracts (step 4).
+- **The staging folder is not the library.** It is not indexed either. The user moves PDFs worth keeping into the library with their own
+  reference manager and runs `reindex`. **The tool does not move them** — that could break the reference manager's
+  sync, so it is the user's decision. Once a paper is moved and taken in, its matching `_text` file is moved to
+  `_text/_obsolete/` on the next run.
+- **The same DOI is fetched only once.** What another `--name`, another query or another computer fetched is not fetched again either
+  if it is in the staging folder; only `oa_file` and `oa_text` are filled (output "Already staged: N papers"). What was fetched is recorded in
+  `_oa_inbox/_manifest.json` (the fetch manifest), and the module docstring of `lib/oafetch.py` is the authority on the decision order and the format.
+  If a copy `<name>_1.pdf` with identical content appears, that is a tool defect; report it to the user before deleting anything.
+- At most 30 papers per run (`--oa-limit`), 3–5 seconds between downloads, and only addresses OpenAlex gave.
+  Subscription papers are not touched.
+- In an environment where the network is blocked, the tool only prints a note and still saves the results. Fetch later with `oa-fetch`.
+- The citation source is the original PDF. Do not cite `_text` as the source (G).
+
+### Missing papers that are not open access — shortlist by abstract and ask for the download
+
+There is no way to fetch the full text of subscription papers through the API. **The API's part ends at the abstract**; the full text
+is downloaded by the user in a browser (institutional subscription or proxy) and put into the library.
+**If the project has a download-list tool, use it** — check the project's `AGENTS.md` or `CLAUDE.md`.
+
+1. Read the `Per-entry abstracts` section and pick **only the papers that actually contribute to the question**.
+   If there are hundreds of results, filter with `scopus-sift` first, then read.
+2. Present the chosen missing papers as a **download request list** — each with a DOI link and one line on the reason
+   confirmed from the abstract. If there are many, split them by priority.
 
    ```
    - [ ] Yao (2026). Barrier effect of Sn-Bi-In ... Mater. Sci. Eng. A.
          https://doi.org/10.1016/j.msea.2026.149916
-         이유: Sn-Bi-In 의 thermomigration 저항을 정량 비교 — §x.x 근거 후보
+         Reason: quantitative comparison of the thermomigration resistance of Sn-Bi-In — candidate evidence for §x.x
    ```
 
-   목록이 세션을 넘겨야 하면 인덱스 폴더의 `다운로드요청.md` 에 같은 형식으로 저장합니다.
-3. 사용자가 PDF 를 라이브러리에 넣었다고 하면 `reindex` 로 편입하고, 받은 항목을 목록에서
-   지웁니다. 그 뒤로는 전문 검색(1단계)이 그 문헌을 잡습니다.
+   If the list has to last beyond the session, save it in the same format in `download_requests.md` in the index folder.
+   If the index folder already has `다운로드요청.md` ("download requests", the name older versions used), keep appending to that file instead.
+3. When the user says the PDFs are in the library, take them in with `reindex` and remove the fetched entries from the list.
+   From then on, the full-text search (step 1) finds those papers.
 
-### 3단계 — 웹 검색 (규격·기술자료 등 Scopus 범위 밖)
+### Step 3 — web search (standards, technical data and other material outside Scopus)
 
-현재 앱에 제공된 웹 검색·페이지 열기 도구를 씁니다. Claude의 `WebSearch`·`web_fetch` 나
-Codex의 웹 도구 등 실제로 등록된 기능을 사용하고, 다른 앱의 도구 이름을 가정하지 않습니다.
+Use the web search and page-fetch tools the current app provides. Use what is actually registered, such as Claude's `WebSearch` or `web_fetch`
+or Codex's web tools, and do not assume another app's tool names.
 
-### 4단계 — 보고
+### Step 4 — report
 
-각 문헌에 **`full-text verified` / `abstract-only` / `metadata-only` / `inaccessible`** 증거
-수준을 표시합니다. 추출 텍스트를 찾은 것만으로 `full-text verified` 로 표시하지 않습니다.
-확정할 문장·수치·표·그림은 원본 PDF에서 대조하고, PDF 페이지 순서와 인쇄 페이지 번호를 구분합니다.
-Scopus에 초록이 실제로 없으면 `metadata-only` 입니다.
+Mark each paper with an evidence level: **`full-text verified` / `abstract-only` / `metadata-only` / `inaccessible`**.
+Do not mark it `full-text verified` just because the extracted text was found.
+Check sentences, numbers, tables and figures to be confirmed against the original PDF, and keep the PDF page order apart from the printed page numbers.
+If Scopus really has no abstract, it is `metadata-only`.
 
-돌린 것만 보고합니다. **돌리지 않은 검색처를 굳이 변명하지 않습니다.**
-여러 곳을 돌았으면 출처를 구분합니다.
+Report only what was run. **Do not make excuses for sources not searched.**
+If several sources were searched, label the source.
 
-- **[보유]** — 라이브러리에 있음. `P0xx` ID + 파일 경로 + 근거 문장 스니펫
-- **[Scopus · OA 수신]** — 보유하지 않았지만 `--fetch-oa` 로 임시 폴더에 받은 것. `_text` 에서 확인한
-  **근거 문장**과 파일명. 아직 라이브러리에 없다는 것을 밝힙니다
-- **[Scopus]** — 색인에는 있으나 보유하지 않음. 제목·저자·연도·저널·DOI·피인용수.
-  초록이 있으면 **왜 이 문헌이 해당 질문에 맞는지 초록에서 확인한 내용**을 한 줄 덧붙입니다
-- **[웹]** — 그 외 출처. URL 명시
+- **[Owned]** — in the library. `P0xx` ID + file path + evidence sentence snippet
+- **[Scopus · OA fetched]** — not owned, but fetched into the staging folder with `--fetch-oa`. The **evidence sentence** confirmed in `_text`
+  and the file name. State that it is not yet in the library
+- **[Scopus]** — indexed but not owned. Title, authors, year, journal, DOI, citation count.
+  If there is an abstract, add one line on **why this paper fits the question, as confirmed from the abstract**
+- **[Web]** — other sources. Give the URL
 
-보유 문헌을 먼저, 밖의 것을 나중에. 같은 근거를 지지하는 보유 문헌이 있으면 외부로 대체하지 않습니다.
-검색 결과에 `※` 비고가 붙은 항목은 그 내용을 그대로 사용자에게 전달합니다.
-
----
-
-## B. 라이브러리를 처음 인덱싱할 때
-
-원본 밖의 새 config·출력 위치를 정한 뒤 [전체 검증 절차](references/portability.md#구축갱신-후-전체-검증)의
-작업 전 snapshot을 준비합니다. 기존 config나 캐시를 덮어쓰지 않습니다.
-
-```bash
-python -X utf8 "<도구>/papertool.py" init "<라이브러리 경로>" --name "<이름>"
-python -X utf8 "<도구>/papertool.py" index          # 전문 추출은 시간이 걸립니다
-```
-
-에이전트 셸은 한 호출의 시간 제한이 있습니다. `index` 가 "N편 남음"이라고 하면
-**같은 명령을 다시 실행**하십시오. 이어서 처리합니다. (`--limit` 로 조절 가능)
-
-태그 프리셋이 없으면 태그가 비어 있습니다. 이렇게 만드십시오.
-
-```bash
-python -X utf8 "<도구>/papertool.py" tags-auto --top 20   # 코퍼스에서 초안 생성
-```
-
-초안을 사용자와 함께 다듬어 `presets/<분야>.json` 으로 저장하고, config 의 `preset` 에 적은 뒤
-`index` 를 다시 실행합니다. **자동 생성 태그를 그대로 확정하지 마십시오** — 저널명이나 흔한
-표현이 섞여 들어옵니다. 반드시 사용자에게 보여 주고 확인받습니다.
-
-## C. 새 PDF가 추가됐을 때
-
-구축·갱신 전후에는 [전체 검증 절차](references/portability.md#구축갱신-후-전체-검증)를 수행합니다.
-검색 요청만으로 매번 갱신하지는 않습니다. 이미 검증된 인덱스와 변경 없는 원본이면 검색만 합니다.
-
-```bash
-python -X utf8 "<도구>/papertool.py" reindex
-```
-
-기존 항목(수동 보정 포함)은 보존하고 새 파일만 추가합니다.
-**같은 경로의 PDF 내용 변경은 자동으로 감지하지 않습니다.** 이전 검증 기록의 크기·mtime·SHA-256과
-달라졌다면 캐시가 오래됐을 수 있습니다. 기존 인덱스와 수동 보정을 보존한 채 별도 재구축을 계획하고,
-`reindex` 만으로 갱신됐다고 보고하지 않습니다.
-`_oa_inbox` 에 받아 둔 OA PDF 는 **사용자가 라이브러리로 옮긴 뒤에야** `reindex` 대상이 됩니다.
-옮기기 전에는 인덱스에 없고 `_oa_inbox/_text` 로만 읽습니다.
-
-**라이브러리 폴더가 없으면 `doctor`·`index`·`reindex`·`resync`·`repair` 는 멈춥니다** (v0.7.2).
-후보 폴더가 하나도 실재하지 않는데 조용히 「원본 0편」으로 도는 것을 막습니다. `search` 는 캐시만으로 계속
-되되 경고를 한 줄 냅니다. `doctor` 는 첫 줄에 고른 라이브러리 경로를 찍고, 원본 편수가 인덱스의 절반에
-못 미치면 경고합니다. `reindex` 는 그 경우 `--force` 없이는 진행하지 않습니다 — 다른 폴더를 집었거나
-동기화가 덜 끝난 상태에서 엉뚱한 파일을 새 문헌으로 넣는 사고를 막기 위한 것입니다.
-
-## D. 파일명이 바뀌었을 때 — 자주 일어납니다
-
-문헌관리 프로그램이 `_1`/`_2` 접미사를 붙였다 떼거나, 클라우드 전환 시 전체를 다시 내려받습니다.
-
-```bash
-python -X utf8 "<도구>/papertool.py" doctor    # "경로 누락"이 잡히면
-python -X utf8 "<도구>/papertool.py" resync    # 이름 정규화 → 내용 대조로 재매칭
-python -X utf8 "<도구>/papertool.py" reindex   # 새 파일 추가
-```
-
-**작업 전 라이브러리가 안정됐는지 확인합니다.** 파일 목록 해시를 20초 간격으로 두 번 떠서
-같은지 봅니다. 다르면 동기화가 진행 중이므로 기다렸다 시작합니다.
-
-두 기록은 동봉된 `verify_index.py snapshot` 으로 만들고 `sources`의 상대경로·크기·mtime·SHA-256을
-비교할 수 있습니다. 기록은 원본 밖의 작업 폴더에 보관하고, 달라지면 동기화 완료 후 다시 확인합니다.
-
-## E. 전문 텍스트가 깨졌을 때
-
-```bash
-python -X utf8 "<도구>/papertool.py" repair
-```
-
-폰트 인코딩이 어긋난 PDF를 찾아 코드포인트를 되돌리고, 붙어 버린 단어를 분리합니다.
-복원본은 검색용입니다. 완전히 복원되지 않는 문서도 있으니 해당 항목의 `※` 비고를 확인하십시오.
-
-## F. 인용 대조 (요청이 있을 때만)
-
-원고의 인용을 인덱스와 대조하려면 `templates/citation-check/` 를 프로젝트로 복사하고
-`citecheck.config.json` 의 인용 정규식을 그 프로젝트 형식에 맞게 고칩니다.
-인용 표기 형식은 프로젝트마다 다르므로 **임의로 정하지 말고 사용자에게 확인**합니다.
+Owned papers first, outside ones after. If an owned paper supports the same evidence, do not replace it with an external one.
+For results with a `※` note, pass the note on to the user as it is.
 
 ---
 
-## G-0. API 키 취급 — 예외 없습니다
+## B. Indexing a library for the first time
 
-- **키를 채팅에 입력받지 않습니다.** 사용자가 적으려 하면 말리고 환경변수 설정을 안내합니다.
-- **키를 파일에 쓰지 않습니다.** `paperindex.config.json`, 스크립트, 로그, 결과 파일 어디에도.
-  도구는 `ELS_API_KEY` / `ELS_INST_TOKEN` 환경변수에서만 읽습니다.
-- **키를 URL이나 명령줄 인자에 넣지 않습니다.** `X-ELS-APIKey` 헤더로만 보냅니다.
-  쿼리스트링에 넣으면 셸 기록·프록시 로그에 남습니다.
-- 오류 메시지를 그대로 옮길 때도 키가 섞이지 않았는지 봅니다. 도구는 자동으로 가립니다.
-- `401`·`403`·`429` 는 사용자 승인이나 권한·할당량 상태가 달라지기 전까지 반복 재시도하지 않습니다.
-  도구의 제한된 view 폴백 뒤에도 막히면 접근 한계를 보고하고 가능한 다른 검색 경로를 사용합니다.
-- 환경변수는 Git·채팅 노출은 막아 주지만 **암호화 저장소가 아닙니다.** 같은 사용자 권한으로
-  실행되는 다른 프로세스는 읽을 수 있습니다. 이 점을 사용자가 물으면 사실대로 알립니다.
+Choose a new config and output location outside the source, then prepare the pre-work snapshot of the
+[full verification procedure](references/portability.md#full-verification-after-building-or-updating). Do not overwrite an existing config or cache.
 
-## G. 반드시 지킬 것
+```bash
+python -X utf8 "<tool>/papertool.py" init "<library path>" --name "<name>"
+python -X utf8 "<tool>/papertool.py" index          # full-text extraction takes time
+```
 
-- **원본 폴더는 읽기 전용입니다.** 파일 생성·수정·이름변경·이동·삭제를 하지 않습니다.
-- **인덱스의 제목·저자·저널은 자동 추출값입니다.** 인덱스만 보고 참고문헌을 확정하지 않습니다.
-  전문 캐시에서 근거 문장을 찾은 뒤, 인용 확정 전에 **원본 PDF로 대조**합니다.
-- **인용 출처는 원본 PDF입니다.** 전문 캐시(`.txt`)를 출처로 적지 않습니다.
-- **파일명이 내용과 다른 파일이 있습니다.** `papers_index.md` 의 §주의 필요 항목을 먼저 확인합니다.
-- **논문 ID는 재생성할 때마다 다시 매겨집니다.** 이전 대화의 ID를 그대로 믿지 말고 다시 확인합니다.
-- **깊이를 먼저 정합니다 (A-0).** 표현·용어 확인에 전 문헌 본문을 꺼내지 않습니다.
-  다만 부재·신규성 주장("없다", "최초다")은 반드시 `--depth full` 로 확인합니다.
-- 검색 결과가 0건이면 그대로 보고합니다. 지어내지 않습니다. 단, 표기 변형과 구(句) 검색 한계
-  때문일 수 있으니 단어를 쪼개 한 번 더 시도한 뒤 판단합니다.
+Agent shells limit the time of one call. If `index` reports "N left",
+**run the same command again**. It continues where it stopped. (Adjustable with `--limit`.)
+
+Without a tag preset, the tags are empty. Make one like this.
+
+```bash
+python -X utf8 "<tool>/papertool.py" tags-auto --top 20   # draft from the corpus
+```
+
+Refine the draft with the user, save it as `presets/<field>.json`, put it in the config's `preset`, then
+run `index` again. **Do not adopt automatically generated tags as they are** — journal names and common
+expressions slip in. Always show them to the user and get confirmation.
+
+**To rename a tag later, keep the old name in the preset's `renamed`** (`"renamed": {"<old name>": "<new name>"}`, format in
+`lib/tagging.py`). The next `reindex` rewrites the old name in the existing entries, and `search --tag` accepts either name.
+The bundled `solder-thesis.json` lists its earlier Korean tag names there. A tag's regex list may also hold Korean words (such as `도금`, "plating")
+so that it matches Korean-language titles.
+
+## C. When new PDFs are added
+
+Before and after building or updating, run the [full verification procedure](references/portability.md#full-verification-after-building-or-updating).
+Do not update on every search request. With an already verified index and an unchanged source, just search.
+
+```bash
+python -X utf8 "<tool>/papertool.py" reindex
+```
+
+Existing entries (including manual corrections) are kept and only new files are added.
+**The first `reindex` after an update can change existing entries too:** values that older versions wrote in Korean
+(the `untagged` tag, the notes `repair` writes, journal names guessed from a DOI) and tag names the preset's `renamed` retires
+are rewritten in English, exact matches only. Before that write, `papers_index.json` is copied once to
+`_backup/papers_index_<date>.json` and one line reports the count; hand-written notes and edited values stay as they are.
+The next run changes nothing.
+**A change in the content of a PDF at the same path is not detected automatically.** If the size, mtime or SHA-256 differs from the earlier
+verification record, the cache may be stale. Plan a separate rebuild that keeps the existing index and manual corrections,
+and do not report the index as updated by `reindex` alone.
+OA PDFs fetched into `_oa_inbox` become `reindex` targets **only after the user moves them into the library**.
+Until then they are not in the index and are read only through `_oa_inbox/_text`.
+
+**If the library folder does not exist, `doctor`, `index`, `reindex`, `resync` and `repair` stop.**
+This prevents a quiet run over "0 source papers" when none of the candidate folders exists. `search` keeps working from the cache alone
+but prints a one-line warning. `doctor` prints the chosen library path on its first line and warns if the source has fewer than half as many
+papers as the index. In that case `reindex` does not proceed without `--force` — this prevents files from the wrong folder,
+or from an unfinished sync, from being added as new papers.
+
+## D. When file names change — this happens often
+
+Reference managers add and remove `_1`/`_2` suffixes, or download everything again when switching to the cloud.
+
+```bash
+python -X utf8 "<tool>/papertool.py" doctor    # if it reports "Paths missing"
+python -X utf8 "<tool>/papertool.py" resync    # name normalization → re-match by content
+python -X utf8 "<tool>/papertool.py" reindex   # add new files
+```
+
+**Confirm the library is stable before working.** Take a hash of the file list twice, 20 seconds apart,
+and check that they match. If not, a sync is in progress; wait before starting.
+
+Both records can be made with the bundled `verify_index.py snapshot`, which lets you compare the relative path, size, mtime and SHA-256
+in `sources`. Keep the records in a work folder outside the source, and if they differ, check again after the sync finishes.
+
+## E. When the full text is garbled
+
+```bash
+python -X utf8 "<tool>/papertool.py" repair
+```
+
+Finds PDFs whose font encoding is off, shifts the code points back, and splits words that ran together.
+The restored text is for searching. Some documents are not fully restored; check the entry's `※` note.
+
+## F. Citation check (only on request)
+
+To match a manuscript's citations against the index, copy `templates/citation-check/` into the project and
+edit the citation regexes in `citecheck.config.json` to fit that project's format.
+Citation formats differ by project, so **do not choose one yourself; confirm it with the user**.
+
+---
+
+## G-0. Handling the API key — no exceptions
+
+- **Do not take the key in the chat.** If the user starts to type it, stop them and explain how to set the environment variable.
+- **Do not write the key into any file** — not `paperindex.config.json`, scripts, logs or result files.
+  The tool reads it only from the environment variables `ELS_API_KEY` / `ELS_INST_TOKEN`.
+- **Do not put the key in a URL or a command-line argument.** Send it only in the `X-ELS-APIKey` header.
+  In a query string it stays in shell history and proxy logs.
+- When quoting an error message, check that the key is not in it. The tool masks it automatically.
+- Do not retry `401`, `403` or `429` repeatedly until the user approves or the access or quota state changes.
+  If access is still blocked after the tool's limited-view fallback, report the access limit and use another available search route.
+- Environment variables keep the key out of Git and the chat, but **they are not encrypted storage.** Other processes running
+  with the same user's rights can read them. If the user asks, say so plainly.
+
+## G. Always
+
+- **The source folder is read-only.** Do not create, modify, rename, move or delete files.
+- **Titles, authors and journals in the index are automatically extracted.** Do not confirm references from the index alone.
+  Find the evidence sentence in the full-text cache, then **check against the original PDF** before confirming the citation.
+- **The citation source is the original PDF.** Do not cite the full-text cache (`.txt`) as the source.
+- **Some files have names that do not match their content.** Check the `Needs attention` section of `papers_index.md` first
+  (`주의 필요 항목` in an index last written by an older version).
+- **Paper IDs are renumbered every time the index is regenerated.** Do not trust IDs from an earlier conversation; check them again.
+- **Decide the depth first (A-0).** Do not pull out the text of every paper to check an expression or term.
+  But always check claims of absence or novelty ("none", "first") with `--depth full`.
+- If a search finds 0, report it as is. Do not make anything up. But it may be due to spelling variants or the limits of phrase
+  search, so split the terms and try once more before concluding.

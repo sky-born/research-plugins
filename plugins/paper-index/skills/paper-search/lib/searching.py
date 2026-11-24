@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""전문 검색 — 실제 검색 대상은 `_fulltext/*.txt` 입니다.
+"""Full-text search — what is actually searched is `_fulltext/*.txt`.
 
-검색 **깊이(depth)** 를 조절할 수 있습니다. 라이브러리 전체를 훑는 비용보다
-적중한 문헌을 전부 본문과 함께 쏟아내는 비용이 훨씬 크기 때문에,
-기본 동작은 **전수 스캔 + 제한 출력** 입니다.
+The search **depth** is adjustable. Pouring out every matching paper with its text costs far more
+than scanning the whole library, so the default is
+**scan everything + limit the output**.
 
-- 스캔은 기본적으로 전체를 돕니다 → 적중 편수·출현 횟수 통계가 정확합니다
-- 출력만 상위 N편으로 자릅니다   → 나머지는 한 줄 요약, 그 뒤는 편수만
-- `stop_after` 를 주면 스캔 자체를 조기에 끊습니다 (초대형 라이브러리용,
-  대신 통계가 하한값이 되므로 그렇다고 표시합니다)
+- The scan covers everything by default → the counts of matching papers and occurrences are exact
+- Only the output is cut to the top N papers → the rest get one line each, after that only a count
+- With `stop_after` the scan itself stops early (for very large libraries;
+  the statistics then become lower bounds, and the output says so)
 
-전문과 검색어는 모두 `textnorm.norm_text` 를 거쳐 대조합니다 — `reflow` 가 PDF 합자 `reﬂow` 도 찾습니다.
+Full text and query terms both go through `textnorm.norm_text` before comparison — `reflow` also finds the PDF ligature `reﬂow`.
 """
 import json, os, re
 
@@ -28,7 +28,7 @@ def _flat(path):
 
 
 def _snippets(path, pats, limit, context):
-    """표시할 문헌에 대해서만 스니펫을 뽑습니다 (지연 추출)."""
+    """Extract snippets only for the papers to be shown (lazy extraction)."""
     if limit <= 0:
         return []
     flat = _flat(path)
@@ -44,18 +44,32 @@ def _snippets(path, pats, limit, context):
     return out
 
 
-def search(paths, terms, any_of=False, tag="", year="", snippets=3, context=120,
-           max_docs=0, brief_docs=12, stop_after=0, count_only=False):
-    """반환: (rows, hits, stats)
+def _tag_filter(rows, tag, aliases):
+    """Rows with a tag that contains `tag` (ignoring case), under its own name or any name it was renamed from or to."""
+    q = tag.lower()
+    back = {}
+    for old, new in (aliases or {}).items():
+        back.setdefault(new, set()).add(old)
 
-    max_docs   : 본문 스니펫까지 상세 출력할 문헌 수 (0 = 무제한)
-    brief_docs : 상세 출력 뒤에 한 줄 요약으로 덧붙일 문헌 수 (-1 = 나머지 전부)
-    stop_after : 이만큼 적중하면 스캔 중단 (0 = 끝까지 — 통계 정확)
-    count_only : 편수·횟수만 세고 스니펫은 뽑지 않음
+    def names(t):
+        cur = (aliases or {}).get(t, t)
+        return {t, cur} | back.get(cur, set())
+    return [r for r in rows if any(q in n.lower() for t in r["tags"] for n in names(t))]
+
+
+def search(paths, terms, any_of=False, tag="", year="", snippets=3, context=120,
+           max_docs=0, brief_docs=12, stop_after=0, count_only=False, tag_aliases=None):
+    """Returns (rows, hits, stats).
+
+    tag_aliases: {old tag name: current name} (tagging.tag_aliases) — `tag` matches either name
+    max_docs   : papers printed in detail with snippets (0 = no limit)
+    brief_docs : papers listed one line each after the detailed ones (-1 = all the rest)
+    stop_after : stop scanning after this many matches (0 = to the end — exact statistics)
+    count_only : count papers and occurrences only; no snippets
     """
     rows = load_rows(paths)
     if tag:
-        rows = [r for r in rows if any(tag.lower() in t.lower() for t in r["tags"])]
+        rows = _tag_filter(rows, tag, tag_aliases)
     if year:
         m = re.match(r"(\d{4})(?:-(\d{4}))?$", year)
         if m:
@@ -118,8 +132,8 @@ def format_hits(terms, rows, hits, stats=None):
         out.append(f"{r['id']} [{r.get('year','')}] {r['title']}")
         out.append(f"    {r.get('author') or '-'} · {r.get('journal') or '-'}" +
                    (f" · doi:{r['doi']}" if r.get("doi") else ""))
-        out.append(f"    파일: {r['rel']}")
-        out.append("    적중: " + ", ".join(f"{t}={c}" for t, c in zip(terms, counts)))
+        out.append(f"    file: {r['rel']}")
+        out.append("    hits: " + ", ".join(f"{t}={c}" for t, c in zip(terms, counts)))
         if r.get("note"):
             out.append(f"    ※ {r['note']}")
         for s in snip:
@@ -128,37 +142,37 @@ def format_hits(terms, rows, hits, stats=None):
     brief = stats.get("brief") or []
     if brief:
         out.append("-" * 100)
-        out.append(f"이하 {len(brief)}편은 목록만 (본문 스니펫 생략)")
+        out.append(f"The next {len(brief)} papers are listed only (no snippets)")
         for total, r, counts in brief:
-            out.append(f"  {r['id']} [{r.get('year','') or '----'}] {total:>4}회  {_trim(r['title'])}")
+            out.append(f"  {r['id']} [{r.get('year','') or '----'}] {total:>4}x  {_trim(r['title'])}")
 
     out.append("=" * 100)
     if not stats:
-        out.append(f"총 {len(hits)}편 적중 (검색 대상 {len(rows)}편)")
+        out.append(f"Matched {len(hits)} papers (of {len(rows)} searched)")
         return "\n".join(out)
 
     matched, scanned = stats.get("matched", 0), stats.get("scanned", len(rows))
     pct = f" ({matched * 100 // scanned}%)" if scanned else ""
     if stats.get("stopped_early"):
-        out.append(f"검색 대상 {len(rows)}편 중 {scanned}편까지 스캔 · 적중 {matched}편 · "
-                   f"총 출현 {stats.get('occurrences', 0)}회"
-                   "  [조기 중단 — 실제 적중은 이보다 많습니다]")
+        out.append(f"Of {len(rows)} papers, scanned {scanned} · matched {matched} · "
+                   f"{stats.get('occurrences', 0)} occurrences in total"
+                   "  [stopped early — there are more matches than this]")
     else:
-        out.append(f"검색 대상 {scanned}편 · 적중 {matched}편{pct} · "
-                   f"총 출현 {stats.get('occurrences', 0)}회")
+        out.append(f"Searched {scanned} papers · matched {matched} of them{pct} · "
+                   f"{stats.get('occurrences', 0)} occurrences in total")
 
     if matched == 0:
-        out.append("0건입니다. 표기 변형(하이픈·공백·아래첨자)이나 구(句) 검색 한계일 수 있으니 "
-                   "단어를 쪼개 한 번 더 시도해 보십시오.")
+        out.append("No matches. Spelling variants (hyphens, spaces, subscripts) or the limits of phrase search may be the cause; "
+                   "split the terms into single words and try once more.")
     elif stats.get("count_only"):
-        out.append("빈도만 셈 (본문 미개봉). 근거 문장이 필요하면 `--depth focus` 로 다시 돌리십시오.")
+        out.append("Counts only (no text opened). For evidence sentences, run again with `--depth focus`.")
     else:
         hidden = stats.get("hidden", 0)
-        parts = [f"상세 {len(hits)}편"]
+        parts = [f"detail: {len(hits)} papers"]
         if brief:
-            parts.append(f"목록 {len(brief)}편")
+            parts.append(f"list: {len(brief)} papers")
         if hidden:
-            parts.append(f"미표시 {hidden}편")
+            parts.append(f"not shown: {hidden} papers")
         out.append(" · ".join(parts) +
-                   ("   → 더 보려면 `--depth full` (또는 `--max-docs N`)" if hidden or brief else ""))
+                   ("   → to see more, `--depth full` (or `--max-docs N`)" if hidden or brief else ""))
     return "\n".join(out)

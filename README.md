@@ -1,6 +1,6 @@
 # research-plugins
 
-English | [한국어](README.ko.md)
+English | [Korean](README.ko.md)
 
 Plugins for academic writing and PDF literature search, shared by Claude Code and Codex.
 They are versioned in this one repository so that **every computer and every account runs the same version**.
@@ -28,7 +28,7 @@ They are developed with AI coding assistants (Claude Code · Codex).
 | `paper-index` | `paper-search` | Indexes a PDF library, searches the full text, and matches Scopus results against the papers you own | `/paper-index:paper-search` |
 
 In Codex, pick the skill of the same name in the skill picker.
-The skill instructions are in Korean.
+The skill instructions, the tools and everything they create in a project are in English. The tools still read the Korean spellings of projects made before research-writing 0.14.
 The call syntax differs per app, but **both apps read the same instructions and run the same tools** ([One source, two registrations](#one-source-two-registrations)).
 
 ---
@@ -200,7 +200,7 @@ research-plugins/
     ├── research-writing/
     │   ├── .claude-plugin/plugin.json   Source of name, version and description
     │   ├── .codex-plugin/plugin.json    For Codex (generated)
-    │   ├── README.md
+    │   ├── README.md · README.ko.md
     │   ├── hooks/hooks.json             Hooks that protect shared files in a manuscript project
     │   └── skills/
     │       ├── manuscript/              SKILL.md
@@ -209,7 +209,7 @@ research-plugins/
     └── paper-index/
         ├── .claude-plugin/plugin.json
         ├── .codex-plugin/plugin.json    For Codex (generated)
-        ├── README.md
+        ├── README.md · README.ko.md
         └── skills/paper-search/         SKILL.md · papertool.py · lib/ · presets/ · references/ · templates/
 ```
 
@@ -306,10 +306,10 @@ What `check` does, in order:
 
 1. Runs `git fetch` on the baseline's remote and confirms the baseline `origin/main`, and that every file name is ASCII — otherwise it **stops**
 2. Looks for personal information in the files, their paths, the commits to push and the identity of the next commit (`check_public.py`) — anything found **stops** it. Personal terms come from a deny list kept outside the repository (`--deny-list`, `RESEARCH_PLUGINS_DENYLIST`, or `git config research-plugins.denylist <file>` in the clone); without one only the generic patterns run, with a warning
-3. Validates the layout both apps share and that derived files match their source (`validate_shared_plugins.py`), and that the hash list of managed files is current (`tool_hashes.py --check`)
+3. Validates the layout both apps share and that derived files match their source (`validate_shared_plugins.py`), and that the hash list of managed files is current (`tool_hashes.py --check`). A skill reference file over 100 lines must open with a table of contents that matches its headings, and Korean is allowed only as data — in Markdown prose (the `README.<lang>.md` translations aside), Python comments, names and docstrings it **stops** unless it sits in a code span, and in plugin and script code a Korean string must sit in a `LEGACY*` table of older spellings or be a `가-힣` character range
 4. Validates the marketplace and plugin manifests with `claude plugin validate` — it prints which executable and version it used
 5. Compares with the baseline to find the **plugins that changed**, and confirms each one's `version` was raised — otherwise it **stops**
-6. Confirms `CHANGELOG.md` has an entry for each raised version — otherwise it **stops**
+6. Confirms `CHANGELOG.md` has an entry for each raised version and no section other than the plugins — otherwise it **stops**
 7. Runs all tests (`tests/`)
 
 Every push also runs the same `check` on Windows, macOS and Linux through GitHub Actions (`.github/workflows/check.yml`), without the `claude plugin validate` step.

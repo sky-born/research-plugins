@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""코퍼스 어휘 기반 최대일치 단어 분리.
+"""Word splitting by best match against the corpus vocabulary.
 
-인코딩이 깨진 PDF를 복원하면 단어 사이 공백이 사라져 붙는 경우가 있습니다.
-사전을 따로 두는 대신 **같은 라이브러리의 정상 문서들에서 어휘를 뽑아** 씁니다.
-분야 용어가 자동으로 포함되므로 일반 영어사전보다 잘 맞습니다.
+When a PDF with broken encoding is restored, the spaces between words are sometimes lost.
+Instead of a separate dictionary, **the vocabulary is taken from the sound documents of the same library**.
+Field terms are included automatically, so it fits better than a general English dictionary.
 """
 import json, math, os, re, collections
 

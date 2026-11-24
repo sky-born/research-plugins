@@ -1,69 +1,70 @@
 ---
 name: new-manuscript
-description: 새 논문·원고 프로젝트를 만듭니다. 도구(번호 점검·미결 항목 정리·완료 기록 색인·기록 번호 할당·위치 문법·문법 점검 기준), 기존 프로젝트의 도구를 정본에 맞추는 갱신 도구(update_tools.py), 완료 기록 덮어쓰기를 막는 Claude Code 훅, 설정(.manuscript/project.json), 추적 파일 뼈대, 공통 CLAUDE.md 와 Codex용 AGENTS.md 진입 안내를 한 번에 생성합니다. "새 논문 시작", "프로젝트 만들어줘", "논문 폴더 세팅", "새 원고 준비" 같은 요청에 사용합니다. 이미 있는 프로젝트에는 쓰지 않습니다.
+description: Creates a new paper or manuscript project in one go — the tools (number check, open-item tidy-up, record index, record-number assignment, location syntax, grammar baseline), the updater that brings an existing project's tools up to the canonical copy (update_tools.py), the Claude Code hook that stops completion records from being overwritten, the settings (.manuscript/project.json), the tracker file skeleton, and the shared CLAUDE.md with an AGENTS.md entry note for Codex. Use it for requests such as "start a new paper", "make me a project", "set up a paper folder" or "prepare a new manuscript". Never use it on an existing project.
 ---
 
-# 새 원고 프로젝트 만들기
+# Creating a new manuscript project
 
-`init_manuscript.py` 가 폴더 하나를 **작업 가능한 상태**로 만듭니다.
-사용자가 파일을 손으로 만들 일이 없어야 합니다.
+`init_manuscript.py` turns one folder into a **ready-to-work state**.
+The user should never have to create files by hand.
 
-## 먼저 확인합니다
+## Check first
 
-**대상 폴더에 이미 `.manuscript/project.json`(구 `.writing/`) 이나 추적 색인(`tracker_index.md` · 옛 이름 `수정필요_목록.md`)이 있으면 기존 프로젝트입니다.**
-초기화하지 말고 그 사실을 알립니다. (스크립트도 이미 있는 파일은 건너뛰지만, 먼저 확인하는 편이 낫습니다.)
+**If the target folder already has `.manuscript/project.json` (older: `.writing/`) or a tracker index (`tracker_index.md`, or its old default name in `_config.LEGACY_DEFAULTS`), it is an existing project.**
+Do not initialise it; say so. (The script skips existing files too, but checking first is better.)
 
-## 물어볼 것 — 모르면 묻고, 알면 묻지 않습니다
+## What to ask — only what you do not know
 
-| 값 | 기본 | 비고 |
+| Value | Default | Note |
 |---|---|---|
-| 폴더 위치 | — | **반드시 확인합니다.** 형제 프로젝트 옆에 두는 것이 보통입니다 |
-| 논문 이름 | — | `--name`. 한글 가능 |
-| 종류 | `journal` | 학위논문이면 `--kind dissertation` |
-| 장 구성 | `ch1.md` `ch2.md` | `--chapters intro.md methods.md results.md` 또는 `--chapter-count 4` |
-| 원고 폴더 | `manuscript_src` | `--source-dir manuscript` 처럼 바꿀 수 있습니다 |
-| 참고문헌 | `references.md` | `--references bib.md` |
-| 빌드 스크립트 | 없음 | 학교 서식으로 빌드한다면 `--build-script build_tpl.py`. 스크립트를 만들 때는 [build-technical.md](../manuscript-workflow/references/build-technical.md) 를 따릅니다 |
+| Folder location | — | **Always confirm.** Usually next to the sibling projects (the other manuscript projects in the same parent folder) |
+| Paper title | — | `--name`. Any script, including Korean |
+| Kind | `journal` | For a dissertation, `--kind dissertation` |
+| Chapters | `ch1.md` `ch2.md` | `--chapters intro.md methods.md results.md` or `--chapter-count 4` |
+| Manuscript folder | `manuscript_src` | Change it like `--source-dir manuscript` |
+| References | `references.md` | `--references bib.md` |
+| Build script | none | If you build with a university template, `--build-script build_tpl.py`. Follow [build-technical.md](../manuscript-workflow/references/build-technical.md) when writing the script |
 
-**대화를 길게 끌지 않습니다.** 사용자가 "ENIG 후속 연구 새로 시작하자" 정도만 말해도
-폴더 위치와 장 구성만 확인하고 나머지는 기본값으로 진행합니다.
+**Keep the conversation short.** Even if the user only says "let's start the follow-up study",
+confirm the folder location and the chapters and use the defaults for the rest.
 
-## 실행
+## Running it
 
 ```text
-python -X utf8 "<이 스킬 폴더>/init_manuscript.py" "<대상폴더>" --name "논문 이름" --kind journal --source-dir manuscript --chapters intro.md methods.md results.md --references bib.md
+python -X utf8 "<this skill folder>/init_manuscript.py" "<target folder>" --name "Paper title" --kind journal --source-dir manuscript --chapters intro.md methods.md results.md --references bib.md
 ```
 
-`<이 스킬 폴더>`는 **현재 읽은 `SKILL.md`의 부모 폴더**입니다. 그 안의 `init_manuscript.py`와
-`tools/`가 실제로 있는지 확인합니다. Claude·Codex의 설치 위치를 추측하거나 다른 버전을 고르지 않습니다.
-`python`은 현재 환경에서 확인한 Python 3 실행기를 사용합니다
-([실행 환경 확인](../manuscript-workflow/references/environment.md)).
+`<this skill folder>` is **the parent folder of the `SKILL.md` you just read**. Check that `init_manuscript.py` and
+`tools/` really are there. Do not guess where Claude or Codex installed it, and do not pick another version.
+For `python`, use the Python 3 interpreter you confirmed in this environment
+([checking the environment](../manuscript-workflow/references/environment.md)).
 
-**이미 있는 파일은 건너뜁니다.** 두 번 돌려도 기존 내용을 보존합니다. `--force`는 덮어쓰기
-옵션이므로 사용자가 기존 파일의 교체를 명시적으로 요청한 경우에만 사용합니다.
+**Existing files are skipped.** Running it twice keeps their content. `--force` overwrites,
+so use it only when the user explicitly asks to replace existing files.
 
-## 만들어지는 것
+## What it creates
 
 ```
-<프로젝트>/
-  CLAUDE.md                  공통 정체성 블록 + 파일 지도. 구성·도메인 한계는 비워 둡니다
-  AGENTS.md                  Codex 진입 안내. CLAUDE.md와 공통 절차를 읽도록 연결합니다
-  .manuscript/project.json   챕터·파일명·트리거. 도구가 읽습니다
-  .claude/settings.json      Pre · PostToolUse 훅 등록(Edit · Write · Bash) — 완료기록 덮어쓰기 거부 · 새 미결 ID 손 등록 거부 · 동기화 가드 · 쓰기 후 스냅샷
-  .claude/hooks/guard_write.py  그 훅의 본체 (hooks/ 에서 복사). 플러그인 설치본의 hooks/hooks.json 도 같은 본체를 등록합니다
-  tools/                       _config.py · _location.py · _sync.py · check_numbers.py · tidy_tracker.py · index_records.py · new_record.py · new_pending.py · check_sync.py · grammar_baseline.py
-  tracker_index.md           색인 (자동 생성 구간의 마커 포함)
-  tracker_pending.md         미결 항목 표 — 기본 A·B·C·D(글자는 프로젝트가 정함)
-  tracker_records_index.md   완료 기록 색인 (빈 상태)
-  tracker_literature.md      F·G 표
-  tracker_proposals.md       H 표
-  records/                   README.md (형식 규약) · archive.md
-  <원고폴더>/                 챕터 md 뼈대 + 참고문헌
+<project>/
+  CLAUDE.md                  §1 identity · §2 what to read for each task · §3 the single source of each record · §4 session start and end commands. §5 read-only sources and §6 domain limits are left blank
+  writing_guide.md           chapter outline · this manuscript's writing rules (blank). Read only when writing, through the §2 table
+  AGENTS.md                  entry note for Codex. Points it to CLAUDE.md and the shared procedure
+  .manuscript/project.json   chapters · file names · triggers. The tools read it
+  .claude/settings.json      Pre- and PostToolUse hook registration (Edit · Write · Bash · PowerShell) — refuses to overwrite completion records · refuses hand-registered open-item IDs · sync guard · snapshot after writing
+  .claude/hooks/guard_write.py  the hook itself (copied from hooks/). The plugin's hooks/hooks.json registers the same script
+  tools/                     the managed tools — the list is in project-config.md, "New projects are made by the `new-manuscript` skill"
+  tracker_index.md           index (with the markers of its generated sections)
+  tracker_pending.md         open-item tables — A · B · C · D by default (the project sets the letters)
+  tracker_records_index.md   record index (empty)
+  tracker_literature.md      tables F · G
+  tracker_proposals.md       table H
+  records/                   README.md (format rules) · archive.md
+  <manuscript folder>/       chapter skeletons + references
 ```
 
-## 만든 뒤 반드시 합니다
+## Always do after creating
 
-**1) 도구가 도는지 확인합니다.**
+**1) Check that the tools run.**
 
 ```text
 python -X utf8 tools/check_numbers.py
@@ -71,50 +72,51 @@ python -X utf8 tools/tidy_tracker.py
 python -X utf8 tools/check_sync.py
 ```
 
-셋째는 공용 파일 동기화 점검입니다 — 여러 컴퓨터가 클라우드 동기화 폴더에서 같은 프로젝트를 쓸 때의 안전장치
-(규약은 [tracker-workflow.md](../manuscript-workflow/references/tracker-workflow.md) 「동기화」). 세션 시작마다 돌립니다.
+The third is the sync check of the shared files — the safeguard for a project used from several computers through a cloud-synced folder
+(rules in [tracker-workflow.md](../manuscript-workflow/references/tracker-workflow.md) "Sync — several computers write the shared files"). Run it at the start of every session.
 
-새 프로젝트에서는 경고가 나오는 것이 정상입니다 — 완료 기록 0건,
-미인용 문헌(뼈대의 예시 항목). `tidy_tracker.py`의 종료 코드 `1`은 진단 경고이며, 위의 빈
-기록 경고인지 실제 내용을 확인합니다. 누락 파일·실행 오류를 같은 경고로 간주하지 않습니다.
-미결 항목 0건은 경고가 아니라 안내입니다 — 표 구조가 정상이면 목록의 표를 빈 상태로 만듭니다.
+Warnings are normal in a new project — zero completion records,
+uncited references (the skeleton's example entries). Exit code `1` from `tidy_tracker.py` means diagnostic warnings; check that they are
+these empty-project warnings. Do not treat a missing file or a crash as the same warning.
+Zero open items is a note, not a warning — with intact tables, the lists are rebuilt empty.
 
-**2) `CLAUDE.md` 의 빈 절 둘을 채웁니다.**
+**2) Fill in the blank sections.**
 
-`## 구성` 과 `## 도메인 근거 한계` 가 `**작성하십시오**` 로 남아 있습니다.
-사용자에게 물어 채우거나, 지금 채울 수 없으면 미결 항목으로 등록합니다.
+§5 read-only sources and §6 domain limits in `CLAUDE.md`, and the chapter outline and writing rules in `writing_guide.md`,
+still read `**Fill in**` (a Korean placeholder in projects made before 0.14). Ask the user and fill them in, or register them as open items if they cannot be filled now.
+Rules needed for one task only go to a file that a row of the §2 table points to, not into `CLAUDE.md`.
 
-**3) 프로젝트 전용 스킬이 필요한지 판단합니다.**
+**3) Decide whether the project needs its own skill.**
 
-빌드 절차나 원본 자료 위치처럼 그 논문에만 있는 절차가 많으면
-프로젝트 안의 절차 문서로 두고 `.manuscript/project.json`의 `procedure`에 상대 경로를 적습니다.
-기존 `.claude/skills/<이름>/SKILL.md`를 그대로 가리켜도 양쪽에서 파일을 직접 읽을 수 있습니다.
-앱에서 직접 호출하는 로컬 스킬 등록이 필요하면 해당 앱이 지원하는 프로젝트 등록 방식만 더하고,
-**본문은 하나로 유지합니다.** 전역 플러그인에는 넣지 않습니다 — 다른 논문 폴더에서도 발동할 수 있습니다.
+If many procedures belong to this paper alone, such as its build or where its source data is,
+keep them in a procedure document inside the project, put its relative path in `procedure` in `.manuscript/project.json`,
+and point the §2 table rows of the tasks that need it at it. How the document is reached and how a local skill is registered:
+[project-config.md](../manuscript-workflow/references/project-config.md) "`markers` and `procedure` — two values the entry skill uses".
 
-**4) 형제 프로젝트와의 경계를 확인합니다.**
+**4) Check the boundary with sibling projects.**
 
-새 프로젝트가 기존 프로젝트와 같은 데이터를 다루면, 새 프로젝트의 정체성 블록에 자료 사용
-범위와 다른 원고의 읽기 전용 경계를 적습니다. 형제 프로젝트의 지침도 변경할 필요가 있으면
-그 파일과 범위에 대한 사용자 지시를 확인합니다. 새 프로젝트 생성 권한으로 형제 문서를 고치지 않습니다.
+If the new project uses the same data as an existing one, write the scope of data use and the read-only boundary of the other
+manuscripts into the new project's identity block. If a sibling project's guidance also needs changing,
+confirm the user's instruction for that file and scope. Creating a new project gives no permission to edit sibling documents.
 
-## 기존 프로젝트의 도구를 정본에 맞출 때 — `update_tools.py`
+## Bringing an existing project's tools up to date — `update_tools.py`
 
-초기화는 새 프로젝트에만 씁니다. 이미 있는 프로젝트의 도구 · 훅이 정본과 다르면(플러그인을 갱신한 뒤) 같은 폴더의
-`update_tools.py` 로 맞춥니다. 원본은 **이 파일이 든 플러그인 사본**이고, 관리 대상은 `managed_files.json` 입니다.
+Initialising is for new projects only. When an existing project's tools or hooks differ from the canonical copy (after a plugin update),
+bring them up to date with `update_tools.py` in this folder.
 
 ```text
-python -X utf8 "<이 스킬 폴더>/update_tools.py" "<프로젝트>"            # 판정만 — 같음 · 옛 정본 판 · 로컬 수정 · 없음 · 옛 이름
-python -X utf8 "<이 스킬 폴더>/update_tools.py" "<프로젝트>" --apply    # 옛 정본 판을 바꿈. 로컬 수정판은 --force <파일>, 없는 파일은 --add <파일>
-python -X utf8 "<이 스킬 폴더>/update_tools.py" --scan "<상위 폴더>"     # 자매 프로젝트 전체의 상태표
+python -X utf8 "<this skill folder>/update_tools.py" "<project>"            # report only — same · older canonical version · locally modified · missing · old name
+python -X utf8 "<this skill folder>/update_tools.py" "<project>" --apply    # replace older canonical versions; locally modified: --force <file>, missing: --add <file>
+python -X utf8 "<this skill folder>/update_tools.py" --scan "<parent folder>"   # status table of all sibling projects
 ```
 
-설정 파일(`.manuscript/project.json`)은 쓰지 않습니다 — 기본값에 기대는 키를 보고만 하므로, 필요한 값은 사용자에게 보인 뒤 Edit 으로
-적습니다. 0.12 이하가 만든 프로젝트(한글 기본 이름)는 설정에 적을 옛 이름을 보이고, 적기 전에는 적용하지 않습니다 —
-규약은 [project-config.md](../manuscript-workflow/references/project-config.md). 로컬 수정판을 바꾸기 전 원본은 `.manuscript/tools_backup/<날짜>/` 에 둡니다. 훅 등록이 다르면 `hooks/settings.example.json` 의
-`hooks` 블록을 손으로 합칩니다. 배포 전 자매 프로젝트에 무엇이 바뀌는지는 저장소의 `scripts/preview_projects.py` 로 미리 봅니다.
+What it judges and replaces, what it never writes (the settings file), backups, 0.12-or-earlier names, the tracker format migration and the hook registration:
+[project-config.md](../manuscript-workflow/references/project-config.md) "New projects are made by the `new-manuscript` skill".
+A project whose tracker anchors still use the pre-0.14 Korean spellings is migrated in the same run (`migrate_format.py` — previewed
+without `--apply`): [tracker-workflow.md](../manuscript-workflow/references/tracker-workflow.md) "Format tokens — English written, the old Korean spellings read".
+To see beforehand what a release changes in sibling projects, use `scripts/preview_projects.py` in the repository.
 
-## 공통 규칙
+## Shared rules
 
-문체·헤지·인용·수정 프로토콜은 [manuscript-workflow](../manuscript-workflow/SKILL.md)를 따릅니다.
-`.manuscript/project.json`의 스키마는 [project-config.md](../manuscript-workflow/references/project-config.md)에 있습니다.
+Style, hedging, citations and the revision protocol follow [manuscript-workflow](../manuscript-workflow/SKILL.md).
+The `.manuscript/project.json` schema is in [project-config.md](../manuscript-workflow/references/project-config.md).

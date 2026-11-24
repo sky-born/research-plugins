@@ -1,42 +1,46 @@
 # -*- coding: utf-8 -*-
-r"""_sync.py — 공용 파일 동기화 안전장치. 점검 · 스냅샷 · 복구 · 쓰기 가드 · 1회 치환 도우미.
+r"""_sync.py — sync guard for the shared files. Check · snapshot · restore · write guard · replace-once helper.
 
-여러 컴퓨터가 클라우드 동기화 폴더(구글드라이브 등)에서 같은 원고 프로젝트를 쓰면, 따라잡지 못한 미러 위에 쓴 판이
-나중에 올라가 다른 컴퓨터의 작업을 조용히 덮습니다. 이 모듈은 그것을 **코드로** 막고 · 잡고 · 되돌립니다 — 모델 토큰은 쓰지
-않습니다. 규약은 플러그인 문서 `manuscript-workflow/references/tracker-workflow.md` 「동기화」에 있습니다.
+When several computers work on the same manuscript project in a cloud-sync folder (Google Drive and the like), a version written on top of a
+mirror that has not caught up is uploaded later and silently overwrites another computer's work. This module prevents, catches and reverts
+that **in code** — it spends no model tokens. The rules are in the plugin document `manuscript-workflow/references/tracker-workflow.md`
+"Sync — several computers write the shared files".
 
     from _sync import Sync, replace_once
-    s = Sync(cfg)                        # cfg 는 _config.load()
-    s.session_start()                    # 세션 시작 — 점검 · 경계 스냅샷 · 상태 한 줄
-    s.guard('Edit', 'tracker_pending.md')    # 쓰기 직전 — 막을 사유 문자열 또는 None
-    s.after_write('tracker_pending.md')     # 쓰기 직후 — 스냅샷 · 지문 · 「쓴 줄」 기록
-    s.session_end()                      # 세션 끝 — 경계 스냅샷 · 보존 정리
-    s.accept_warn()                      # WARN 만 있을 때 기준 재설정 — 열린 ERROR 가 있으면 None(닫는 길은 ack 뿐)
-    replace_once(path, old, new)         # 대상이 정확히 1회일 때만 바꾸고 줄끝 · 스냅샷까지
+    s = Sync(cfg)                        # cfg is _config.load()
+    s.session_start()                    # session start — checks · boundary snapshot · status line
+    s.guard('Edit', 'tracker_pending.md')    # right before a write — reason string to block, or None
+    s.after_write('tracker_pending.md')     # right after a write — snapshot · fingerprint · record of "written lines"
+    s.session_end()                      # session end — boundary snapshot · retention cleanup
+    s.accept_warn()                      # reset the baseline when there are only WARNs — None if an ERROR is open (only ack closes it)
+    replace_once(path, old, new)         # replaces only when the target occurs exactly once, keeping line endings, with snapshots
 
-점검(등급 · 시점) — 가해 쪽은 추정, 피해 쪽은 불변식으로 정확히.
-    S1 신선도      WARN   시작 · update_tools   공용 파일의 최근 변경이 stale_days 넘게 지남
-    S2 E 연속      ERROR  시작 · 쓰기            완료기록 번호에 빈칸(known_gaps 제외) — 따라잡는 중
-    S3 참조 무결   ERROR  시작 · 쓰기            생성물이 가리키는 원본 항목이 없음(색인 → E 파일 · 목록 → 미결 ID — 생성 블록의 ID 자리만, _config.list_block_ids)
-                   WARN   시작 · 쓰기            목록 생성 블록의 모양을 읽지 못해 ID 대조를 건너뜀
-                   WARN   시작                   손편집 파일이 가리키는 E 번호가 최대 E 보다 큼
-    S4 생성 스탬프 INFO   시작                   생성물의 스탬프가 원본과 다른데 원본이 생성 **뒤에** 바뀜(순방향) — 재생성 안내 「할 일」. 동기화 문제 아님
-                   WARN   시작                   원본이 이 컴퓨터가 본 옛 판으로 되돌아감 · 스탬프 뒤 편집이 없는데 내용이 다름 · 기존 기록이 바뀜 · 기록이 줆
-                   ERROR  시작                   원본이 옛 판으로 역행했고 수정 시각도 생성물보다 앞 — 덮어쓰기
-    S5 충돌 사본   WARN   시작(전체) · 쓰기(폴더) 동기화 충돌 사본(`x 2.md` · `x (1).md` · conflicted copy)
-    S6 손실 보고   WARN   시작 · --damage        이 컴퓨터가 쓴 줄의 생존율이 survival_pct 아래
-    S7 ID 단조     ERROR  시작 · 쓰기            이 컴퓨터가 본 미결 · 이관 · 제안 · 문헌 ID 가 사라짐
-    S8 드라이브    INFO   시작                   동기화 프로그램 프로세스 유무
-상태는 동기화 폴더 **밖** `~/.claude/sync-state/<프로젝트 id>/` 에 컴퓨터별로 둡니다(`SYNC_STATE_HOME` 으로 바꿀 수 있음 — 시험용).
-프로젝트 id 는 `<이름 슬러그>-<루트 경로 해시8>`(project_id — 정의는 그 한 곳) — 루트 경로를 **NFC 로 맞춘 뒤** 해시하므로 훅(표준 입력의
-NFC 경로)과 셸에서 돌린 도구(맥 파일 시스템의 NFD 경로)가 같은 폴더를 씁니다. 옛 정의(정규화 없음 · 0.11.3 까지)로 생긴 폴더는 처음
-만날 때 새 이름으로 옮기거나 새 폴더에 합칩니다(_adopt_legacy_state).
-쓰기 뒤 「쓴 줄」의 차이는 **이 컴퓨터가 쓰기 직전에 본 판**(`seen.json` 의 해시 → 그 해시의 스냅샷)과 견줍니다 — 시각상 마지막 스냅샷은 다른 컴퓨터의 옛 판일 수 있습니다.
-스냅샷은 쓰기마다 로컬(같은 곳 `snap/`)에, 세션 경계와 일괄 도구 전후에 드라이브(`sync.snapshot_dir`)에 둡니다.
-이름 `<UTC>_<컴퓨터>_<경로(/→__)>_<해시8><확장자>` 는 매번 달라 다른 컴퓨터가 덮을 수 없고, 같은 해시는 다시 만들지 않습니다.
-보존(세션 시작 · 끝) — 파일마다 최근 `snapshot_min` 개는 늘 남기고, 자기 컴퓨터 것은 `snapshot_days`(로컬 2배) 지났거나 `snapshot_max`
-(로컬 `snapshot_max_local`)를 넘는 것을 오래된 순으로, 다른 컴퓨터 것은 `snapshot_days_others` 지난 것을 지웁니다. 바뀌지 않는 파일은 하나씩만 남습니다.
-파일 이름 · 경로 · 줄은 비교하거나 키로 쓸 때 NFC 로 맞춥니다(`_config.nfc`) — 맥 미러의 NFD 이름이 설정 · 본문의 NFC 와 섞여도 같은 파일로 봅니다.
+Checks (level · when) — the cause is inferred; the damage is detected exactly, through invariants.
+    S1 freshness             WARN   start · update_tools     the latest change to the shared files is older than stale_days
+    S2 record continuity     ERROR  start · write            gap in the completion record numbers (except known_gaps) — still catching up
+    S3 reference integrity   ERROR  start · write            a source item that a generated file points to is missing (record index → E file · list → open-item ID — only the ID positions of the generated blocks, _config.list_block_ids)
+                             WARN   start · write            the shape of a generated list block could not be read, so the ID comparison is skipped
+                             WARN   start                    a hand-edited file points to an E number above the highest E
+    S4 generation stamp      INFO   start                    the stamp of a generated file differs from the source and the source changed **after** generation (forward) — "to do": regenerate. Not a sync problem
+                             WARN   start                    the source went back to an old version this computer saw · content differs with no edit after the stamp · an existing record changed · records shrank
+                             ERROR  start                    the source went back to an old version and its mtime is also earlier than the generated file — overwrite
+    S5 conflict copies       WARN   start (all) · write (folder)   sync conflict copies (`x 2.md` · `x (1).md` · conflicted copy)
+    S6 loss report           WARN   start · --damage         survival of the lines this computer wrote is below survival_pct
+    S7 ID monotonicity       ERROR  start · write            an open-item · archive · proposal · literature ID this computer saw has disappeared
+    S8 drive                 INFO   start                    whether the sync program's process is running
+    S9 format                ERROR  start · write            the tracker files mix English and pre-0.14 Korean anchors (`_config.project_format`) — Drive catching up, or an old tool wrote
+                             INFO   start                    the project still uses the Korean anchors — migrate with `update_tools.py --apply`
+State lives **outside** the sync folder, per computer, in `~/.claude/sync-state/<project id>/` (`SYNC_STATE_HOME` overrides it — for tests).
+The project id is `<name slug>-<root path hash8>` (project_id — defined in that one place). The root path is hashed **after NFC normalization**, so the
+hook (NFC path on standard input) and tools run from a shell (NFD path from the macOS file system) use the same folder. Folders made under the old
+definition (no normalization, up to 0.11.3) are renamed, or merged into the new folder, when first met (_adopt_legacy_state).
+After a write, the "written lines" difference is taken against **the version this computer saw right before writing** (hash in `seen.json` → the snapshot of
+that hash) — the latest snapshot by time may be an old version from another computer.
+Snapshots go to local storage (`snap/` in the same place) on every write, and to the drive (`sync.snapshot_dir`) at session boundaries and around batch tools.
+The name `<UTC>_<computer>_<path(/→__)>_<hash8><ext>` differs every time, so another computer cannot overwrite it, and the same hash is not made twice.
+Retention (session start and end) — per file the latest `snapshot_min` are always kept; this computer's snapshots older than `snapshot_days` (twice that locally)
+or beyond `snapshot_max` (local `snapshot_max_local`) are deleted oldest first, and other computers' snapshots older than `snapshot_days_others` are deleted. A file that does not change keeps one.
+File names, paths and lines are NFC-normalized when compared or used as keys (`_config.nfc`) — NFD names from a macOS mirror and NFC names in settings and text count as the same file.
 """
 import datetime
 import errno
@@ -53,21 +57,22 @@ import time
 import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _config import (load as _load_cfg, CONFIG_REL, CONFIG_REL_OLD, DEFAULTS, nfc,                  # noqa: E402  — nfc: 이름 · 경로 · 줄의 비교는 NFC 로
-                     TABLE_ROW_RE_M, table_problems, describe_table_problem,              # 표 행 문법은 _config.py 한 곳(정리 도구 · 훅과 같음)
-                     list_block_ids, id_key,                                              # 목록의 ID 자리 · ID 정렬도 정리 도구와 같은 정의
-                     allocation_scope, id_stem)                                           # 번호를 도구가 정하는 범위 — new_pending.py 와 같은 정의
+from _config import (load as _load_cfg, CONFIG_REL, CONFIG_REL_OLD, DEFAULTS, nfc,                  # noqa: E402  — nfc: names, paths and lines are compared in NFC
+                     TABLE_ROW_RE_M, table_problems, describe_table_problem,              # table row grammar lives in _config.py only (same as the tidy tool and the hook)
+                     list_block_ids, id_key,                                              # ID positions of the list and ID order: same definitions as the tidy tool
+                     allocation_scope, id_stem,                                           # scope of tool-assigned numbers — same definition as new_pending.py
+                     STAMP_RE, STAMP_WORDS, project_format, is_anchor_line)                               # format tokens — stamps in either spelling, the project's format
 
 UTC_FMT = '%Y%m%dT%H%M%SZ'
 SNAP_RE = re.compile(r'^(\d{8}T\d{6}Z)_([^_]+)_(.+)_([0-9a-f]{8})(\.[^.]*)?$')
-STAMP_RE = re.compile(r'^<!-- 생성스탬프 (.*?) -->\s*$', re.M)
-ROW_ID_RE = TABLE_ROW_RE_M      # S7 가 모으는 행 ID — 정리 도구의 행 정규식과 같은 정의
+STAMP_LINE = '<!-- %s %%s -->' % STAMP_WORDS[0]    # written in English; STAMP_RE reads both spellings
+ROW_ID_RE = TABLE_ROW_RE_M      # row IDs collected by S7 — same definition as the tidy tool's row regex
 E_REF_RE = re.compile(r'(?<![\w/\\])E(\d+)(?!\d)')
-MIN_LINE = 8          # 이보다 짧은 줄은 「쓴 줄」로 세지 않습니다 — 구분선 · 빈 셀 같은 것
+MIN_LINE = 8          # shorter lines are not counted as "written lines" — separators, empty cells and the like
 MAX_LINES_PER_FILE = 3000
 
 
-# ---------------------------------------------------------------- 공용 작은 도구
+# ---------------------------------------------------------------- small shared helpers
 def utc_now():
     return datetime.datetime.now(datetime.timezone.utc)
 
@@ -85,7 +90,7 @@ def sha(data):
 
 
 def norm_sha(data):
-    """줄끝을 LF 로 정규화한 해시 — 컴퓨터마다 줄끝이 달라도 같은 내용이면 같게."""
+    """Hash with line endings normalized to LF — the same content gives the same hash whatever the computer's line endings."""
     return sha(data.replace(b'\r\n', b'\n'))
 
 
@@ -95,7 +100,7 @@ def _slug(s):
 
 
 def computer_id():
-    """컴퓨터 식별자 — `<상태 기준 폴더>/computer_id` 첫 줄, 없으면 hostname. `_` 는 이름 규약의 구분자라 `-` 로 바꿉니다."""
+    """Computer identifier — first line of `<state base folder>/computer_id`, else the hostname. `_` is the separator of the name scheme, so it becomes `-`."""
     p = os.path.join(state_home(), 'computer_id')
     name = ''
     if os.path.isfile(p):
@@ -109,7 +114,7 @@ def computer_id():
 
 
 def state_home():
-    """상태 기준 폴더 — 동기화 폴더 밖. 시험은 `SYNC_STATE_HOME` 으로 임시 폴더를 줍니다."""
+    """State base folder — outside the sync folder. Tests pass a temporary folder via `SYNC_STATE_HOME`."""
     env = os.environ.get('SYNC_STATE_HOME')
     if env:
         return os.path.abspath(env)
@@ -118,27 +123,27 @@ def state_home():
 
 
 def _root_key(root, form='NFC'):
-    """상태 폴더 id 에 넣는 루트 경로 문자열 — 절대 경로 · normcase · `/` 구분자, 그리고 유니코드 정규화(form).
-    form=None 은 정규화 없음(0.11.3 까지의 정의) — 옛 폴더를 찾을 때만 씁니다."""
+    """Root path string used in the state folder id — absolute path, normcase, `/` separators, then Unicode normalization (form).
+    form=None means no normalization (the definition up to 0.11.3) — used only to find old folders."""
     key = os.path.normcase(os.path.abspath(root)).replace('\\', '/')
     return unicodedata.normalize(form, key) if form else key
 
 
 def project_id(name, root, form='NFC'):
-    """상태 폴더 이름 `<이름 슬러그>-<루트 경로 해시8>` — 정의는 여기 한 곳. 루트 경로를 NFC 로 맞춘 뒤 해시하므로 훅(표준 입력의
-    NFC 경로)과 셸에서 돌린 도구(맥 파일 시스템의 NFD 경로)가 같은 폴더를 씁니다(2026-11-06 맥 실측 — 갈리면 `--ack` 가 훅에 닿지 않음)."""
+    """State folder name `<name slug>-<root path hash8>` — defined here only. The root path is hashed after NFC normalization, so the hook (NFC path
+    on standard input) and tools run from a shell (NFD path from the macOS file system) use the same folder (measured on macOS — when they differ, `--ack` does not reach the hook)."""
     return '%s-%s' % (_slug(name), sha(_root_key(root, form).encode('utf-8'))[:8])
 
 
 def legacy_project_ids(name, root):
-    """옛 정의(정규화 없음)로 생겼을 수 있는 폴더 이름 — 지금 정의와 다른 것만. 루트가 NFC 면 옛 정의의 결과가 지금과 같아 NFD 쪽만
-    남고, 루트가 NFD 면 그 자체가 옛 폴더입니다. ASCII 경로에서는 빈 목록."""
+    """Folder names the old definition (no normalization) may have made — only those that differ from the current one. If the root is NFC, the old
+    definition gives the same result as now, so only the NFD form remains; if the root is NFD, that form is itself the old folder. Empty list for ASCII paths."""
     cur = project_id(name, root)
     return [p for p in dict.fromkeys(project_id(name, root, f) for f in (None, 'NFD')) if p != cur]
 
 
 def find_project_root(start):
-    """start(파일 또는 폴더)에서 위로 올라가며 설정 파일이 있는 폴더를 찾습니다. 없으면 None."""
+    """Walks up from start (file or folder) to the folder that holds the settings file. None if there is none."""
     p = os.path.abspath(start)
     if os.path.isfile(p):
         p = os.path.dirname(p)
@@ -153,17 +158,18 @@ def find_project_root(start):
 
 
 def _rel(root, path):
-    """루트 기준 상대 경로(`/` 구분 · NFC). 두 경로의 정규화 형이 달라도(훅의 NFC · 맥 파일 시스템의 NFD) 맞게 — 둘 다 NFC 로 맞춘 뒤 relpath."""
+    """Path relative to the root (`/`-separated, NFC). Works even when the two paths differ in normalization (the hook's NFC, the macOS file system's NFD) — both are NFC-normalized before relpath."""
     return nfc(os.path.relpath(nfc(os.path.abspath(path)), nfc(os.path.abspath(root))).replace(os.sep, '/'))
 
 
 def _line_table(data):
-    """줄 해시 → 미리보기(40자). 공백만 다른 줄은 같은 줄로 봅니다."""
+    """Line hash → preview (40 characters). Lines that differ only in whitespace count as the same line.
+    Anchor lines (block markers, generated stamps, `| ID |` header rows — `_config.is_anchor_line`) are tool-owned structure, not written content."""
     out = {}
     text = data.decode('utf-8', errors='replace')
     for line in text.split('\n'):
         t = nfc(line.strip())
-        if len(t) < MIN_LINE:
+        if len(t) < MIN_LINE or is_anchor_line(t):
             continue
         out[hashlib.sha1(t.encode('utf-8')).hexdigest()[:12]] = t[:40]
     return out
@@ -192,30 +198,30 @@ def _mtime(path):
 
 
 def _merge_state_json(name, new, old):
-    """상태 JSON 둘을 하나로 — new 가 더 최근에 쓰인 파일. 파일마다 규칙이 다릅니다(합치기는 멱등)."""
-    if name == 'written.json':                        # {파일: {줄 해시: [utc, 미리보기]}} — 파일 · 줄 모두 합집합, 겹치면 new
+    """Merges two state JSON values into one — new is the more recently written file. Each file has its own rule (merging is idempotent)."""
+    if name == 'written.json':                        # {file: {line hash: [utc, preview]}} — union of files and lines, new wins on overlap
         out = {}
         for reg in (old, new):
             for rel, lines in (reg or {}).items():
                 if isinstance(lines, dict):
                     out.setdefault(rel, {}).update(lines)
         return out
-    if name == 'ids.json':                            # {ID: 처음 본 utc} — 합집합, 더 이른 시각
+    if name == 'ids.json':                            # {ID: first-seen utc} — union, the earlier time
         out = dict(old or {})
         for k, v in (new or {}).items():
             out[k] = min(out[k], v) if isinstance(out.get(k), str) and isinstance(v, str) else v
         return out
-    if name == 'records_max.json':                    # 이 컴퓨터가 본 최대 번호 — 큰 쪽
+    if name == 'records_max.json':                    # highest number this computer saw — the larger one
         a, b = (old or {}), (new or {})
         return b if int(b.get('max', 0)) >= int(a.get('max', 0)) else a
-    if name == 'alerts.json':                         # findings 는 new 의 것(점검마다 다시 적힘), acked 는 합집합(겹치면 new)
+    if name == 'alerts.json':                         # findings from new (rewritten on every check), acked is the union (new wins on overlap)
         out = dict(old or {})
         out.update(new or {})
         acked = dict((old or {}).get('acked') or {})
         acked.update((new or {}).get('acked') or {})
         out['acked'] = acked
         return out
-    if name == 'ack_log.json':                        # 목록 — 이어 붙여 utc 순, 중복 제거, 최근 200
+    if name == 'ack_log.json':                        # list — concatenated in utc order, duplicates removed, latest 200
         seen, out = set(), []
         for e in sorted(list(old or []) + list(new or []), key=lambda e: str((e or {}).get('utc', ''))):
             k = json.dumps(e, sort_keys=True, ensure_ascii=False)
@@ -223,7 +229,7 @@ def _merge_state_json(name, new, old):
                 seen.add(k)
                 out.append(e)
         return out[-200:]
-    if isinstance(new, dict) and isinstance(old, dict):   # seen.json · fingerprints.json · 그 밖의 사전 — 빈 자리는 old, 겹치면 new
+    if isinstance(new, dict) and isinstance(old, dict):   # seen.json · fingerprints.json · other dicts — old fills gaps, new wins on overlap
         out = dict(old)
         out.update(new)
         return out
@@ -231,8 +237,8 @@ def _merge_state_json(name, new, old):
 
 
 def _merge_state_dir(src, dst):
-    """옛 상태 폴더 src 를 dst 에 합친 뒤 src 를 지웁니다 — 하위 폴더(snap · hook_seen)의 파일은 dst 에 없는 것만 옮기고(이름이 UTC · 컴퓨터 ·
-    해시라 같은 이름은 같은 내용), JSON 은 _merge_state_json, 그 밖의 파일은 없는 것만 옮깁니다. 중간에 실패하면 OSError 를 내고 src 를 남깁니다."""
+    """Merges the old state folder src into dst, then deletes src — files in subfolders (snap, hook_seen) move only when dst lacks them (names are UTC,
+    computer and hash, so equal names mean equal content), JSON files go through _merge_state_json, and other files move only when missing. On a failure midway it raises OSError and leaves src."""
     for name in os.listdir(src):
         s, d = os.path.join(src, name), os.path.join(dst, name)
         if os.path.isdir(s):
@@ -276,22 +282,22 @@ class Finding(object):
         return '%-5s %s %s%s' % (self.level, self.code, self.msg, extra)
 
 
-# ---------------------------------------------------------------- 본체
+# ---------------------------------------------------------------- main
 class Sync(object):
     def __init__(self, cfg):
         self.cfg = cfg
         self.root = os.path.abspath(cfg.root)
         self.t = cfg.raw.get('tracker') or {}
         self.s = cfg.raw.get('sync') or {}
-        self.pid = project_id(cfg.name, self.root)          # 루트 경로는 NFC 로 맞춰 해시 — 훅(NFC) · 셸(맥 NFD)이 같은 폴더
+        self.pid = project_id(cfg.name, self.root)          # root path hashed in NFC — the hook (NFC) and the shell (macOS NFD) share the folder
         self.state = os.path.join(state_home(), self.pid)
         self.me = computer_id()
         self._adopt_legacy_state()
 
     def _adopt_legacy_state(self):
-        """옛 정의(정규화 없음 · 0.11.3 까지)가 만든 상태 폴더를 거둬들입니다 — 맥에서 훅(NFC 경로)과 셸(NFD 경로)이 다른 폴더를 써서
-        `--ack` 가 훅에 닿지 않던 결함. 새 폴더가 없으면 옛 폴더의 이름만 바꾸고, 둘 다 있으면 옛 것을 새 것에 합친 뒤 지웁니다. 실패하면
-        옛 폴더를 그대로 두고 알리며 다음 Sync 가 다시 시도합니다(합치기는 멱등). 옛 폴더가 없으면 isdir 한두 번이 전부입니다."""
+        """Adopts state folders made under the old definition (no normalization, up to 0.11.3) — under it the hook (NFC path) and the shell (NFD path) on
+        macOS use different folders and `--ack` does not reach the hook. If the new folder does not exist, the old folder is renamed; if both exist, the old one
+        is merged into the new one and deleted. On failure the old folder stays, a note is printed, and the next Sync tries again (merging is idempotent). Without old folders this costs one or two isdir calls."""
         home = state_home()
         for old in legacy_project_ids(self.cfg.name, self.root):
             src = os.path.join(home, old)
@@ -303,9 +309,9 @@ class Sync(object):
                 else:
                     os.rename(src, self.state)
             except OSError as e:
-                sys.stderr.write('_sync: 옛 상태 폴더 %s 를 %s 로 옮기지 못했습니다(%s) — 다음에 다시 시도합니다\n' % (old, self.pid, e))
+                sys.stderr.write('_sync: could not move the old state folder %s to %s (%s) — will retry next time\n' % (old, self.pid, e))
 
-    # ---- 설정 값 -------------------------------------------------
+    # ---- settings -----------------------------------------------
     def opt(self, key, default=None):
         v = self.s.get(key)
         return default if v is None else v
@@ -318,10 +324,10 @@ class Sync(object):
     def local_snap_dir(self):
         return os.path.join(self.state, 'snap')
 
-    # ---- 파일 집합 -----------------------------------------------
+    # ---- file sets ----------------------------------------------
     def _path(self, rel):
-        """rel(루트 기준 · NFC)의 실제 경로. 그대로 없으면 NFD 이름으로, 그래도 없으면 그 폴더에서 NFC 로 같은 이름을 찾습니다 —
-        맥 미러에서 만든 NFD 이름의 파일이 윈도(NTFS 는 정규화에 민감)로 넘어와도 같은 파일로 다룹니다."""
+        """Real path of rel (relative to the root, NFC). If it does not exist as is, tries the NFD name, then looks in the folder for a name equal in NFC —
+        so a file with an NFD name made on a macOS mirror is still the same file when it reaches Windows (NTFS is normalization-sensitive)."""
         rel = rel.replace('\\', '/')
         p = os.path.join(self.root, *rel.split('/'))
         if os.path.exists(p):
@@ -355,7 +361,7 @@ class Sync(object):
         return out
 
     def records(self):
-        """[(번호, 상대경로)] — 완료기록 E*.md"""
+        """[(number, relative path)] — completion records E*.md"""
         d = os.path.join(self.root, self.cfg.records_dir)
         prefix = self.t.get('record_prefix', 'E')
         pat = re.compile(r'^%s(\d+)\.md$' % re.escape(prefix))
@@ -368,7 +374,7 @@ class Sync(object):
         return sorted(out)
 
     def shared_files(self):
-        """공용 파일 — 설정에서 유도. 추적 파일 · 인수인계 · 완료기록 · 원고 md · sync.shared_extra. 실재하는 파일만."""
+        """Shared files — derived from the settings: tracker files · handover · completion records · manuscript .md · sync.shared_extra. Existing files only."""
         out = []
         for k in ('index', 'pending', 'record_index', 'literature', 'proposals', 'archive', 'checkpoint'):
             r = self.tracker_rel(k)
@@ -416,7 +422,7 @@ class Sync(object):
     def read(self, rel):
         return _read_bytes(self._path(rel))
 
-    # ---- 상태 ---------------------------------------------------
+    # ---- state --------------------------------------------------
     def _load(self, name, default):
         p = os.path.join(self.state, name)
         if not os.path.isfile(p):
@@ -429,19 +435,19 @@ class Sync(object):
     def _save(self, name, obj):
         _atomic_write(os.path.join(self.state, name), json.dumps(obj, ensure_ascii=False, indent=0).encode('utf-8'))
 
-    # ---- 생성 스탬프 ---------------------------------------------
+    # ---- generation stamp ---------------------------------------
     def stamp_for_index(self, texts):
-        """목록의 스탬프 줄. texts — {원본 상대경로: 그 파일의 저장될 내용(str 또는 bytes)}. 결정적(시각 없음)."""
+        """Stamp line of the list. texts — {source relative path: content that file will have when saved (str or bytes)}. Deterministic (no time)."""
         parts = []
         for rel in sorted(texts):
             data = texts[rel]
             if isinstance(data, str):
                 data = data.encode('utf-8')
             parts.append('%s=%s' % (rel, norm_sha(data)[:16]))
-        return '<!-- 생성스탬프 ' + ' '.join(parts) + ' -->'
+        return STAMP_LINE % ' '.join(parts)
 
     def records_fingerprint(self, upto=None):
-        """(개수, 최대 번호, 해시16). upto — 그 번호까지만(S4 가 「스탬프 때 있던 기록이 그대로인가」를 볼 때)."""
+        """(count, highest number, hash16). upto — only up to that number (when S4 checks whether the records present at stamp time are unchanged)."""
         recs = [(n, r) for n, r in self.records() if upto is None or n <= upto]
         h = hashlib.sha256()
         for n, r in recs:
@@ -450,16 +456,16 @@ class Sync(object):
 
     def stamp_for_records(self):
         n, mx, hx = self.records_fingerprint()
-        return '<!-- 생성스탬프 %s/ n=%d max=%d sha=%s -->' % (self.cfg.records_dir.replace('\\', '/').rstrip('/'), n, mx, hx)
+        return STAMP_LINE % ('%s/ n=%d max=%d sha=%s' % (self.cfg.records_dir.replace('\\', '/').rstrip('/'), n, mx, hx))
 
     @staticmethod
     def parse_stamp(text):
         m = STAMP_RE.search(text)
         return m.group(1) if m else None
 
-    # ---- 점검 ---------------------------------------------------
+    # ---- checks -------------------------------------------------
     def check(self, scope='start', target=None):
-        """scope — 'start'(전부) · 'write'(싼 것 — S2 S3생성물 S5폴더 S7) · 'tools'(update_tools — S1 S2 S5)."""
+        """scope — 'start' (all) · 'write' (the cheap ones — S2, S3 generated files, S5 folder, S7) · 'tools' (update_tools — S1 S2 S5)."""
         F = []
         if scope in ('start', 'tools'):
             F += self.s1()
@@ -475,7 +481,26 @@ class Sync(object):
             F += self.s7()
         if scope == 'start':
             F += self.s8()
+        if scope != 'tools':                      # not before update_tools — that is where a mixed or old format gets migrated
+            F += self.s9(info=(scope == 'start'))
         return F
+
+    def s9(self, info=True):
+        """Format of the tracker anchors — mixed is an ERROR (Drive catching up, or a tool from an older plugin wrote here),
+        still Korean is INFO (not yet migrated; the writing tools of this version refuse it)."""
+        try:
+            state, per = project_format(self.cfg)
+        except OSError:
+            return []
+        where = '; '.join('%s: %s' % (r, '+'.join(v)) for r, v in sorted(per.items()))
+        if state == 'mixed':
+            return [Finding('ERROR', 'S9', 'S9:mixed:' + ','.join(sorted(r for r, v in per.items() if len(v) > 1 or v == ['ko'])),
+                            'The tracker files mix English and Korean anchors (%s) — Drive may not have caught up, or a tool from an older '
+                            'plugin version wrote here. Check Drive and update the plugin on every computer, then run update_tools.py --apply' % where)]
+        if state == 'ko' and info:
+            return [Finding('INFO', 'S9', 'S9:ko', 'The tracker files use the pre-0.14 Korean anchors — migrate with update_tools.py '
+                            '<project> (preview) and --apply after the user agrees')]
+        return []
 
     def latest_change(self):
         best = None
@@ -491,11 +516,11 @@ class Sync(object):
     def s1(self):
         best = self.latest_change()
         if not best:
-            return [Finding('WARN', 'S1', 'S1', '공용 파일이 하나도 없습니다 — 설정(tracker · manuscript.source_dir)을 확인하십시오')]
+            return [Finding('WARN', 'S1', 'S1', 'No shared files found — check the settings (tracker · manuscript.source_dir)')]
         days = (time.time() - best[0]) / 86400.0
         limit = float(self.opt('stale_days', 2))
         if days > limit:
-            return [Finding('WARN', 'S1', 'S1', '공용 파일의 최근 변경이 %.1f일 전(%s) — 미러가 낡았거나 작업 공백. 드라이브가 최신인지 확인하십시오'
+            return [Finding('WARN', 'S1', 'S1', 'The latest change to the shared files was %.1f days ago (%s) — a stale mirror or a break in work. Check that the drive is up to date'
                             % (days, best[1]))]
         return []
 
@@ -510,12 +535,12 @@ class Sync(object):
         F = []
         if gaps:
             F.append(Finding('ERROR', 'S2', 'S2:' + ','.join(str(g) for g in gaps[:20]),
-                             '완료기록 번호에 빈칸 %d개 — 따라잡는 중이거나 손상' % len(gaps),
+                             'Gaps in the completion record numbers: %d — still catching up, or damage' % len(gaps),
                              ['%s%d' % (prefix, g) for g in gaps]))
         seen_max = self.max_record_seen()
-        if seen_max and max(have) < seen_max:        # 빈칸 없이 끝만 잘린 경우 — 다음 번호가 겹치는 ID 재사용의 길
+        if seen_max and max(have) < seen_max:        # no gap, but the end is cut off — the next number would reuse an existing ID
             F.append(Finding('ERROR', 'S2', 'S2:max:%d<%d' % (max(have), seen_max),
-                             '완료기록 최대 번호(%s%d)가 이 컴퓨터가 본 %s%d 보다 뒤입니다 — 최신 기록이 덜 내려왔거나 지워짐'
+                             'The highest completion record (%s%d) is behind %s%d, which this computer has seen — the latest records have not arrived yet, or were deleted'
                              % (prefix, max(have), prefix, seen_max)))
         return F
 
@@ -530,13 +555,13 @@ class Sync(object):
         return self._ids_in([self.tracker_rel(k) for k in ('pending', 'archive', 'proposals', 'literature')])
 
     def known_ids(self):
-        """지금 파일들(대기 · 이관 · 제안 · 문헌)의 행 ID 와 이 컴퓨터가 본 ID 등록의 합 — 새 번호 배정(new_pending.py)과 손 등록 판정의 기준."""
+        """Row IDs in the current files (pending · archive · proposals · literature) plus the IDs this computer has registered as seen — the basis for assigning new numbers (new_pending.py) and for detecting hand-added IDs."""
         return self._id_universe() | set(self._load('ids.json', {}))
 
     def hand_added_ids(self, rel, text):
-        """text(쓰려는 글)의 표 행 가운데 **도구가 번호를 정하는 범위인데 어디에도 없던 새 ID** — 손 등록. 훅이 이것으로 거부합니다.
-        범위는 `_config.allocation_scope`(파일 · 글자)이고 그 밖은 빈 목록입니다. 가지 번호(`D35-1`)는 줄기(`D35`)가 있으면 새 ID 가
-        아닙니다. 지웠던 행을 되살리거나 행을 옮기는 것은 이미 아는 ID 라 걸리지 않습니다."""
+        """Among the table rows of text (what is about to be written), **new IDs in a tool-assigned scope that exist nowhere yet** — hand-added rows. The hook refuses on these.
+        The scope is `_config.allocation_scope` (file and letter); outside it the result is an empty list. A branch number (`D35-1`) is not new when its stem (`D35`)
+        exists. Restoring a deleted row or moving a row uses a known ID and is not caught."""
         rel = nfc(rel.replace('\\', '/'))
         letters = {l for l, r in allocation_scope(self.cfg).items() if r == rel}
         ids = set(ROW_ID_RE.findall(text or '')) if letters else set()
@@ -558,7 +583,7 @@ class Sync(object):
         recs = dict((n, r) for n, r in self.records())
         prefix = self.t.get('record_prefix', 'E')
         mx = max(recs) if recs else 0
-        # 생성물 → 원본: 색인 §2 의 E 행
+        # generated → source: E rows of record index §2
         ri = self.tracker_rel('record_index')
         if ri and self._exists(ri) and recs:
             text = self.read(ri).decode('utf-8', errors='replace')
@@ -566,10 +591,10 @@ class Sync(object):
             missing = sorted(listed - set(recs))
             if missing:
                 F.append(Finding('ERROR', 'S3', 'S3:index:' + ','.join(str(m) for m in missing[:20]),
-                                 '완료 색인이 가리키는 기록 파일 %d개가 없습니다 — 미러가 따라잡는 중' % len(missing),
+                                 'Record files that the record index points to are missing: %d — the mirror is catching up' % len(missing),
                                  ['%s%d' % (prefix, m) for m in missing]))
-        # 생성물 → 원본: 목록의 미결 ID — 생성 블록의 ID 자리(표의 ID 셀 · 포커스 항목 머리)만 셉니다. 포커스의 비고 사본 같은 본문에는
-        # 다른 문서의 라벨(반영계획의 D4 · 다른 프로젝트의 A40)이 섞여 있어 미결 ID 로 읽으면 오탐입니다.
+        # generated → source: open-item IDs of the list — counts only the ID positions of the generated blocks (table ID cells, focus item headings). Free text
+        # such as the notes copied into the focus contains labels from other documents (decision numbers of a plan, IDs of another project); reading those as open-item IDs gives false alarms.
         idx = self.tracker_rel('index')
         if idx and self._exists(idx):
             text = self.read(idx).decode('utf-8', errors='replace')
@@ -579,12 +604,12 @@ class Sync(object):
                 missing = sorted(refs - self._id_universe(), key=id_key)
                 if missing:
                     F.append(Finding('ERROR', 'S3', 'S3:list:' + ','.join(missing[:20]),
-                                     '목록이 가리키는 미결 항목 %d개가 대기 · 이관 · 제안에 없습니다' % len(missing), missing))
+                                     'Open items that the list points to but that are in none of the pending, archive and proposals files: %d' % len(missing), missing))
             if unknown:
                 F.append(Finding('WARN', 'S3', 'S3:list:format:' + ','.join(unknown),
-                                 '%s 의 생성 블록(%s)에서 ID 자리를 읽지 못해 미결 ID 대조를 건너뜁니다 — 옛 판이거나 손으로 고친 것. '
-                                 '정리 도구 `--apply` 로 다시 만드십시오' % (idx, ' · '.join(unknown))))
-        # 손편집 파일 → 최대 E 보다 큰 참조 (경로 안 · `../` 가 앞에 있는 것은 뺌)
+                                 '%s: could not read the ID positions in the generated blocks (%s), so the open-item ID comparison is skipped — an old version or a hand edit. '
+                                 'Regenerate them with the tidy tool `--apply`' % (idx, ' · '.join(unknown))))
+        # hand-edited files → references above the highest E (skipping those inside paths or preceded by `../`)
         if hand and recs:
             for key in ('pending', 'checkpoint'):
                 r = self.tracker_rel(key)
@@ -600,17 +625,17 @@ class Sync(object):
                         continue
                     big.add(n)
                 if big:
-                    F.append(Finding('WARN', 'S3', 'S3:%s' % r, '%s 가 아직 없는 기록을 가리킵니다(최대 %s%d) — 기록 파일이 덜 내려왔을 수 있음'
+                    F.append(Finding('WARN', 'S3', 'S3:%s' % r, '%s points to records that do not exist yet (highest %s%d) — record files may not have arrived yet'
                                      % (r, prefix, mx), ['%s%d' % (prefix, n) for n in sorted(big)]))
         return F
 
-    # ---- S4 — 스탬프가 다를 때 「어느 쪽이 나중인가」 -------------------
+    # ---- S4 — when the stamp differs, "which side is later" -----------
     S4_ORDER = ('forward', 'revert', 'suspect', 'regress')
     S4_LEVEL = {'forward': 'INFO', 'revert': 'WARN', 'suspect': 'WARN', 'regress': 'ERROR'}
 
     def _history_keys(self, rel, wanted):
-        """rel 의 스냅샷(로컬 + 드라이브)에서 wanted(정규화 해시16 집합)에 든 판이 **처음 보인** 순서 키 — {해시16: 키}(그 판이 쓰인 시각).
-        먼저 이름의 해시8 로 맞춰 보고(줄끝이 LF 인 판은 정규화 해시와 같음), 못 찾은 것만 새것부터 내용을 읽어 맞춥니다."""
+        """Order keys of the snapshots of rel (local + drive) at which the versions in wanted (set of normalized hash16) **first appear** — {hash16: key} (the time that version was written).
+        Matches by the hash8 in the name first (a version with LF line endings has the same normalized hash), then reads the content, newest first, only for those not found."""
         snaps = self.snapshots_of(rel)
         found = {}
         for s in snaps:
@@ -631,10 +656,10 @@ class Sync(object):
         return found
 
     def _stamp_direction(self, gen_rel, src_rel, h_stamp, h_cur):
-        """생성물 gen_rel 이 원본 src_rel 의 h_stamp 판에서 만들어졌는데 지금 원본은 h_cur 판 — 어느 쪽이 나중인가.
-        순서는 이 컴퓨터의 스냅샷 기록으로, 그것이 모자라면 원본 · 생성물의 수정 시각(동기화 서비스가 보존)으로 가립니다.
-        돌려주는 것 — (종류, 설명). forward 원본이 뒤에 바뀜(재생성만 하면 됨) · regress 원본이 옛 판으로 돌아갔고 수정 시각도 앞(덮어쓰기)
-        · revert 옛 판 내용인데 수정 시각은 뒤(되돌렸거나 덮어쓰기) · suspect 스탬프 뒤 편집이 없는데 내용이 다름(옛 판이 덮었거나 생성물만 먼저 옴)."""
+        """The generated file gen_rel was made from version h_stamp of the source src_rel, but the source is now version h_cur — which side is later?
+        The order comes from this computer's snapshot record; if that is not enough, from the mtimes of the source and the generated file (kept by the sync service).
+        Returns (kind, description). forward — the source changed later (just regenerate) · regress — the source went back to an old version and its mtime is earlier too (overwrite)
+        · revert — old content but a later mtime (reverted, or overwritten) · suspect — content differs although nothing was edited after the stamp (an old version overwrote it, or only the generated file arrived first)."""
         hist = self._history_keys(src_rel, {h_stamp, h_cur})
         try:
             src_newer = os.path.getmtime(self._path(src_rel)) > os.path.getmtime(self._path(gen_rel))
@@ -649,12 +674,12 @@ class Sync(object):
         ts, tc = hist.get(h_stamp), hist.get(h_cur)
         if ts and tc:
             if tc > ts:
-                return 'forward', '%s 의 %s 편집' % (src_rel, when(tc))
+                return 'forward', '%s edited %s' % (src_rel, when(tc))
             kind = 'revert' if src_newer else 'regress'
-            return kind, '%s 가 이 컴퓨터가 %s 에 본 옛 판으로 돌아갔습니다(생성물은 %s 판에서)' % (src_rel, when(tc), when(ts))
+            return kind, '%s went back to the old version this computer saw at %s (the generated file is from the %s version)' % (src_rel, when(tc), when(ts))
         if src_newer:
-            return 'forward', '%s 의 뒤 편집%s' % (src_rel, '' if tc else '(이 컴퓨터가 모르는 판)')
-        return 'suspect', '%s 는 생성 뒤 바뀐 적이 없는데 내용이 다릅니다%s' % (src_rel, '' if ts else ' · 생성물의 판을 이 컴퓨터가 모름')
+            return 'forward', '%s edited later%s' % (src_rel, '' if tc else ' (a version this computer does not know)')
+        return 'suspect', '%s has not changed since generation but its content differs%s' % (src_rel, '' if ts else ' · this computer does not know the version the generated file came from')
 
     def s4(self):
         F = []
@@ -663,7 +688,7 @@ class Sync(object):
             text = self.read(idx).decode('utf-8', errors='replace')
             st = self.parse_stamp(text)
             if st is None:
-                F.append(Finding('INFO', 'S4', 'S4:index:none', '%s 에 생성 스탬프가 없습니다(옛 생성물) — 정리 도구를 한 번 돌리면 생깁니다' % idx))
+                F.append(Finding('INFO', 'S4', 'S4:index:none', '%s has no generation stamp (an old generated file) — running the tidy tool once adds it' % idx))
             else:
                 stamped = dict(re.findall(r'(\S+)=([0-9a-f]{16})', st))
                 kinds, notes = [], []
@@ -675,8 +700,8 @@ class Sync(object):
                     old = stamped.get(r)
                     if old == cur:
                         continue
-                    if old is None:                       # 생성 때 없던 원본 파일 — 다시 만들면 됩니다
-                        kinds.append('forward'); notes.append('%s 가 생성 뒤 생김' % r)
+                    if old is None:                       # a source file that did not exist at generation — just regenerate
+                        kinds.append('forward'); notes.append('%s appeared after generation' % r)
                         continue
                     kind, note = self._stamp_direction(idx, r, old, cur)
                     kinds.append(kind); notes.append(note)
@@ -684,13 +709,13 @@ class Sync(object):
                     worst = max(kinds, key=self.S4_ORDER.index)
                     detail = ' · '.join(notes)
                     if worst == 'forward':
-                        msg = '%s 가 원본보다 낡음(%s) — 세션 끝에 `tidy_tracker.py --apply` 로 다시 만듭니다. 동기화 문제 아님' % (idx, detail)
+                        msg = '%s is older than its sources (%s) — regenerate it with `tidy_tracker.py --apply` at the end of the session. Not a sync problem' % (idx, detail)
                     elif worst == 'revert':
-                        msg = '%s — 되돌린 것이면 정상, 아니면 덮어쓰기 의심. 정리 도구로 다시 만들기 전에 확인하십시오' % detail
+                        msg = '%s — fine if it was reverted on purpose, otherwise a suspected overwrite. Check before regenerating with the tidy tool' % detail
                     elif worst == 'suspect':
-                        msg = '%s 가 지금의 원본이 아닌 판에서 만들어짐 — %s. 옛 판이 새 판을 덮었거나 생성물만 먼저 내려옴. 드라이브 상태를 확인하십시오' % (idx, detail)
+                        msg = '%s was made from a version other than the current source — %s. An old version overwrote a new one, or only the generated file arrived first. Check the drive' % (idx, detail)
                     else:
-                        msg = '%s — 덮어쓰기. `--restore <파일>` 로 되돌리거나 확인 뒤 `--ack`' % detail
+                        msg = '%s — overwrite. Revert with `--restore <file>`, or `--ack` after checking' % detail
                     F.append(Finding(self.S4_LEVEL[worst], 'S4', 'S4:index:' + {'forward': 'stale'}.get(worst, worst), msg))
         ri = self.tracker_rel('record_index')
         recs = self.records()
@@ -699,26 +724,26 @@ class Sync(object):
             st = self.parse_stamp(text)
             prefix = self.t.get('record_prefix', 'E')
             if st is None:
-                F.append(Finding('INFO', 'S4', 'S4:records:none', '%s 에 생성 스탬프가 없습니다(옛 생성물) — 색인 도구를 한 번 돌리면 생깁니다' % ri))
-            elif self.stamp_for_records() != '<!-- 생성스탬프 %s -->' % st:
+                F.append(Finding('INFO', 'S4', 'S4:records:none', '%s has no generation stamp (an old generated file) — running the index tool once adds it' % ri))
+            elif self.parse_stamp(self.stamp_for_records()) != st:          # compare contents — the stamp word may be either spelling
                 n, mx, hx = self.records_fingerprint()
                 m = re.search(r'n=(\d+) max=(\d+) sha=([0-9a-f]{16})', st)
                 if not m:
-                    F.append(Finding('WARN', 'S4', 'S4:records', '%s 의 스탬프 형식을 읽을 수 없습니다 — 색인 도구로 다시 만드십시오' % ri))
+                    F.append(Finding('WARN', 'S4', 'S4:records', 'Cannot read the stamp format of %s — regenerate it with the index tool' % ri))
                 else:
                     n0, mx0, hx0 = int(m.group(1)), int(m.group(2)), m.group(3)
                     if n < n0 or mx < mx0:
                         F.append(Finding('WARN', 'S4', 'S4:records:shrunk',
-                                         '완료기록이 색인을 만들 때(%d건 · 최대 %s%d)보다 줄었습니다(%d건 · 최대 %s%d) — 덜 내려왔거나 지워짐'
+                                         'Completion records shrank from %d (highest %s%d) when the index was made to %d (highest %s%d) — not arrived yet, or deleted'
                                          % (n0, prefix, mx0, n, prefix, mx)))
                     elif self.records_fingerprint(upto=mx0)[2] == hx0:
                         new = ['%s%d' % (prefix, k) for k, _ in recs if k > mx0]
                         F.append(Finding('INFO', 'S4', 'S4:records:stale',
-                                         '%s 가 완료기록 폴더보다 낡음(새 기록 %s) — `index_records.py` 로 다시 만듭니다. 동기화 문제 아님'
+                                         '%s is older than the records folder (new records %s) — regenerate it with `index_records.py`. Not a sync problem'
                                          % (ri, ' '.join(new[:8]) + (' …' if len(new) > 8 else ''))))
                     else:
                         F.append(Finding('WARN', 'S4', 'S4:records:changed',
-                                         '색인을 만들 때 있던 기록(%s%d 까지) 가운데 내용이 바뀐 것이 있습니다 — 확정 기록은 고치지 않는 규칙 · 덮어쓰기 확인'
+                                         'Some records that existed when the index was made (up to %s%d) have changed — confirmed records are never edited; check for an overwrite'
                                          % (prefix, mx0)))
         return F
 
@@ -751,13 +776,13 @@ class Sync(object):
                     same = ''
                     if os.path.isfile(base_path):
                         try:
-                            same = '(바이트 동일)' if _read_bytes(base_path) == _read_bytes(os.path.join(dp, f)) else '(다름)'
+                            same = '(identical bytes)' if _read_bytes(base_path) == _read_bytes(os.path.join(dp, f)) else '(differs)'
                         except OSError:
                             same = ''
                     hits.append((rel + same).strip())
                     break
         if hits:
-            return [Finding('WARN', 'S5', 'S5:' + ';'.join(sorted(hits))[:200], '동기화 충돌 사본 %d개 — 어느 쪽이 맞는지 확인한 뒤 지우십시오' % len(hits), sorted(hits))]
+            return [Finding('WARN', 'S5', 'S5:' + ';'.join(sorted(hits))[:200], 'Sync conflict copies: %d — check which side is right, then delete them' % len(hits), sorted(hits))]
         return []
 
     def s6(self, verbose=False):
@@ -775,14 +800,15 @@ class Sync(object):
         for r, lines in sorted(reg.items()):
             if r in skip or not lines or (len(lines) < 5 and not verbose):
                 continue
-            lost = [h for h in lines if h not in union]
+            # entries registered before anchors were left out are skipped by their preview — the format migration rewrites those lines
+            lost = [h for h in lines if h not in union and not (isinstance(lines[h], list) and is_anchor_line(lines[h][1]))]
             surv = 100.0 * (len(lines) - len(lost)) / len(lines)
-            # 평소(시작 점검)는 기준 아래만 경고하고, --damage(verbose)는 사라진 줄이 하나라도 있으면 전부 보입니다
+            # normally (start check) warn only below the threshold; --damage (verbose) shows everything once any line is gone
             if (surv < pct) or (verbose and lost):
                 previews = [lines[h][1] if isinstance(lines[h], list) else '' for h in lost]
-                gone = '' if self._exists(r) else ' · 파일 자체가 없음'
+                gone = '' if self._exists(r) else ' · the file itself is missing'
                 F.append(Finding('WARN', 'S6', 'S6:%s' % r,
-                                 '%s — 이 컴퓨터가 쓴 줄 %d개 중 %d개가 어디에도 없습니다(생존 %.0f %%)%s' % (r, len(lines), len(lost), surv, gone),
+                                 '%s — of %d lines this computer wrote, %d exist nowhere (survival %.0f %%)%s' % (r, len(lines), len(lost), surv, gone),
                                  previews if verbose else previews[:3]))
         return F
 
@@ -794,7 +820,7 @@ class Sync(object):
         lost = sorted((i for i in seen if i not in cur), key=id_key)
         if lost:
             return [Finding('ERROR', 'S7', 'S7:' + ','.join(lost[:30]),
-                            '이 컴퓨터가 본 항목 ID %d개가 대기 · 이관 · 제안 · 문헌 어디에도 없습니다 — 덮어쓰기 의심' % len(lost), lost)]
+                            'Item IDs this computer saw that are in none of the pending, archive, proposals and literature files: %d — suspected overwrite' % len(lost), lost)]
         return []
 
     def s8(self):
@@ -811,10 +837,10 @@ class Sync(object):
         low = self.root.replace('\\', '/').lower()
         drive_like = 'googledrive' in low or 'cloudstorage' in low or 'google drive' in low or re.match(r'^[g-z]:/', low) is not None
         if running:
-            return [Finding('INFO', 'S8', 'S8', '구글드라이브 프로세스 있음')]
-        return [Finding('WARN' if drive_like else 'INFO', 'S8', 'S8', '구글드라이브 프로세스가 보이지 않습니다 — 동기화가 멈춰 있을 수 있음')]
+            return [Finding('INFO', 'S8', 'S8', 'Google Drive process running')]
+        return [Finding('WARN' if drive_like else 'INFO', 'S8', 'S8', 'No Google Drive process found — sync may be stopped')]
 
-    # ---- 스냅샷 ---------------------------------------------------
+    # ---- snapshots ----------------------------------------------
     @staticmethod
     def _snap_name(rel, comp, digest, when=None):
         stem, ext = os.path.splitext(nfc(rel.replace('\\', '/')))
@@ -822,7 +848,7 @@ class Sync(object):
 
     @staticmethod
     def _snap_key(s):
-        """이름의 UTC(초)가 같으면 파일의 수정 시각으로 순서를 가립니다 — 같은 초에 두 판이 생길 수 있습니다."""
+        """When the UTC (seconds) in the names is equal, the files' mtimes decide the order — two versions can appear within the same second."""
         try:
             return (s[0], os.stat(s[5]).st_mtime_ns)
         except OSError:
@@ -830,19 +856,19 @@ class Sync(object):
 
     @classmethod
     def _list_snaps(cls, folder):
-        """[(utc, 컴퓨터, 경로 stem, 해시8, 확장자, 파일경로)] — 오래된 것부터"""
+        """[(utc, computer, path stem, hash8, extension, file path)] — oldest first"""
         out = []
         if not os.path.isdir(folder):
             return out
         for f in os.listdir(folder):
             m = SNAP_RE.match(f)
-            if m:                                    # 컴퓨터 · 경로 stem 은 NFC 로 — 맥 미러의 NFD 이름과 섞여도 같은 파일로 묶이게
+            if m:                                    # computer and path stem in NFC — so NFD names from a macOS mirror group with the same file
                 out.append((m.group(1), nfc(m.group(2)), nfc(m.group(3)), m.group(4), m.group(5) or '', os.path.join(folder, f)))
         return sorted(out, key=cls._snap_key)
 
     def snapshot(self, rel, drive=False, flush=True):
-        """현재 판을 로컬(항상)과 드라이브(drive=True)에 남깁니다. 같은 해시가 이미 있으면 만들지 않습니다. 만든 경로 목록.
-        지금 본 판의 해시를 「이 컴퓨터가 마지막으로 본 판」(seen.json)으로 적습니다 — 쓰기 뒤 차이 계산의 기준입니다."""
+        """Keeps the current version locally (always) and on the drive (drive=True). Not made again if the same hash exists. Returns the paths made.
+        Records the hash of the version just seen as "the version this computer saw last" (seen.json) — the baseline for the post-write difference."""
         rel = nfc(rel.replace('\\', '/'))
         try:
             data = self.read(rel)
@@ -874,7 +900,7 @@ class Sync(object):
         return sorted(out, key=self._snap_key)
 
     def latest_snapshot_bytes(self, rel, exclude_digest=None):
-        """시각상 마지막 스냅샷 — 컴퓨터를 가리지 않으므로 **쓰기 전 판의 기준으로 쓰지 않습니다**(다른 컴퓨터의 옛 판이 더 늦게 찍혀 있을 수 있음)."""
+        """Latest snapshot by time — it does not distinguish computers, so **do not use it as the pre-write baseline** (an old version from another computer may have a later timestamp)."""
         for s in reversed(self.snapshots_of(rel)):
             if exclude_digest and s[3] == exclude_digest[:8]:
                 continue
@@ -884,7 +910,7 @@ class Sync(object):
                 continue
         return None
 
-    # ---- 이 컴퓨터가 마지막으로 본 판 --------------------------------
+    # ---- the version this computer saw last ---------------------
     def _seen(self):
         if getattr(self, '_seen_cache', None) is None:
             self._seen_cache = self._load('seen.json', {})
@@ -905,7 +931,7 @@ class Sync(object):
             self._seen_dirty = False
 
     def _snapshot_bytes_by_digest(self, rel, digest):
-        """그 해시의 스냅샷 내용 — 어느 컴퓨터가 만든 것이든 내용이 같으므로 이름의 해시8 로 찾고 전체 해시로 확인합니다."""
+        """Content of the snapshot with that hash — the content is the same whichever computer made it, so it is found by the hash8 in the name and confirmed by the full hash."""
         for s in reversed(self.snapshots_of(rel)):
             if s[3] != digest[:8]:
                 continue
@@ -918,16 +944,16 @@ class Sync(object):
         return None
 
     def _pre_bytes(self, rel, post_digest):
-        """쓰기 직후 「쓰기 전 판」 — ① 이 컴퓨터가 마지막으로 본 판(before_write · 세션 경계 · 직전 after_write 가 적음)의 스냅샷,
-        ② 그것을 모르면 **이 컴퓨터가 만든** 스냅샷 가운데 가장 최근. 다른 컴퓨터의 스냅샷을 시각만 보고 쓰지 않습니다 —
-        맥의 옛 판이 더 늦게 찍혀 있으면 지운 줄이 등록에 남아 S6 가 오탐합니다. 모르면 None(처음 쓰는 파일)."""
+        """The "pre-write version" right after a write — ① the snapshot of the version this computer saw last (recorded by before_write, session boundaries and the previous after_write);
+        ② if that is unknown, the most recent snapshot **made by this computer**. Another computer's snapshot is never chosen by time alone —
+        if an old version from another computer has a later timestamp, deleted lines stay registered and S6 raises false alarms. None if unknown (a file written for the first time)."""
         seen = self._seen().get(rel)
         if seen and seen != post_digest:
             data = self._snapshot_bytes_by_digest(rel, seen)
             if data is not None:
                 return data
-        # 직전 판을 모르거나, 쓰기 전 훅이 이미 바뀐 내용을 본 경우(seen == 지금 판) — 이 컴퓨터의 스냅샷 가운데 지금 판이 아닌 가장 최근.
-        # 이미 등록된 줄을 다시 견줘도 결과는 같습니다(지운 줄은 빠져 있고 넣은 줄은 이미 있음).
+        # The previous version is unknown, or the pre-write hook already saw the changed content (seen == current) — this computer's latest snapshot that is not the current version.
+        # Comparing lines that are already registered again gives the same result (deleted lines are gone and added lines are already there).
         for s in reversed(self.snapshots_of(rel)):
             if s[1] == nfc(self.me) and s[3] != post_digest[:8]:
                 try:
@@ -952,9 +978,9 @@ class Sync(object):
             return False
 
     def prune(self):
-        """스냅샷 보존 정리 — 파일(경로 stem)마다 최근 `snapshot_min` 개는 늘 남기고, 그 밖에서
-        ① 자기 컴퓨터 것은 `snapshot_days`(로컬은 2배) 지났거나 개수가 `snapshot_max`(로컬 `snapshot_max_local`)를 넘는 것을 오래된 순으로,
-        ② 다른 컴퓨터 것은 `snapshot_days_others` 지난 것을 지웁니다. 미확인 ERROR 가 있으면 지우지 않습니다. 세션 시작 · 끝에 돕니다."""
+        """Snapshot retention — per file (path stem) the latest `snapshot_min` are always kept; of the rest,
+        ① this computer's snapshots older than `snapshot_days` (twice that locally) or beyond `snapshot_max` (local `snapshot_max_local`) are deleted oldest first,
+        ② other computers' snapshots older than `snapshot_days_others` are deleted. Nothing is deleted while an unconfirmed ERROR is open. Runs at session start and end."""
         if self.unacked():
             return 0
         keep = int(self.opt('snapshot_min', 10))
@@ -969,9 +995,9 @@ class Sync(object):
                 by_stem.setdefault(s[2], []).append(s)
             for stem, lst in by_stem.items():
                 lst.sort(key=self._snap_key)
-                old = lst[:-keep] if len(lst) > keep else []          # 최근 keep 개는 손대지 않음
+                old = lst[:-keep] if len(lst) > keep else []          # the latest keep are left untouched
                 over = max(0, sum(1 for s in lst if s[1] == self.me) - cap)
-                for s in old:                                          # 오래된 것부터
+                for s in old:                                          # oldest first
                     try:
                         age = now - parse_utc(s[0])
                     except ValueError:
@@ -995,11 +1021,11 @@ class Sync(object):
         return removed
 
     def restore(self, rel, at=None, digest=None):
-        """스냅샷으로 되돌립니다. at — 'YYYY-MM-DD HH:MM'(지역 시각) 이하의 가장 최근, digest — 해시 앞 8자리. 되돌리기 전 현재 판도 남깁니다."""
+        """Reverts to a snapshot. at — the latest at or before 'YYYY-MM-DD HH:MM' (local time); digest — first 8 characters of the hash. The current version is kept before reverting."""
         rel = nfc(rel.replace('\\', '/'))
         snaps = self.snapshots_of(rel)
         if not snaps:
-            raise SystemExit('스냅샷이 없습니다: %s' % rel)
+            raise SystemExit('No snapshots: %s' % rel)
         pick = None
         if digest:
             for s in snaps:
@@ -1017,14 +1043,14 @@ class Sync(object):
         else:
             pick = snaps[-1]
         if pick is None:
-            raise SystemExit('조건에 맞는 스냅샷이 없습니다: %s (%d개 있음)' % (rel, len(snaps)))
+            raise SystemExit('No snapshot matches: %s (%d exist)' % (rel, len(snaps)))
         self.snapshot(rel, drive=True)
         data = _read_bytes(pick[5])
         _atomic_write(self._path(rel), data)
         self.after_write(rel)
         return pick
 
-    # ---- 지문 · 쓴 줄 · ID 등록 -----------------------------------
+    # ---- fingerprints · written lines · ID registry -------------
     def _fingerprint(self, rel):
         st = os.stat(self._path(rel))
         return [st.st_mtime_ns, st.st_size]
@@ -1052,12 +1078,12 @@ class Sync(object):
         return changed
 
     def before_write(self, rel):
-        """쓰기 직전 — 지금 판을 로컬에 남겨 뒤의 차이 계산에 씁니다."""
+        """Right before a write — keeps the current version locally for the later difference."""
         if self.is_shared(rel):
             self.snapshot(rel)
 
     def after_write(self, rel):
-        """쓰기 직후 — 로컬 스냅샷 · 지문 · 「이 컴퓨터가 쓴 줄」 갱신(지운 줄은 등록에서 빼고 넣은 줄은 더함)."""
+        """Right after a write — local snapshot · fingerprint · update of "lines this computer wrote" (deleted lines leave the registry, added lines join it)."""
         rel = nfc(rel.replace('\\', '/'))
         if not self.is_shared(rel):
             return
@@ -1065,8 +1091,8 @@ class Sync(object):
             post = self.read(rel)
         except OSError:
             return
-        pre = self._pre_bytes(rel, sha(post))      # 이 컴퓨터가 쓰기 직전에 본 판 — 시각상 마지막 스냅샷이 아님
-        self.snapshot(rel)                          # 지금 판을 남기고 「마지막으로 본 판」을 지금 판으로
+        pre = self._pre_bytes(rel, sha(post))      # the version this computer saw right before writing — not the latest snapshot by time
+        self.snapshot(rel)                          # keep the current version and make it "the version seen last"
         if rel not in (self.generated_files() | self.rewrite_ok()):
             reg = self._load('written.json', {})
             mine = reg.get(rel, {})
@@ -1090,14 +1116,14 @@ class Sync(object):
         self._save('fingerprints.json', fp)
 
     def after_bash(self):
-        """셸 도구(Bash · PowerShell) 뒤 — 지문이 바뀐 공용 파일만 after_write. 명령을 해석하지 않습니다."""
+        """After shell tools (Bash · PowerShell) — after_write only for the shared files whose fingerprint changed. The command is not parsed."""
         changed = self.changed_since_fingerprints()
         for r in changed:
             self.after_write(r)
         return changed
 
     def table_report(self, rels):
-        """쓰기 뒤 — 추적 파일(목록 · 대기 · 이관 · 제안 · 문헌)에 남은 표 결함을 [(rel, 설명)] 로. 훅이 그 턴에 알리는 데 씁니다."""
+        """After a write — table defects left in tracker files (list · pending · archive · proposals · literature) as [(rel, description)]. The hook uses it to report in that turn."""
         tracked = {self.tracker_rel(k) for k in ('index', 'pending', 'archive', 'proposals', 'literature')}
         out = []
         for rel in rels:
@@ -1118,17 +1144,17 @@ class Sync(object):
         return int(self._load('records_max.json', {}).get('max', 0))
 
     def remember_records(self):
-        """이 컴퓨터가 본 최대 번호 — 늘어나기만 합니다(줄어드는 것은 S2 가 잡음)."""
+        """Highest number this computer saw — it only grows (S2 catches it shrinking)."""
         recs = self.records()
         if recs and max(n for n, _ in recs) >= self.max_record_seen():
             self._save('records_max.json', {'max': max(n for n, _ in recs), 'utc': utc_stamp()})
 
     def remember_records_reset(self):
-        """사용자 확인 뒤 — 지금 폴더의 최대 번호를 그대로 받아들입니다."""
+        """After the user's confirmation — accepts the folder's current highest number as is."""
         recs = self.records()
         self._save('records_max.json', {'max': max(n for n, _ in recs) if recs else 0, 'utc': utc_stamp()})
 
-    # ---- 경고 상태 · 확인 -----------------------------------------
+    # ---- alert state · confirmation ------------------------------
     def _alerts(self):
         return self._load('alerts.json', {'findings': [], 'acked': {}})
 
@@ -1139,8 +1165,15 @@ class Sync(object):
         a['utc'] = utc_stamp()
         self._save('alerts.json', a)
 
+    def drop_alerts(self, code):
+        """Removes the recorded findings of one check — only for the tool that has just removed that condition (the format migration and S9).
+        Every other recorded ERROR stays; the next check records the condition again if it is still there."""
+        a = self._alerts()
+        a['findings'] = [d for d in a.get('findings', []) if d.get('code') != code]
+        self._save('alerts.json', a)
+
     def ack_of(self, key, alerts=None):
-        """key 의 유효한 확인 기록({'utc', 'text'}) — `ack_hours` 안이면 그 기록, 아니면 None. 확인이 유효한지는 여기 한 곳에서 정합니다."""
+        """Valid confirmation record of key ({'utc', 'text'}) — the record if it is within `ack_hours`, otherwise None. Whether a confirmation is valid is decided here only."""
         a = alerts if alerts is not None else self._alerts()
         ack = a.get('acked', {}).get(key)
         if not ack:
@@ -1153,14 +1186,14 @@ class Sync(object):
         return None
 
     def unacked(self):
-        """확인되지 않은 ERROR 목록(Finding)."""
+        """List of unconfirmed ERRORs (Finding)."""
         a = self._alerts()
         return [Finding.from_dict(d) for d in a.get('findings', []) if self.ack_of(d['key'], a) is None]
 
     def blocking(self, target=None):
-        """쓰기를 막을 ERROR — 기록된 것 가운데 미확인, 없으면 싼 검사(write)를 새로 해 기록하고 그 가운데 미확인.
-        확인은 key(검사 코드 + 대상 번호 · ID) 단위로 `ack_hours` 동안 유효합니다 — 같은 조건이 생성물 · 폴더에 그대로 남아 있어도 다시 막지
-        않고(남은 조건을 지울 정리 도구까지 막으면 교착), 조건이 달라지면(key 가 다르면) 막습니다. 가드 · 일괄 도구 · 세션 끝이 이것을 씁니다."""
+        """ERRORs that block writes — the unconfirmed ones among those recorded; if there are none, runs the cheap checks (write) afresh, records them and returns the unconfirmed ones.
+        A confirmation is valid per key (check code + target number or ID) for `ack_hours` — the same condition left in generated files or folders does not block again
+        (blocking the tidy tool that would clear it would deadlock), while a different condition (a different key) blocks. The guard, batch tools and session end use this."""
         open_ = self.unacked()
         if open_:
             return open_
@@ -1171,8 +1204,8 @@ class Sync(object):
         return self.unacked()
 
     def ack(self, text):
-        """사용자 확인을 기록합니다 — 지금 열린 ERROR 전부. 사라진 ID · 줄은 「정당한 삭제」로 받아들여 등록에서 뺍니다(_rebaseline).
-        ERROR 를 닫는 길은 이것뿐이라 사용자 문구 없이 돌리지 않습니다. WARN 만 받아들일 때는 accept_warn()."""
+        """Records the user's confirmation — for all ERRORs open now. Vanished IDs and lines are accepted as legitimate deletions and removed from the registry (_rebaseline).
+        This is the only way to close an ERROR, so it never runs without the user's words. To accept WARNs only, use accept_warn()."""
         a = self._alerts()
         now = utc_stamp()
         n = 0
@@ -1184,15 +1217,15 @@ class Sync(object):
         return n
 
     def accept_warn(self):
-        """WARN 수용 — 확인 안 된 ERROR 가 없을 때만 기준(S6 쓴 줄 등록 · S4 본 기록 · S7 본 ID)을 지금 상태에 맞춥니다.
-        ERROR 는 건드리지 않습니다. 열린 ERROR 가 있으면 None 을 돌려주고 아무것도 바꾸지 않습니다(닫는 길은 ack 뿐)."""
+        """Accept WARNs — only when there is no unconfirmed ERROR, aligns the baselines (S6 written-line registry · S4 seen records · S7 seen IDs) with the current state.
+        ERRORs are not touched. With an open ERROR it returns None and changes nothing (only ack closes it)."""
         if self.blocking():
             return None
-        self._rebaseline(utc_stamp(), 'WARN 수용', [])
+        self._rebaseline(utc_stamp(), 'WARN accepted', [])
         return True
 
     def _rebaseline(self, now, text, keys):
-        """사라진 ID · 줄을 정당한 삭제로 받아들여 등록에서 빼고, 본 기록 기준을 다시 잡고, ack_log 에 남깁니다. ack · accept_warn 이 함께 씁니다."""
+        """Accepts vanished IDs and lines as legitimate deletions and removes them from the registry, resets the seen-records baseline and logs to ack_log. Shared by ack and accept_warn."""
         cur = self._id_universe()
         seen = self._load('ids.json', {})
         for i in [i for i in seen if i not in cur]:
@@ -1213,36 +1246,36 @@ class Sync(object):
         self._save('ack_log.json', log[-200:])
 
     def guard(self, tool, rel=None):
-        """쓰기 직전 판정 — 막을 사유 또는 None. 판정은 blocking() — 확인된 key 는 ack_hours 동안 다시 막지 않습니다."""
+        """Decision right before a write — a reason to block, or None. Decided by blocking() — a confirmed key does not block again for ack_hours."""
         rel = nfc(rel.replace('\\', '/')) if rel else rel
         open_ = self.blocking(target=rel)
         if not open_:
             return None
-        lines = ['동기화 점검에 확인되지 않은 ERROR 가 있어 공용 파일 쓰기를 막습니다(%s%s).' % (tool, (' → ' + rel) if rel else '')]
+        lines = ['The sync check has unconfirmed ERRORs, so writes to shared files are blocked (%s%s).' % (tool, (' → ' + rel) if rel else '')]
         lines += ['  ! ' + f.line() for f in open_]
-        lines.append('  사용자에게 위 경고를 보이고 확인을 받은 뒤 `<py> -X utf8 %s --ack "<사용자 문구>"` 를 돌리십시오. ' % self.cfg.tool('check_sync.py') +
-                     '덮인 파일은 `--restore <파일>` 로 되돌립니다.')
+        lines.append('  Show the user the warnings above and get their confirmation, then run `<py> -X utf8 %s --ack "<what the user said>"`. ' % self.cfg.tool('check_sync.py') +
+                     'Revert an overwritten file with `--restore <file>`.')
         return '\n'.join(lines)
 
-    # ---- 세션 경계 --------------------------------------------------
+    # ---- session boundaries ---------------------------------------
     def status_line(self, findings):
         recs = self.records()
         prefix = self.t.get('record_prefix', 'E')
-        mx = ('%s%d' % (prefix, max(n for n, _ in recs))) if recs else '기록 없음'
+        mx = ('%s%d' % (prefix, max(n for n, _ in recs))) if recs else 'no records'
         best = self.latest_change()
         when = datetime.datetime.fromtimestamp(best[0]).strftime('%Y-%m-%d %H:%M') if best else '—'
         days = ((time.time() - best[0]) / 86400.0) if best else 0
         last = self.last_drive_snapshot()
-        last_s = ('%s %s' % (last[1], parse_utc(last[0]).astimezone().strftime('%m-%d %H:%M'))) if last else '없음'
+        last_s = ('%s %s' % (last[1], parse_utc(last[0]).astimezone().strftime('%m-%d %H:%M'))) if last else 'none'
         a = self._alerts()
         errs = [f for f in findings if f.level == 'ERROR']
         if any(self.ack_of(f.key, a) is None for f in errs):
             worst = 'ERROR'
         elif errs:
-            worst = 'ERROR(확인됨)'
+            worst = 'ERROR (confirmed)'
         else:
             worst = 'WARN' if any(f.level == 'WARN' for f in findings) else 'OK'
-        return '동기화 %s · %s · 최근 변경 %s (%.1f일 전) · 드라이브 스냅샷 마지막 %s · 이 컴퓨터 %s' % (worst, mx, when, days, last_s, self.me)
+        return 'Sync %s · %s · last change %s (%.1f days ago) · last drive snapshot %s · this computer %s' % (worst, mx, when, days, last_s, self.me)
 
     def last_drive_snapshot(self):
         snaps = self._list_snaps(self.snapshot_dir)
@@ -1251,13 +1284,13 @@ class Sync(object):
     def session_start(self, snapshot=True):
         findings = self.check('start')
         self.record_alerts(findings)
-        if not self.unacked():                # 확인된 ERROR 만 남았으면 지금 상태를 기준으로 받아들입니다(ack 가 이미 등록을 맞춤)
+        if not self.unacked():                # with only confirmed ERRORs left, accept the current state as the baseline (ack has already aligned the registry)
             self.remember_ids()
             self.remember_records()
         if snapshot:
             self.snapshot_all(drive=True)
             self.refresh_fingerprints()
-            self.prune()                      # 세션 끝에만 지우면 정리 도구를 안 돌린 세션이 이어질 때 쌓입니다
+            self.prune()                      # pruning only at session end lets snapshots pile up across sessions that never run the tidy tool
         return findings
 
     def session_end(self):
@@ -1266,28 +1299,28 @@ class Sync(object):
         findings = [f for f in self.check('write') if f.level == 'ERROR']
         if findings:
             self.record_alerts(findings)
-            findings = self.unacked()         # 확인된 key 는 「ERROR 남음」으로 다시 알리지 않습니다 — blocking() 과 같은 판정
+            findings = self.unacked()         # confirmed keys are not reported again as "ERROR left" — same decision as blocking()
         if not findings:
             self.remember_ids()
             self.remember_records()
         removed = self.prune()
         return findings, removed
 
-    # ---- 쓰기 잠금 ------------------------------------------------
+    # ---- write lock ----------------------------------------------
     def write_lock(self, tool='', wait=None):
-        """공용 파일을 읽고 다시 쓰는 동안만 잡는 잠금(WriteLock) — `with sync.write_lock('도구 이름') as lock:` · 못 잡으면 lock.busy."""
+        """Lock held only while shared files are read and rewritten (WriteLock) — `with sync.write_lock('tool name') as lock:` · lock.busy if it could not be taken."""
         return WriteLock(os.path.join(self.state, LOCK_NAME), tool, _lock_wait(LOCK_WAIT_TOOL) if wait is None else wait)
 
     def wait_write_lock(self, wait=None):
-        """쓰기 직전(훅) — 잠금이 풀릴 때까지 기다립니다. 풀렸으면 True, wait 초가 지나도 잡혀 있으면 False.
-        막지는 않습니다 — 부르는 쪽이 어느 쪽이든 통과시키고, 그 틈은 도구의 저장 전 검사가 받칩니다."""
+        """Right before a write (hook) — waits until the lock is free. True if it is free, False if it is still held after wait seconds.
+        Does not block — the caller lets the write through either way; the tool's pre-save check covers that gap."""
         lock = self.write_lock(None, _lock_wait(LOCK_WAIT_HOOK) if wait is None else wait).acquire()
         free = not lock.busy
         lock.release()
         return free
 
     def hook_seen(self, marker):
-        """같은 도구 호출을 두 훅(설치본 · 프로젝트)이 중복 처리하지 않게 — 처음 보면 False 를 돌려주고 표시합니다."""
+        """Keeps the two hooks (installed copy and project copy) from handling the same tool call twice — returns False on first sight and marks it."""
         d = os.path.join(self.state, 'hook_seen')
         if not os.path.isdir(d):
             os.makedirs(d)
@@ -1300,16 +1333,16 @@ class Sync(object):
         return False
 
 
-# ---------------------------------------------------------------- 쓰기 잠금
+# ---------------------------------------------------------------- write lock
 LOCK_NAME = 'write.lock'
-LOCK_WAIT_TOOL = 10.0     # 도구가 잠금을 기다리는 시간(초) — 도구 한 번은 1초 안팎입니다
-LOCK_WAIT_HOOK = 6.0      # 훅이 기다리는 시간(초) — 훅 제한 시간보다 짧아야 합니다
+LOCK_WAIT_TOOL = 10.0     # seconds a tool waits for the lock — one tool run takes about a second
+LOCK_WAIT_HOOK = 6.0      # seconds the hook waits — must be shorter than the hook timeout
 LOCK_POLL = 0.05
-_LOCKS_HELD = {}          # 이 프로세스가 쥔 잠금 {경로: [파일, 횟수]} — 같은 프로세스가 다시 잡으면 횟수만 늘립니다
+_LOCKS_HELD = {}          # locks held by this process {path: [file, count]} — taking it again in the same process only raises the count
 
 
 def _lock_wait(default):
-    """기다리는 시간(초) — 시험은 `SYNC_LOCK_WAIT` 로 줄입니다(`SYNC_STATE_HOME` 과 같은 쓰임)."""
+    """Wait time (seconds) — tests shorten it via `SYNC_LOCK_WAIT` (used like `SYNC_STATE_HOME`)."""
     try:
         return float(os.environ['SYNC_LOCK_WAIT'])
     except (KeyError, ValueError):
@@ -1317,7 +1350,7 @@ def _lock_wait(default):
 
 
 def _os_lock(f):
-    """파일 f 에 운영체제 잠금을 겁니다(기다리지 않음). 다른 프로세스가 쥐고 있으면 BlockingIOError."""
+    """Takes an operating-system lock on file f (no waiting). BlockingIOError if another process holds it."""
     try:
         if os.name == 'nt':
             import msvcrt
@@ -1328,7 +1361,7 @@ def _os_lock(f):
             fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as e:
         if isinstance(e, BlockingIOError) or e.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
-            raise BlockingIOError(e.errno or errno.EAGAIN, '잠금을 다른 프로세스가 쥐고 있습니다')
+            raise BlockingIOError(e.errno or errno.EAGAIN, 'another process holds the lock')
         raise
 
 
@@ -1343,23 +1376,23 @@ def _os_unlock(f):
 
 
 class WriteLock(object):
-    """공용 파일을 **읽고 다시 쓰는 동안만** 잡는 잠금 — 프로젝트 하나 · 컴퓨터 하나에 하나(`<상태 폴더>/write.lock`, 동기화 폴더 밖).
-    운영체제 잠금이라 쥔 프로세스가 죽으면 저절로 풀립니다 — 남는 잠금이 없고 풀어 줄 사람도 필요 없습니다. 세션 단위로 잡지 않습니다.
+    """Lock held **only while shared files are read and rewritten** — one per project and computer (`<state folder>/write.lock`, outside the sync folder).
+    It is an operating-system lock, so it is released by itself when the holding process dies — no stale locks, and nobody needs to release one. It is not held per session.
 
         with sync.write_lock('tidy_tracker') as lock:
-            if lock.busy:                  # wait 초 안에 못 잡음 — 쓰지 않고 lock.busy_message() 를 알립니다
+            if lock.busy:                  # not taken within wait seconds — do not write; report lock.busy_message()
                 ...
-            (읽기 → 계산 → 읽은 뒤 바뀌었는지 검사 → 저장)
+            (read → compute → check whether anything changed since reading → save)
 
-    state — 'held' 잡음 · 'busy' 다른 프로세스가 쥐고 있어 wait 초 안에 못 잡음 · 'off' 잠금 장치 자체가 실패(상태 폴더에 못 씀 ·
-    잠금을 지원하지 않는 파일 시스템) — 막지 않고 잠금 없이 진행합니다. 어느 경우에도 도구의 저장 전 검사가 바닥을 받칩니다.
-    같은 프로세스가 다시 잡는 것은 됩니다(횟수만 셈). **잠금을 쥔 채, 잠금을 잡는 다른 도구를 자식 프로세스로 부르지 않습니다** — 서로 기다립니다.
-    막지 못하는 것 — Edit · Write 자체(훅은 Edit 보다 먼저 끝나 잠금을 쥘 수 없어, 직전에 풀리기를 기다릴 뿐입니다) · 편집기 손편집 ·
-    훅이 없는 앱 · 다른 컴퓨터 · 잠금을 모르는 옛 판의 도구."""
+    state — 'held' taken · 'busy' another process holds it and it was not taken within wait seconds · 'off' the lock mechanism itself failed (cannot write the
+    state folder, or the file system does not support locks) — proceeds without a lock rather than blocking. In every case the tool's pre-save check is the floor.
+    The same process may take it again (it only counts). **While holding the lock, do not call another lock-taking tool as a child process** — they wait for each other.
+    Not covered — Edit and Write themselves (the hook finishes before the Edit, so it cannot hold the lock; it only waits for a release just before) · manual edits in an editor ·
+    apps without hooks · other computers · old tool versions that do not know the lock."""
 
     def __init__(self, path, tool='', wait=LOCK_WAIT_TOOL):
         self.path = path
-        self.tool = tool              # None 이면 쥔 쪽 정보를 남기지 않습니다(훅의 기다림)
+        self.tool = tool              # None leaves no holder info (the hook's wait)
         self.wait = wait
         self.state = None
         self._key = os.path.normcase(os.path.abspath(path))
@@ -1374,12 +1407,12 @@ class WriteLock(object):
 
     def _off(self, e):
         self.state = 'off'
-        sys.stderr.write('쓰기 잠금을 쓸 수 없어 잠금 없이 진행합니다(저장 전 검사는 그대로): %r\n' % (e,))
+        sys.stderr.write('Write lock unavailable; proceeding without it (the pre-save check still applies): %r\n' % (e,))
         return self
 
     def acquire(self):
         ent = _LOCKS_HELD.get(self._key)
-        if ent:                       # 이 프로세스가 이미 쥐고 있음
+        if ent:                       # this process already holds it
             ent[1] += 1
             self.state = 'held'
             return self
@@ -1401,7 +1434,7 @@ class WriteLock(object):
                     self.state = 'busy'
                     return self
                 time.sleep(LOCK_POLL)
-            except Exception as e:    # 잠금을 지원하지 않는 파일 시스템 등 — 장치의 결함이 쓰기를 막지 않게
+            except Exception as e:    # e.g. a file system without lock support — a fault in the mechanism must not block writes
                 f.close()
                 return self._off(e)
         _LOCKS_HELD[self._key] = [f, 1]
@@ -1440,26 +1473,26 @@ class WriteLock(object):
         return False
 
     def who(self):
-        """잠금을 쥔 쪽의 한 줄 설명(못 잡았을 때 알림용). 모르면 빈 문자열."""
+        """One-line description of the holder (for the busy notice). Empty string if unknown."""
         try:
             d = json.loads(_read_bytes(self.path + '.info').decode('utf-8'))
-            return '%s (PID %s · %s 부터)' % (d.get('tool') or '?', d.get('pid'), d.get('utc'))
+            return '%s (PID %s · since %s)' % (d.get('tool') or '?', d.get('pid'), d.get('utc'))
         except Exception:
             return ''
 
     def busy_message(self):
         w = self.who()
-        return ('다른 도구가 공용 파일을 쓰는 중이라 %g초 안에 잠금을 잡지 못했습니다%s — 쓰지 않았습니다. 다시 돌리면 됩니다.'
-                % (self.wait, (' · 쥔 쪽: ' + w) if w else ''))
+        return ('Another tool is writing the shared files, so the lock was not taken within %gs%s — nothing was written. Run again.'
+                % (self.wait, (' · held by: ' + w) if w else ''))
 
 
-# ---------------------------------------------------------------- 1회 치환 도우미
+# ---------------------------------------------------------------- replace-once helper
 def replace_once(path, old, new, encoding='utf-8', check_tables=True):
-    """`old` 가 파일에 **정확히 1회**일 때만 `new` 로 바꿉니다. 줄끝(CRLF/LF)을 보존하고, 프로젝트 안이면 쓰기 전후 스냅샷 · 지문 ·
-    「쓴 줄」 기록까지 합니다. 0회 · 2회 이상이면 ValueError — 이것이 낙관적 동시성 검사입니다(앞서 본 문구가 그대로 있어야 함).
-    `.md` 에서 치환이 표 결함(쪼개진 행 · 셀 수 · 끝 `|` — _config.table_problems)을 **늘리면** 쓰지 않고 ValueError 입니다.
-    이미 있던 결함은 stderr 경고만. 알고 하는 치환은 check_tables=False. 돌려주는 것 — {'path', 'crlf', 'delta', 'count'}.
-    프로젝트 안이면 읽기 → 쓰기 동안 쓰기 잠금(WriteLock)을 잡습니다. 못 잡아도 치환은 합니다 — 1회 검사가 스스로 받칩니다."""
+    """Replaces `old` with `new` only when `old` occurs **exactly once** in the file. Keeps the line endings (CRLF/LF), and inside a project also takes the
+    before/after snapshots, fingerprint and "written lines" record. Zero or several occurrences raise ValueError — this is the optimistic concurrency check (the text seen earlier must still be there).
+    In `.md` files, a replacement that **adds** table defects (split rows · cell count · trailing `|` — _config.table_problems) is not written and raises ValueError.
+    Defects that were already there only give a stderr warning. For a deliberate replacement pass check_tables=False. Returns {'path', 'crlf', 'delta', 'count'}.
+    Inside a project the write lock (WriteLock) is held from read to write. If it cannot be taken, the replacement still happens — the once-check covers it."""
     path = os.path.abspath(path)
     root = find_project_root(path)
     lock = None
@@ -1467,8 +1500,8 @@ def replace_once(path, old, new, encoding='utf-8', check_tables=True):
         try:
             lock = Sync(_load_cfg(root)).write_lock('replace_once').acquire()
             if lock.busy:
-                sys.stderr.write('replace_once: ' + lock.busy_message().replace('쓰지 않았습니다. 다시 돌리면 됩니다.', '잠금 없이 치환합니다.') + '\n')
-        except Exception:        # 안전장치의 결함이 치환 자체를 막지 않게
+                sys.stderr.write('replace_once: ' + lock.busy_message().replace('nothing was written. Run again.', 'replacing without the lock.') + '\n')
+        except Exception:        # a fault in the guard must not block the replacement itself
             lock = None
     try:
         return _replace_once(path, old, new, encoding, check_tables, root)
@@ -1486,26 +1519,26 @@ def _replace_once(path, old, new, encoding, check_tables, root):
     ob, nb = o.encode(encoding), n.encode(encoding)
     cnt = b.count(ob)
     if cnt != 1:
-        raise ValueError('대상 문자열이 %d회 있습니다(정확히 1회여야 함): %s' % (cnt, path))
+        raise ValueError('The target string occurs %d times (it must occur exactly once): %s' % (cnt, path))
     sync = None
     if root:
         try:
             sync = Sync(_load_cfg(root))
             sync.before_write(_rel(root, path))
-        except Exception:        # 안전장치의 결함이 치환 자체를 막지 않게
+        except Exception:        # a fault in the guard must not block the replacement itself
             sync = None
     out = b.replace(ob, nb)
-    assert out.count(b'\r\n') == b.count(b'\r\n') + (nb.count(b'\r\n') - ob.count(b'\r\n')), '줄바꿈 수가 어긋남'
+    assert out.count(b'\r\n') == b.count(b'\r\n') + (nb.count(b'\r\n') - ob.count(b'\r\n')), 'line break count mismatch'
     if check_tables and path.lower().endswith('.md'):
         before = table_problems(b.decode(encoding, 'replace'))
         after = table_problems(out.decode(encoding, 'replace'))
         grew = [c for c in ('orphan', 'cells', 'tail')
                 if sum(1 for x in after if x[1] == c) > sum(1 for x in before if x[1] == c)]
         if grew:
-            raise ValueError('치환이 표 행을 깨뜨려 쓰지 않았습니다(한 항목은 한 줄 · 셀 안의 | 는 \\|) — %s: %s'
+            raise ValueError('Not written: the replacement breaks table rows (one item per line · write | inside a cell as \\|) — %s: %s'
                              % (path, ' · '.join(describe_table_problem(x) for x in after if x[1] in grew)[:600]))
         if after:
-            sys.stderr.write('replace_once: %s 에 이미 있던 표 결함 %d건(이 치환과 무관) — %s\n'
+            sys.stderr.write('replace_once: %s already had %d table defects (unrelated to this replacement) — %s\n'
                              % (path, len(after), ' · '.join(describe_table_problem(x) for x in after[:3])))
     _atomic_write(path, out)
     if sync is not None:
@@ -1517,12 +1550,12 @@ def _replace_once(path, old, new, encoding, check_tables, root):
 
 
 def refuse_if_alert(sync, writing, tool_name):
-    """일괄 도구의 진입 검사 — writing(파일을 쓸 참)이면 미확인 ERROR 에서 False(거부). 진단만이면 경고를 보이고 True.
-    판정은 Sync.blocking() — 확인된 key 는 ack_hours 동안 다시 막지 않으므로, 확인 뒤에는 남은 조건을 다시 만드는 정리 도구가 돕니다."""
+    """Entry check of batch tools — when writing (about to write files), returns False (refuse) on an unconfirmed ERROR. When only diagnosing, shows the warning and returns True.
+    Decided by Sync.blocking() — a confirmed key does not block again for ack_hours, so after confirmation the tidy tool that rebuilds the remaining condition runs."""
     open_ = sync.blocking()
     if not open_:
         return True
-    print('! 동기화 점검 ERROR — %s%s' % (tool_name, ' 를 중단합니다. 확인 뒤 `check_sync.py --ack` 를 돌리십시오.' if writing else ' 는 진단만 합니다.'))
+    print('! Sync check ERROR — %s%s' % (tool_name, ' stopped. After confirmation, run `check_sync.py --ack`.' if writing else ' only diagnoses.'))
     for f in open_:
         print('  ! ' + f.line())
     return not writing

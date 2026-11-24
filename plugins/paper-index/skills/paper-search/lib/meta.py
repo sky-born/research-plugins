@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""제목·저자·연도·저널·DOI 추출.
+"""Extracting title, author, year, journal and DOI.
 
-전부 자동 추정값입니다. 인용을 확정하기 전에는 반드시 원본 PDF로 대조하십시오.
+All of these are automatic guesses. Always check against the source PDF before confirming a citation.
 """
 import os, re
 
@@ -81,7 +81,7 @@ DOI_PUB = [
     (r"^10\.1016/j\.corsci", "Corrosion Science"),
     (r"^10\.1016/j\.mssp", "Mater. Sci. Semicond. Process."),
     (r"^10\.1016/j\.mee", "Microelectronic Engineering"),
-    (r"^10\.1016/", "Elsevier (기타)"),
+    (r"^10\.1016/", "Elsevier (other)"),
     (r"^10\.1007/s10854", "J. Mater. Sci.: Mater. Electron."),
     (r"^10\.1007/s11664", "Journal of Electronic Materials"),
     (r"^10\.1007/s11661", "Metall. Mater. Trans. A"),
@@ -89,24 +89,24 @@ DOI_PUB = [
     (r"^10\.1007/s10853", "Journal of Materials Science"),
     (r"^10\.1007/s11837", "JOM"),
     (r"^10\.1007/s11669", "J. Phase Equilib. Diffus."),
-    (r"^10\.1007/", "Springer (기타)"),
+    (r"^10\.1007/", "Springer (other)"),
     (r"^10\.3390/ma\d", "Materials (MDPI)"),
     (r"^10\.3390/met", "Metals (MDPI)"),
     (r"^10\.3390/cryst", "Crystals (MDPI)"),
     (r"^10\.3390/mi", "Micromachines (MDPI)"),
     (r"^10\.3390/app", "Applied Sciences (MDPI)"),
     (r"^10\.3390/nano", "Nanomaterials (MDPI)"),
-    (r"^10\.3390/", "MDPI (기타)"),
+    (r"^10\.3390/", "MDPI (other)"),
     (r"^10\.1109/ECTC", "IEEE ECTC"),
     (r"^10\.1109/TCPMT", "IEEE Trans. CPMT"),
     (r"^10\.1109/JSSC", "IEEE J. Solid-State Circuits"),
     (r"^10\.1109/TDMR", "IEEE Trans. Device Mater. Reliab."),
     (r"^10\.1109/IEDM", "IEEE IEDM"),
-    (r"^10\.1109/", "IEEE (기타)"),
+    (r"^10\.1109/", "IEEE (other)"),
     (r"^10\.1103/PhysRevB", "Physical Review B"),
     (r"^10\.1103/PhysRevLett", "Physical Review Letters"),
-    (r"^10\.1103/", "Physical Review (기타)"),
-    (r"^10\.1063/", "AIP (J. Appl. Phys. 등)"),
+    (r"^10\.1103/", "Physical Review (other)"),
+    (r"^10\.1063/", "AIP (J. Appl. Phys. etc.)"),
     (r"^10\.1080/", "Taylor & Francis"),
     (r"^10\.1002/", "Wiley"),
     (r"^10\.1361/", "J. Phase Equilib."),
@@ -115,12 +115,12 @@ DOI_PUB = [
     (r"^10\.2320/", "Materials Transactions (JIM)"),
     (r"^10\.1179/", "Taylor & Francis"),
     (r"^10\.1108/", "Soldering & SMT"),
-    (r"^10\.1038/", "Nature 계열"),
+    (r"^10\.1038/", "Nature family"),
     (r"^10\.1126/", "Science"),
     (r"^10\.1021/", "ACS"),
     (r"^10\.1039/", "RSC"),
     (r"^10\.6117/", "J. Microelectron. Packag. Soc. (KMEPS)"),
-    (r"^10\.1201/", "CRC Press (단행본)"),
+    (r"^10\.1201/", "CRC Press (book)"),
 ]
 
 HEAD_JOURNALS = [
@@ -182,7 +182,7 @@ def _loose(pre):
 
 
 def extend_from_body(title, body):
-    """파일명에서 온 잘린 제목을 본문에서 찾아 늘립니다."""
+    """Find a truncated title taken from the file name in the body text and extend it."""
     t = title.rstrip(" …").strip()
     if len(t.split()) < 3:
         return title, False
@@ -221,7 +221,7 @@ def journal_from(doi, head):
 
 
 def build(rel, fn, folder, body):
-    """한 편의 메타데이터를 만듭니다."""
+    """Build the metadata of one paper."""
     head = body[:4000]
     m = re.match(r"^([A-ZÀ-ÿ][A-Za-zÀ-ÿ'’]{1,19})-", fn)
     author = m.group(1) if m else ""

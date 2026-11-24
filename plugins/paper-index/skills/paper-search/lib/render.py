@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
-"""인덱스 산출물 생성 — papers_index.{json,md,csv}"""
+"""Writing the index files — papers_index.{json,md,csv}"""
 import collections, csv, datetime, difflib, json, os, re
 
 from .textnorm import norm_text
 
+YEAR_UNKNOWN = "year unknown"
+
 
 def _norm(s):
-    return re.sub(r"[^a-z0-9가-힣]", "", norm_text(s).lower())   # 색인 제목의 합자(Eﬀect)를 풀고 비교
+    return re.sub(r"[^a-z0-9가-힣]", "", norm_text(s).lower())   # unfold ligatures in index titles (Eﬀect) before comparing
 
 
 def duplicate_groups(rows, ratio=0.93):
-    """중복 후보를 블로킹으로 좁힌 뒤 유사도를 잽니다.
+    """Narrow duplicate candidates by blocking, then measure similarity.
 
-    전수 비교(O(n^2) SequenceMatcher)는 수백 편만 되어도 느려집니다.
-    같은 DOI, 또는 정규화 제목의 앞 12자가 같은 것끼리만 비교합니다.
+    Comparing every pair (O(n^2) SequenceMatcher) gets slow with only a few hundred papers.
+    Only entries with the same DOI, or the same first 12 characters of the normalized title, are compared.
     """
     buckets = collections.defaultdict(list)
     for r in rows:
@@ -69,10 +71,29 @@ def write_json(rows, path):
     json.dump(rows, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
+def backup_copy(path, folder):
+    """Copy `path` byte for byte into `folder` as <stem>_<YYYY-MM-DD><ext>. Never overwrites: a name already
+    taken gets _1, _2, ... (exclusive creation). Returns the new path; raises OSError if it cannot be written."""
+    os.makedirs(folder, exist_ok=True)
+    stem, ext = os.path.splitext(os.path.basename(path))
+    data = open(path, "rb").read()
+    base = f"{stem}_{datetime.date.today().isoformat()}"
+    for i in range(1000):
+        target = os.path.join(folder, base + (f"_{i}" if i else "") + ext)
+        try:
+            with open(target, "xb") as f:
+                f.write(data)
+            return target
+        except FileExistsError:
+            continue
+    raise OSError(f"No free backup name for {base}{ext} in {folder}")
+
+
 def write_csv(rows, path):
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["ID", "연도", "제1저자", "제목", "출처", "DOI", "태그", "폴더", "파일명", "전문캐시", "비고"])
+        w.writerow(["ID", "year", "first author", "title", "source", "DOI", "tags", "folder", "file",
+                    "full-text cache", "note"])
         for r in rows:
             w.writerow([r["id"], r["year"], r["author"], r["title"], r["journal"], r["doi"],
                         "; ".join(r["tags"]), r["folder"], r["file"], r["txt"], r.get("note", "")])
@@ -87,7 +108,7 @@ def _line(r, with_tags=False):
         o += f" · doi:{r['doi']}"
     o += f"  \n  `{r['rel']}`"
     if with_tags:
-        o += f" · 태그: {', '.join(r['tags'][:3])}"
+        o += f" · tags: {', '.join(r['tags'][:3])}"
     if r.get("note"):
         o += f"  \n  {r['note']}"
     return o
@@ -97,14 +118,15 @@ def write_md(rows, path, cfg, tag_order):
     today = datetime.date.today().isoformat()
     groups = duplicate_groups(rows)
     name = cfg.get("name") or os.path.basename(cfg["library"].rstrip("/\\"))
-    L = [f"# 문헌 인덱스 — {name}", "",
-         f"생성일 {today} · 총 **{len(rows)}편** · 원본 `{cfg['library']}` (**읽기 전용**)", "",
-         "전문(full text)은 `_fulltext/`에 `.txt`로 캐시되어 있습니다. "
-         "키워드 검색은 `papertool.py search` 또는 `_fulltext/` grep 이 가장 빠릅니다.", "",
-         "> 제목·저자·저널은 PDF 본문에서 자동 추출한 값입니다. **인용 확정 전에 원본 PDF로 대조하십시오.**", "",
-         "---", "", "## 목차", "",
-         "- [주제별](#주제별)", "- [연도별 전체 목록](#연도별-전체-목록)",
-         "- [중복 파일](#중복-파일)", "- [주의 필요 항목](#주의-필요-항목)", "", "---", "", "## 주제별", ""]
+    L = [f"# Literature index — {name}", "",
+         f"Generated {today} · **{len(rows)} papers** · source `{cfg['library']}` (**read-only**)", "",
+         "The full text is cached as `.txt` files in `_fulltext/`. "
+         "For keyword searches, `papertool.py search` or a grep of `_fulltext/` is fastest.", "",
+         "> Titles, authors and journals are extracted automatically from the PDF text. "
+         "**Check them against the original PDF before confirming a citation.**", "",
+         "---", "", "## Contents", "",
+         "- [By topic](#by-topic)", "- [All papers by year](#all-papers-by-year)",
+         "- [Duplicate files](#duplicate-files)", "- [Needs attention](#needs-attention)", "", "---", "", "## By topic", ""]
     byt = collections.defaultdict(list)
     for r in rows:
         for t in r["tags"]:
@@ -112,26 +134,26 @@ def write_md(rows, path, cfg, tag_order):
     order = [t for t in tag_order if t in byt] + [t for t in byt if t not in tag_order]
     for t in order:
         lst = sorted(byt[t], key=lambda r: (r.get("year") or "0000"))
-        L += [f"### {t} ({len(lst)}편)", ""] + [_line(r) for r in lst] + [""]
+        L += [f"### {t} ({len(lst)})", ""] + [_line(r) for r in lst] + [""]
 
-    L += ["---", "", "## 연도별 전체 목록", ""]
+    L += ["---", "", "## All papers by year", ""]
     byy = collections.defaultdict(list)
     for r in rows:
-        byy[r.get("year") or "연도미상"].append(r)
-    for y in sorted(byy, key=lambda x: (x == "연도미상", x)):
-        L += [f"### {y} ({len(byy[y])}편)", ""] + \
+        byy[r.get("year") or YEAR_UNKNOWN].append(r)
+    for y in sorted(byy, key=lambda x: (x == YEAR_UNKNOWN, x)):
+        L += [f"### {y} ({len(byy[y])})", ""] + \
              [_line(r, True) for r in sorted(byy[y], key=lambda r: (r.get("author") or "").lower())] + [""]
 
-    L += ["---", "", "## 중복 파일", "",
-          "같은 논문이 여러 파일로 저장되어 있습니다. 인용 시 대표 ID 하나만 쓰십시오.", "",
-          "| 대표 | 중복 | 제목 |", "|---|---|---|"]
+    L += ["---", "", "## Duplicate files", "",
+          "The same paper is saved as several files. When citing, use only the main ID.", "",
+          "| Main | Duplicates | Title |", "|---|---|---|"]
     for g in groups:
         L.append(f"| `{g[0]['id']}` | {', '.join('`' + x['id'] + '`' for x in g[1:])} | {g[0]['title'][:80]} |")
 
-    L += ["", "---", "", "## 주의 필요 항목", "",
-          "파일명이 내용과 다르거나, 전문 추출에 문제가 있는 항목입니다. "
-          "**파일명을 근거로 인용하면 오인용이 됩니다.**", "",
-          "| ID | 파일명 | 제목(내용 기준) | 비고 |", "|---|---|---|---|"]
+    L += ["", "---", "", "## Needs attention", "",
+          "Entries whose file name does not match the content, or whose full-text extraction has a problem. "
+          "**Citing on the strength of the file name leads to a wrong citation.**", "",
+          "| ID | File | Title (from the content) | Note |", "|---|---|---|---|"]
     for r in rows:
         if r.get("note"):
             L.append(f"| {r['id']} | `{r['file']}` | {r['title'][:70]} | {r['note']} |")

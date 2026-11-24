@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PDF 전문 추출 — 원본 폴더는 읽기만 합니다."""
+"""PDF full-text extraction — the source folder is only read."""
 import os, subprocess
 
 from .textnorm import norm_text
@@ -10,7 +10,7 @@ def txtname(rel):
 
 
 def scan(library):
-    """라이브러리 안의 PDF 상대경로 목록."""
+    """Relative paths of the PDFs in the library."""
     out = []
     for dp, _, fns in os.walk(library):
         for fn in sorted(fns):
@@ -20,10 +20,10 @@ def scan(library):
 
 
 def extract_missing(cfg, ft_dir, limit=None, timeout=25, verbose=True):
-    """캐시가 없는 PDF만 추출합니다. limit 을 주면 그만큼만 처리하고 남은 수를 돌려줍니다.
+    """Extract only the PDFs that have no cache. With limit, process that many and return how many are left.
 
-    한 번에 다 돌리면 오래 걸리는 환경(에이전트 셸의 호출 타임아웃 등)을 위해
-    나눠 실행할 수 있게 만들었습니다.
+    This lets the work run in parts where one long run is a problem
+    (for example the call timeout of an agent shell).
     """
     os.makedirs(ft_dir, exist_ok=True)
     todo = [rel for rel in scan(cfg["library"])
@@ -47,7 +47,7 @@ def extract_missing(cfg, ft_dir, limit=None, timeout=25, verbose=True):
 
 
 def read_cache(ft_dir, rel):
-    """캐시 전문을 글자 정규화해 돌려줍니다(메타데이터 · 태깅용). 캐시 파일 자체는 그대로 둡니다."""
+    """Return the cached full text with characters normalized (for metadata and tagging). The cache file itself is left as is."""
     p = os.path.join(ft_dir, txtname(rel))
     if not os.path.exists(p):
         return ""
@@ -55,7 +55,7 @@ def read_cache(ft_dir, rel):
 
 
 def prune_orphans(ft_dir, keep):
-    """인덱스에 없는 캐시를 _obsolete/ 로 옮깁니다 (삭제하지 않습니다)."""
+    """Move caches that are not in the index to _obsolete/ (nothing is deleted)."""
     import shutil
     obs = os.path.join(ft_dir, "_obsolete")
     os.makedirs(obs, exist_ok=True)

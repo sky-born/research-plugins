@@ -1,129 +1,152 @@
-# 원고 프로젝트 설정 — `.manuscript/project.json`
+# Manuscript project settings — `.manuscript/project.json`
 
-로더는 옛 경로 `.writing/` 도 읽지만 새 프로젝트는 `.manuscript/` 로 만듭니다.
+<!-- toc -->
+**Contents**
 
-도구가 프로젝트에 적응하는 데 쓰는 값을 한 파일에 모읍니다.
-**챕터 개수, 파일 이름, 폴더 구조, 트리거 값이 프로젝트마다 다르기 때문**입니다.
+- What goes in
+- `grammar` — the scope of the pre-submission grammar check
+- `markers` and `procedure` — two values the entry skill uses
+- What stays out of this file — boundaries
+- Triggers differ per project
+- New projects are made by the `new-manuscript` skill
+<!-- /toc -->
 
-`templates/project.example.json` 을 복사해 값만 바꾸면 됩니다.
-`new-manuscript/tools/_config.py`가 이 파일을 읽는 로더이며 초기화 때 프로젝트의 도구 폴더(`tools_dir`)로 복사됩니다.
+The loader also reads the old path `.writing/`, but new projects are made with `.manuscript/`.
 
-## 무엇이 들어가나
+This file gathers in one place the values the tools use to adapt to a project.
+**The number of chapters, the file names, the folder structure and the trigger values differ from project to project.**
 
-| 키 | 쓰는 도구 | 없으면 |
+Copy `templates/project.example.json` and change only the values.
+`new-manuscript/tools/_config.py` is the loader that reads this file, and it is copied into the project's tools folder (`tools_dir`) at initialization.
+
+## What goes in
+
+| Key | Tool that uses it | If absent |
 |---|---|---|
-| `tools_dir` | 훅 · `update_tools` · 도구의 안내 문구 | `tools`. 관리 도구를 두는 폴더(루트 바로 아래) |
-| `manuscript.source_dir` | 번호 점검, 빌드 | `manuscript_src`, 없으면 프로젝트 루트 |
-| `manuscript.chapters` | 번호 점검, 빌드 | `ch1.md` ~ `ch4.md` |
-| `manuscript.references` | 번호 점검 | `references.md` |
-| `manuscript.build_script` | 번호 점검 | `build_tpl.py`. **없는 프로젝트면 그 점검을 건너뜁니다** |
-| `tracker.*` | 미결 항목 정리·색인 | `tracker_index.md` · `tracker_pending.md` · `tracker_records_index.md` · `tracker_literature.md` · `tracker_proposals.md` · `records/` · `records/archive.md`. 다섯 파일(`index` · `pending` · `record_index` · `literature` · `proposals`)은 루트 기준 경로라 하위 폴더(`tracking/tracker_index.md`)도 됩니다 — 도구 · 훅은 이 값만 보고, 옮기면 `markers` 도 함께 바꿉니다 |
-| `tracker.triggers` | 정리 도구 | 공통 다섯 — `지금` · `해당 절 작업 시` · `사용자 판단` · `자료 확보 후` · `최종 제출 직전`. 일정에 걸린 값은 프로젝트가 더합니다. **목록에 없는 값을 쓰면 경고합니다** |
-| `tracker.movable_prefixes` | 정리 도구 · 동기화 점검(S7) | `["A","B","C","D"]`. 대기 파일의 절 글자 — 절 제목 `## X.` 와 행 ID 의 머리글자. 글자를 줄여도 옛 ID 의 글자는 목록에 남깁니다(`tracker-workflow.md` 「미결 표의 분류 글자」) |
-| `tracker.section_markers` | 위치 문법(정리 · 색인 · 새 기록 검사) | 빈 목록. 프로젝트만의 절 표기(정규식 목록) |
-| `tracker.record_index_exclude` | 완료 색인 | 빈 목록. 완료 색인 §1 에서 뺄 파일 · 폴더의 글롭(루트 기준, 폴더는 끝 `/`) |
-| `tracker.checkpoint` | 동기화 점검 | 없음. 인수인계 파일(루트 기준) — 공용 파일로 스냅샷하되, 갈아쓰는 문서라 손실 보고에서 뺍니다 |
-| `sync.*` | 동기화 점검 · 훅 · 정리 · 색인 · 새항목 · `update_tools` | 전부 기본값으로 돕니다. `shared_extra`(공용 파일 추가 글롭) · `snapshot_dir`(`archive/tracker_backup`) · `conflict_patterns` · `exclude` · `stale_days`(2) · `snapshot_days`(30) · `snapshot_days_others`(90) · `snapshot_min`(10) · `snapshot_max`(20) · `snapshot_max_local`(100) · `ack_hours`(4) · `known_gaps` · `rewrite_ok` · `survival_pct`(70). 뜻은 `tracker-workflow.md` 「동기화」 |
-| `manuscript.output_pattern` | 완료 색인, 초기화 | 없음. 빌드 산출물 이름 글롭(`원고_v*.docx`) — 완료 색인에서 뺍니다 |
-| `grammar.*` | grammar_baseline | 범위는 `manuscript.source_dir` 의 `chapters`(참고문헌 파일 제외). `sources`(기본 범위에 **더하는** 원본) · `exclude_prefixes`(`["@NOTE"]`) · `avoid_lists`(없음). 아래 「`grammar`」 |
-| `markers` | `manuscript` 진입 스킬과 프로젝트 로컬 스킬의 가드 | — |
-| `procedure` | `manuscript` 진입 스킬 | **그 단계를 건너뜁니다** |
+| `tools_dir` | Hook · `update_tools` · tool messages | `tools`. The folder (directly under the root) that holds the managed tools |
+| `manuscript.source_dir` | Number check, build | `manuscript_src`, or the project root if absent |
+| `manuscript.chapters` | Number check, build | `ch1.md` – `ch4.md` |
+| `manuscript.references` | Number check | `references.md` |
+| `manuscript.figure_dir` | The project's own build script (no managed tool reads it) | `fig_src`. The folder of figure sources |
+| `manuscript.build_script` | Number check | `build_tpl.py`. **A project without it skips that check** |
+| `tracker.*` | Open-item tidying and index | `tracker_index.md` · `tracker_pending.md` · `tracker_records_index.md` · `tracker_literature.md` · `tracker_proposals.md` · `records/` · `records/archive.md`. The five files (`index` · `pending` · `record_index` · `literature` · `proposals`) are paths relative to the root, so a subfolder (`tracking/tracker_index.md`) also works — tools and hooks look only at this value, and when you move them, change `markers` as well |
+| `tracker.triggers` | Tidying tool | The common five — `now` · `when working on the section` · `user decision` · `when data is available` · `before final submission` (older projects list their Korean spellings, which count as the same triggers). A project adds values tied to its schedule. **A value not in the list triggers a warning** |
+| `tracker.movable_prefixes` | Tidying tool · sync check (S7) | `["A","B","C","D"]`. The section letters of the pending file — the initial letter of a section title `## X.` and of a row ID. If you reduce the letters, the letters of old IDs stay in the list (`tracker-workflow.md` "Category letters of the open-item tables — set by the project") |
+| `tracker.section_markers` | Location syntax (tidying · index · new-record check) | An empty list. A project's own section notation (a list of regular expressions) |
+| `tracker.record_prefix` | New record · sync check | `E`. The letter that starts completion-record IDs (`E12`) |
+| `tracker.index_size_limit_kb` | Tidying tool | `40`. Above this size of the index file the tool warns that its structure needs another look |
+| `tracker.record_index_exclude` | Record index | An empty list. Globs of files and folders to leave out of §1 of the record index (relative to the root; a folder ends with `/`) |
+| `tracker.checkpoint` | Sync check | None. The handoff file (relative to the root) — it is snapshotted as a shared file, but because it is a document that gets overwritten, it is left out of loss reports |
+| `sync.*` | Sync check · hook · tidying · index · new item · `update_tools` | All run on defaults. `shared_extra` (extra globs for shared files) · `snapshot_dir` (`archive/tracker_backup`) · `conflict_patterns` · `exclude` · `stale_days` (2) · `snapshot_days` (30) · `snapshot_days_others` (90) · `snapshot_min` (10) · `snapshot_max` (20) · `snapshot_max_local` (100) · `ack_hours` (4) · `known_gaps` · `rewrite_ok` · `survival_pct` (70). For their meaning see `tracker-workflow.md` "Sync — several computers write the shared files" |
+| `manuscript.output_pattern` | Record index, initialization | None. A glob for build output names (`manuscript_v*.docx`) — left out of the record index |
+| `grammar.*` | grammar_baseline | The scope is the `chapters` in `manuscript.source_dir` (the references file excluded). `sources` (sources **added** to the default scope) · `exclude_prefixes` (`["@NOTE"]`) · `avoid_lists` (none). See "`grammar` — the scope of the pre-submission grammar check" below |
+| `markers` | Guard of the `manuscript` entry skill and of project-local skills | — |
+| `procedure` | `manuscript` entry skill — checks that the file exists | **That check is skipped** |
 
-**설정 파일이 없어도 도구는 돕니다.** 기본값이 들어갑니다.
+**The tools run even without a settings file.** Defaults are built in.
 
-**0.12 이하가 만든 프로젝트는 한글 기본 이름(`도구/` · `수정필요_*.md` · `완료기록/` 등 — 값은 `_config.LEGACY_DEFAULTS`)을 씁니다.**
-그 이름을 설정에 적어 두면 그대로 돕니다. 적지 않은 채 옛 이름만 디스크에 있으면 도구는 멈추고 훅은 설정 파일 말고는 쓰기를 막으며,
-둘 다 설정에 더할 값을 보입니다 — `update_tools.py` 도 같은 값을 보이고 적기 전에는 적용하지 않습니다.
+**Projects made by 0.12 or earlier use the old default names, which are Korean — the values are in `_config.LEGACY_DEFAULTS`.**
+If you write those names into the settings, they run as they are. If you do not, and only the old names exist on disk, the tools stop and the hook blocks writes except to the settings file,
+and both show the values to add to the settings — `update_tools.py` shows the same values and does not apply anything until they are written.
 
-## `grammar` — 제출 전 문법 점검의 범위
+## `grammar` — the scope of the pre-submission grammar check
 
-`tools/grammar_baseline.py` 가 읽습니다(규약은 `revision-protocol.md` 「제출 전 문법 점검」). **키가 없으면 범위는 원고 폴더의 장 파일입니다** —
-초록 · 빌드 스크립트 안의 글 · 목차용 짧은 제목처럼 장 파일 밖에 있는 영문만 `sources` 로 더합니다.
+`tools/grammar_baseline.py` reads it (for the rules, see `revision-protocol.md` "Pre-submission grammar check"). **If the key is absent, the scope is the chapter files in the manuscript folder** —
+add with `sources` only English text that lies outside the chapter files, such as the abstract, text inside the build script, and short titles for the table of contents.
 
-| 키 | 값 |
+| Key | Value |
 |---|---|
-| `sources` | 원본 목록. 항목마다 `file`(**루트 기준** 경로) · `kind` · (lines 면) `regions` |
-| `exclude_prefixes` | md 블록에서 뺄 머리글자. 기본 `["@NOTE"]` |
-| `avoid_lists` | 피할 표현 목록(루트 기준 경로 목록). 표 첫 칸의 첫 코드 스팬이 바뀐 단위에 들어 있으면 표시합니다(대소문자 무시) |
+| `sources` | List of sources. For each item: `file` (a path **relative to the root**) · `kind` · (for lines) `regions` |
+| `exclude_prefixes` | Initial strings of md blocks to leave out. Default `["@NOTE"]` |
+| `avoid_lists` | Avoid lists (a list of paths relative to the root). If the first code span in the first cell of a table row is in a changed unit, it is flagged (case-insensitive) |
 
-| `kind` | 단위 |
+| `kind` | Unit |
 |---|---|
-| `md`(기본) | 빈 줄로 나뉜 블록 하나. `exclude_prefixes` 로 시작하는 블록은 뺍니다 — 메모가 문단에 빈 줄 없이 붙어 있으면 문단과 한 단위입니다 |
-| `lines` | `regions` 의 구간 안에서 비어 있지 않은 줄 하나. 구간은 `start` 정규식에 맞는 줄부터, 그 다음 줄부터 찾은 `end` 정규식에 맞는 줄 **앞**까지입니다(끝 줄은 넣지 않음). 맞는 곳이 여럿이면 모두 |
-| `json-values` | 문자열 값 하나(키는 아님). `_` 로 시작하는 키의 값은 그 아래 모두 설명 칸이라 뺍니다 |
+| `md` (default) | One block separated by blank lines. A block that starts with one of the `exclude_prefixes` is left out — if a note is attached to a paragraph with no blank line, it is one unit with the paragraph |
+| `lines` | One non-empty line inside a `regions` span. A span runs from the line that matches the `start` regular expression up to, and **not including**, the line that matches the `end` regular expression, searched from the next line on (the end line is not included). If there are several matches, all of them count |
+| `json-values` | One string value (not the key). The values of keys that start with `_` are all description fields below it, so they are left out |
 
-지문은 정규화(NFC · 줄끝 LF · 앞뒤 공백 제거)한 글의 SHA-256 이고 파일 · 위치를 넣지 않습니다 — 순서만 바뀐 단위는 다시 나오지 않습니다.
-**모르는 키 · 모르는 `kind` · 찾지 못한 구간 표지 · 없는 파일 · 0 단위는 경고합니다.** `_` 로 시작하는 키는 주석으로 봅니다.
-`kind` 를 적지 않은 `.md` 밖의 파일은 md 로 읽고 경고합니다.
+The fingerprint is the SHA-256 of the normalized text (NFC · LF line ends · leading and trailing whitespace stripped), and it does not include the file or the position — a unit that only changed order does not come up again.
+**Unknown keys, unknown `kind` values, section markers that are not found, missing files and 0 units trigger a warning.** A key that starts with `_` is treated as a comment.
+A file other than `.md` with no `kind` is read as md, with a warning.
 
-## `markers` 와 `procedure` — 진입 스킬이 쓰는 두 값
+## `markers` and `procedure` — two values the entry skill uses
 
-`manuscript` 스킬은 어느 폴더에서든 불릴 수 있어 **가드가 먼저입니다.**
+The `manuscript` skill can be called from any folder, so **the guard comes first.**
 
-- **`markers`** — 이 파일들이 **모두 실재해야** 초기화된 프로젝트로 봅니다. 하나라도 없으면
-  기준 루트와 누락을 먼저 확인하며, 기존 프로젝트에 초기화를 자동 실행하지 않습니다.
-  그 프로젝트에만 있는 파일을 고릅니다.
-- **`procedure`** — 그 논문의 상세 절차 문서. **프로젝트 루트 기준 상대 경로**입니다.
-  프로젝트 로컬 스킬이면 `.claude/skills/<이름>/SKILL.md` 등을 그대로 가리키거나, 공통 절차
-  문서의 경로를 적습니다. **Claude·Codex 모두 그 파일을 직접 읽으며** 같은 이름의 스킬이
-  자동 등록됐다고 가정하지 않습니다. **키가 없으면 적용되는 프로젝트 지침과 추적 색인으로
-  진행합니다.** 명시한 경로의 파일이 없으면 누락을 보고하고 필수 보호 절차를 추측하지 않습니다.
+- **`markers`** — the project counts as initialized only if **all** these files exist. If even one is missing,
+  first check the base root and what is missing, and do not run initialization automatically on an existing project.
+  Choose files that exist only in that project.
+- **`procedure`** — the procedure document for that paper. It is a **path relative to the project root.**
+  For a project-local skill, point at `.claude/skills/<name>/SKILL.md` or the like as it is, or write the path of the shared procedure
+  document. **The entry skill only checks that the file exists; it does not read it.** The file is opened when a row of the project
+  guidance's reading guide (§2 of a generated `CLAUDE.md`) points to it, for the task that needs it. A large procedure document works best as a short
+  index whose numbered sections point to per-task files one level below it, so that each task reads only its own file.
+  **Both Claude and Codex read that file directly**, and do not assume a skill of the same name has been registered automatically;
+  where an app really has it registered, it may be called directly. If an app needs the local skill registered to call it, add only
+  that app's project registration and **keep a single body** — never put it into the global plugin, where it could fire in other paper folders.
+  **If the key is absent, proceed with the applicable project instructions and the tracker index.** If the file at the stated path is missing, report the omission and do not guess the required protection steps.
 
-`AGENTS.md`가 다른 원고 소스 폴더를 기준 루트로 지정하는 연결 프로젝트라면, 먼저 그 지침의
-상대 경로와 마커를 확인하고 대상 루트의 이 설정을 읽습니다. 도구 실행 위치도 대상 루트입니다.
+For a linked project where `AGENTS.md` names another manuscript source folder as the base root, first check the relative paths and markers in that instruction file, then read this setting in the target root. The tools also run from the target root.
 
-**논문별 절차를 플러그인에 넣지 않습니다.** 파일 구조와 제약이 논문마다 다르므로
-진입 로직만 공통이고, 내용은 각 프로젝트가 갖습니다.
+**Do not put paper-specific procedures in the plugin.** File structure and constraints differ from paper to paper,
+so only the entry logic is shared, and each project owns the content.
 
-## 이 파일에 넣지 않는 것 — 경계
+## What stays out of this file — boundaries
 
-**`project.json` 은 도구가 읽는 값만 담습니다.** 도구가 쓰지 않는 값을 넣으면 두 곳에서
-관리해야 하는 죽은 키가 됩니다. 아래는 프로젝트마다 다르지만 **여기 두지 않습니다.**
+**`project.json` holds only values the tools read.** A value that no tool uses becomes a dead key that has to be
+maintained in two places. The following differ from project to project, but **they do not go here.**
 
-| 프로젝트마다 다른 것 | 어디에 두나 |
+| What differs per project | Where it goes |
 |---|---|
-| 서식 원본(학교 배포본·저널 템플릿)과 그것을 찾는 규칙 | 빌드 스크립트와 그 프로젝트의 `CLAUDE.md` |
-| 도판 원본 폴더와 도판–파일 대응표 | 그 프로젝트의 `CLAUDE.md`, 대응표는 별도 `INDEX.md` |
-| 실험 원자료·저널 원고 원본의 읽기 전용 경로 | 그 프로젝트의 `CLAUDE.md`, 여러 프로젝트가 공유하면 상위 `CLAUDE.md` |
-| 도메인 근거 한계, 인용 금지 목록 | 그 프로젝트의 `CLAUDE.md` — **플러그인이나 상위로 올리지 않습니다** |
-| 세션 진행 절차(최신 산출물 감지·재빌드·검증) | 그 프로젝트의 절차 문서(`procedure`) |
+| The template (school-issued file, journal template) and the rule for finding it | The build script and that project's `CLAUDE.md` |
+| The figure source folder and the figure-to-file table | That project's `CLAUDE.md`; the table goes in a separate `INDEX.md` |
+| Read-only paths of raw experimental data and journal manuscript originals | That project's `CLAUDE.md`; if several projects share them, the parent `CLAUDE.md` |
+| Domain limits of evidence, lists of what must not be cited | That project's `CLAUDE.md` — **do not raise them to the plugin or a parent level** |
+| Per-task procedures (detecting the latest output, rebuilding, verifying) | That project's procedure document (`procedure`), opened through the reading guide |
 
-**추적 체계를 쓰지 않는 원고 프로젝트에는 이 파일이 없어도 됩니다.** `manuscript` 진입 스킬이
-그 폴더의 프로젝트 지침(`CLAUDE.md`·`AGENTS.md`)에 명시된 정체·파일 지도로 판정하고 초기화를 권하지 않습니다.
+**A manuscript project that does not use the tracking system does not need this file.** The `manuscript` entry skill
+identifies it from the identity stated in the project instructions in that folder (`CLAUDE.md` · `AGENTS.md`) and the guide to the documents to read (a file map in older projects), and does not recommend initialization.
 
-## 트리거는 프로젝트마다 다릅니다
+## Triggers differ per project
 
-학위논문은 `심사위원 확정 후` · `졸업 시기 확정 후` 가 필요하고, 저널 원고는
-`리뷰어 응답 후` 같은 값이 필요합니다. **자유 문자열로 두면 표가 만들어지지 않으므로**
-프로젝트마다 목록을 정해 여기 적습니다.
+Each project writes its list in `tracker.triggers` (table above): the common five plus values tied to its own schedule —
+a dissertation adds values such as `after the committee is set` and `after the graduation date is set`, a journal manuscript values such as `after the reviewers respond`.
+The rule — why only values from the list may be used — is `tracker-workflow.md` "Triggers — a fixed set of values".
 
-## 새 프로젝트는 `new-manuscript` 스킬이 만듭니다
+## New projects are made by the `new-manuscript` skill
 
-**손으로 만들지 않습니다.** `new-manuscript` 스킬의 `init_manuscript.py` 가 관리 파일(도구 아홉 · 훅)·설정·
-추적 파일 뼈대·공통 원본 `CLAUDE.md`·얇은 Codex 진입 안내 `AGENTS.md`를 한 번에 생성합니다.
+**Do not make one by hand.** `init_manuscript.py` of the `new-manuscript` skill generates the managed files (the tools listed below · the hook), the settings,
+the skeleton of the tracker files, the canonical `CLAUDE.md` and a thin Codex entry note `AGENTS.md` in one go.
 
 ```bash
-python <플러그인>/skills/new-manuscript/init_manuscript.py <대상폴더> --name "논문 이름"     --chapters intro.md results.md --references bib.md
+python <plugin>/skills/new-manuscript/init_manuscript.py <target folder> --name "paper name"     --chapters intro.md results.md --references bib.md
 ```
 
-**이미 있는 파일은 건너뜁니다.** 두 번 돌려도 안전합니다.
+**Files that already exist are skipped.** It is safe to run twice.
 
-도구의 정본은 `skills/new-manuscript/tools/` 에 있고, 초기화 때 각 프로젝트의 도구 폴더로
-**복사**됩니다. 프로젝트가 독립적으로 돌고, 필요하면 그 프로젝트에서만 손볼 수 있습니다.
-관리 대상 목록의 원본은 `new-manuscript/managed_files.json` 하나입니다. **정본이 바뀌면 각 프로젝트 사본은
-`new-manuscript/update_tools.py` 로 맞춥니다** — `--check`(판정) · `--apply`(교체 — 로컬 수정판은 `--force`, 없는 파일은 `--add`) ·
-`--scan <폴더>`(자매 프로젝트 전체). 원본은 그 도구가 든 플러그인 사본이고, 정본 이력의 해시(`tool_hashes.json`)로 옛 판을 알아봅니다.
-0.12 이하의 한글 이름 사본(`managed_files.json` 의 `old`)은 `--apply` 가 새 이름으로 옮깁니다.
+The canonical copy of the tools is in `skills/new-manuscript/tools/`, and at initialization it is **copied**
+into each project's tools folder. The project then runs on its own and, if needed, can be modified only there.
+The single source for the list of managed files is `new-manuscript/managed_files.json`. **When the canonical copy changes, bring each project copy in line
+with `new-manuscript/update_tools.py`** — `--check` (judge) · `--apply` (replace — a locally modified copy needs `--force`, a missing file needs `--add`) ·
+`--scan <folder>` (all sibling projects). The source is the plugin copy that holds the tool, and it recognizes old versions by the hashes in the canonical history (`tool_hashes.json`).
+For Korean-named copies from 0.12 or earlier (`LEGACY_TOOL_NAMES` in `tools/_config.py`), `--apply` moves them to the new names.
+A project whose tracker anchors still use the Korean spellings from before 0.14 is migrated in the same run (`new-manuscript/migrate_format.py`):
+`--check` previews it, and `--apply` rewrites the anchors once every tool copy is current, then rebuilds the generated files.
+A locally modified file is backed up to `.manuscript/tools_backup/<date>/` before it is replaced. The settings file is never written —
+keys that rely on defaults are only reported, so show the needed values to the user and write them with Edit. The hook registration
+(`.claude/settings.json`) is only compared; if it differs, merge the `hooks` block of `hooks/settings.example.json` by hand.
+The command lines are in the `new-manuscript` skill, "Bringing an existing project's tools up to date".
 
 ```
-tools/_config.py            설정 로더 · 공유 정의(도판 표지 · 상태 어휘) — 그대로 씁니다
-tools/_location.py          「파일 · 절」 위치 문법 — 색인 · 위치 표 · 포커스 · 새 기록 검사가 함께 씁니다
-tools/check_numbers.py      Figure·Table·참고문헌 번호 전수 대조
-tools/tidy_tracker.py       미결 항목 이관·색인 생성
-tools/index_records.py      완료 기록 역색인 생성 (`--검사` 로 옛 기록의 확인 못 한 이름)
-tools/new_record.py         완료 기록 번호 할당 · 대상 검사 · 색인 재생성(`--no-index` 로 끔)
-tools/new_pending.py        새 미결 항목 번호 할당 — 대기 글자 표 · 제안 표(쓰기 잠금 안에서 다시 읽어 정함)
-tools/_sync.py              공용 파일 동기화 안전장치 본체 — 검사 · 스냅샷 · 쓰기 잠금 · `replace_once`
-tools/check_sync.py         세션 시작 점검 · `--ack` · `--restore` · `--snapshots`
-tools/grammar_baseline.py   제출 전 문법 점검의 기준 — 바뀐 단위만 골라냄(changed) · 본 단위를 찍음(clean · resolve) · 후보 원문 대조(verify)
+tools/_config.py            settings loader · shared definitions (figure markers · status vocabulary) — use as is
+tools/_location.py          "file · section" location syntax — used together by the index · location table · focus · new-record check
+tools/check_numbers.py      Full cross-check of Figure · Table · reference numbers — after finishing each chapter
+tools/tidy_tracker.py       Archives open items · builds the index
+tools/index_records.py      Builds the reverse index of completion records — after editing a completion record (`--check-targets` reports names in old records that could not be verified)
+tools/new_record.py         Assigns completion record numbers · checks the target · rebuilds the index (`--no-index` turns this off)
+tools/new_pending.py        Assigns new open-item numbers — the pending letter tables · the proposal table (re-read inside the write lock to decide)
+tools/_sync.py              Core of the shared-file sync guard — check · snapshot · write lock · `replace_once`
+tools/check_sync.py         Session-start check · `--ack` · `--restore` · `--snapshots`
+tools/grammar_baseline.py   Baseline for the pre-submission grammar check — picks out changed units (changed) · records units seen (clean · resolve) · checks candidate wording against the source (verify)
 ```

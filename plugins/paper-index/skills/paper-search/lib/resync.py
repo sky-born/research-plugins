@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""파일명이 바뀌었을 때 인덱스 경로를 다시 맞춥니다.
+"""Re-match index paths after file names change.
 
-문헌관리 프로그램(ReadCube, Zotero 등)은 `_1`, `_2` 같은 접미사를 붙였다 떼거나
-클라우드 전환 시 전체를 다시 내려받습니다. 그때마다 인덱스 경로가 통째로 어긋납니다.
+Reference managers (ReadCube, Zotero and others) add and remove suffixes such as `_1`, `_2`, or
+download everything again when switching to the cloud. Each time, all index paths go out of step.
 
-2단계로 맞춥니다.
-  1) 이름 정규화 — 접미사·supplement 표식을 걷어낸 뒤 앞 34자를 비교. 대부분 여기서 해결됩니다.
-  2) 내용 대조 — 남은 것은 캐시 텍스트 앞부분을 비교합니다. 파일명이 아니라 내용으로 판단합니다.
+Matching runs in two steps.
+  1) Name normalization — strip suffixes and supplement markers, then compare the first 34 characters. Most are resolved here.
+  2) Content comparison — for the rest, compare the start of the cached text. The decision rests on content, not the file name.
 """
 import os, re
 from . import extract
@@ -41,7 +41,7 @@ def resync(rows, cfg, ft_dir, verbose=True):
         else:
             leftover.append(r)
 
-    # 2단계: 내용 대조
+    # step 2: content comparison
     if leftover:
         free = [x for x in cur if x not in used]
         newtext = {}
@@ -90,7 +90,7 @@ def resync(rows, cfg, ft_dir, verbose=True):
             r["year"] = y
         out.append(r)
 
-    # 같은 파일에 두 항목이 붙으면 중복본이 삭제된 것
+    # two entries on the same file mean a duplicate file was deleted
     seen, deduped, collided = set(), [], []
     for r in out:
         if r["rel"] in seen:

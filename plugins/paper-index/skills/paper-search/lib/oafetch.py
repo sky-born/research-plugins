@@ -1,42 +1,43 @@
 # -*- coding: utf-8 -*-
-"""오픈액세스 논문 받기 — 검색 결과 중 OA 인 것만 임시 폴더에 받아 전문 텍스트를 만듭니다.
+"""Fetching open-access papers — only the OA ones among the search results go into the staging folder, with full text.
 
-**라이브러리에는 쓰지 않습니다.** 받은 PDF 는 설정 `oa_staging`(기본 `<index_dir>/_oa_inbox`)에,
-전문 텍스트는 그 아래 `_text/` 에 둡니다. 임시 폴더는 인덱스 대상이 아닙니다.
-라이브러리로 옮기는 것은 사용자가 자기 문헌 관리 프로그램으로 합니다. 옮겨서 `reindex` 가
-편입하면, 다음 실행 때 짝이 되는 `_text` 를 `_text/_obsolete/` 로 치웁니다 (지우지 않습니다).
+**Nothing is written to the library.** Fetched PDFs go to the config `oa_staging` (default `<index_dir>/_oa_inbox`),
+their full text to `_text/` below it. The staging folder is not indexed.
+Moving papers into the library is the user's job, with their own reference manager. Once a moved paper is taken in by
+`reindex`, the next run moves the matching `_text` file to `_text/_obsolete/` (nothing is deleted).
 
-OA 판정은 둘을 함께 봅니다 — Scopus 의 `openaccess` 플래그, 그리고 OpenAlex 의
-`best_oa_location`(리포지터리 사본까지 잡힙니다). **내려받는 주소는 OpenAlex 가 알려 준 것만 씁니다.**
-구독 논문은 건드리지 않습니다. 요청은 도구 이름을 밝힌 User-Agent 로 보내고 간격을 둡니다.
+OA is judged from two sources — the Scopus `openaccess` flag and OpenAlex's
+`best_oa_location` (which also finds repository copies). **Only download addresses OpenAlex gave are used.**
+Subscription papers are not touched. Requests carry a User-Agent naming the tool and are spaced out.
 
-한 DOI 는 한 번만 받습니다 (v0.9.2)
-    결과 이름(`--name`)이나 질의가 달라도, 다른 컴퓨터가 받은 것이어도 임시 폴더에 이미 있으면
-    OpenAlex 에 다시 묻지도 받지도 않고 항목에 oa_file · oa_text 만 채웁니다. 판정은 `_settle` 한 곳입니다.
-      PDF   ① 수신 목록 `_manifest.json` ② 항목 자신의 oa_file ③ `_scopus/` 결과 JSON 들에 남은
-            oa_file(수신 목록 이전 판이 받은 것). 파일이 지금 임시 폴더에 있어야 하고, ②③ 은 다른 DOI 도
-            제 것이라고 적은 파일이면 쓰지 않습니다.
-      전문  `_text/<DOI>.txt` 가 있으면 PDF 를 못 찾아도 받은 것으로 칩니다 (라이브러리로 옮긴 뒤 등).
-    PDF 는 있는데 전문 텍스트가 없으면 받지 않고 텍스트만 만듭니다. 있는 텍스트는 덮어쓰지 않습니다.
-    판정을 빠져나와 새로 받은 PDF 도 임시 폴더의 PDF 와 내용(크기 · md5)이 같으면 사본(<이름>_N.pdf)을
-    만들지 않고 그 파일을 씁니다.
+Each DOI is fetched once
+    Whatever the result name (`--name`) or the query, and even if another computer fetched it, a DOI already in the
+    staging folder is neither looked up in OpenAlex nor fetched again; only oa_file · oa_text are filled in the entry.
+    The decision is made in one place, `_settle`.
+      PDF   ① the fetch manifest `_manifest.json` ② the entry's own oa_file ③ oa_file values left in the result
+            JSON files in `_scopus/` (fetched by versions before the manifest). The file must be in the staging folder
+            now, and ②③ are not used for a file that another DOI also claims.
+      text  If `_text/<DOI>.txt` exists, the DOI counts as fetched even when its PDF is not found (e.g. after it moved to the library).
+    If the PDF is there but its full text is not, nothing is fetched; only the text is made. Existing text is not overwritten.
+    A newly fetched PDF that slips past this decision but has the same content (size · md5) as a PDF in the staging folder
+    does not get a copy (<name>_N.pdf); that file is used instead.
 
-수신 목록 `<oa_staging>/_manifest.json`
+Fetch manifest `<oa_staging>/_manifest.json`
     {"format": "paper-index/oa-staging", "version": 1,
-     "files": {"<소문자 DOI>": {"file": "<임시 폴더 기준 PDF 상대경로>", "text": "_text/<DOI>.txt 또는 ''",
+     "files": {"<lower-case DOI>": {"file": "<PDF path relative to the staging folder>", "text": "_text/<DOI>.txt or ''",
                                "bytes": 123, "md5": "…", "url": "…", "oa_status": "…", "fetched": "YYYY-MM-DD"}}}
-    file 만 필수입니다. md5 · fetched 는 이 도구가 받은 줄에만 있고, ③ 에서 옮겨 적은 줄에는 없습니다.
-    bytes 가 지금 파일 크기와 다르면 다른 파일로 바뀐 것으로 보고 그 줄을 쓰지 않습니다.
-    쓸 때마다 디스크의 목록을 다시 읽어 합칩니다 — 다른 컴퓨터가 동기화로 보탠 줄 · 모르는 줄을 지우지 않습니다.
-    읽을 수 없거나 모르는 형식(다른 format · version)이면 경고하고, 그 실행에서는 읽지도 쓰지도 않습니다.
+    Only file is required. md5 · fetched exist only on lines for PDFs this tool fetched, not on lines copied over from ③.
+    If bytes differs from the current file size, the file has been replaced and that line is not used.
+    Every write reads the list on disk again and merges — lines another computer added through sync, and unknown lines, are kept.
+    If it cannot be read or has an unknown format (another format · version), the tool warns and neither reads nor writes it in that run.
 
-항목에 남기는 필드
-    oa_checked   OpenAlex 를 조회한 날 (ISO). 30일 안에는 다시 묻지 않습니다 (--recheck 로 강제)
-    oa_status    gold / hybrid / green / bronze … 또는 scopus (플래그만 있을 때)
-    oa_url       PDF 직접 주소, 없으면 OA 랜딩 주소
-    oa_file      임시 폴더 기준 PDF 상대경로 — 받았다는 표시. 파일이 지금 임시 폴더에 있을 때만 둡니다
-    oa_text      전문 텍스트 상대경로
-    oa_note      받지 못한 이유, 또는 PDF 없이 전문 텍스트만 있다는 안내
+Fields left on each entry
+    oa_checked   date OpenAlex was queried (ISO). Not asked again within 30 days (force with --recheck)
+    oa_status    gold / hybrid / green / bronze … or scopus (when only the flag is set)
+    oa_url       direct PDF address, otherwise the OA landing page
+    oa_file      PDF path relative to the staging folder — marks it as fetched. Set only while the file is in the staging folder
+    oa_text      relative path of the full text
+    oa_note      why it was not fetched, or a note that only the full text exists, without the PDF
 """
 import datetime as _dt
 import hashlib
@@ -55,13 +56,13 @@ import urllib.request
 UA = "paper-index-tool/1.0 (open-access fetch)"
 OPENALEX = "https://api.openalex.org/works/doi:"
 MIN_PDF_BYTES = 20_000
-DEFAULT_LIMIT = 30          # 한 번에 받는 상한
-DELAY = (3.0, 5.0)          # 다운로드 사이 간격(초)
-LOOKUP_DELAY = 0.25         # OpenAlex 조회 사이 간격(초)
-RECHECK_DAYS = 30           # OA 아님으로 판정한 항목을 다시 묻는 주기
-MANIFEST = "_manifest.json"                                 # 수신 목록 — 형식은 모듈 설명
+DEFAULT_LIMIT = 30          # maximum fetched per run
+DELAY = (3.0, 5.0)          # pause between downloads (seconds)
+LOOKUP_DELAY = 0.25         # pause between OpenAlex lookups (seconds)
+RECHECK_DAYS = 30           # how often entries judged not OA are asked again
+MANIFEST = "_manifest.json"                                 # fetch manifest — format in the module docstring
 MANIFEST_FORMAT, MANIFEST_VERSION = "paper-index/oa-staging", 1
-TEXT_ONLY_NOTE = "PDF 는 임시 폴더에 없고 전문 텍스트만 있음 — 라이브러리로 옮겼거나 지웠으면 정상입니다"
+TEXT_ONLY_NOTE = "PDF not in the staging folder, only its full text — normal if it was moved to the library or deleted"
 
 
 class NoNetwork(RuntimeError):
@@ -85,11 +86,11 @@ def _get(url, accept, timeout):
         ctype = e.headers.get("Content-Type", "") if e.headers else ""
         return e.code, url, ctype, b""
     except (urllib.error.URLError, socket.timeout, socket.gaierror) as e:
-        raise NoNetwork(f"{urllib.parse.urlsplit(url).hostname} 에 연결할 수 없습니다: {e}")
+        raise NoNetwork(f"cannot connect to {urllib.parse.urlsplit(url).hostname}: {e}")
 
 
 def openalex(doi, timeout=20):
-    """OpenAlex 가 아는 OA 위치. 모르는 DOI 면 None."""
+    """The OA location OpenAlex knows. None for a DOI it does not know."""
     st, _, _, body = _get(OPENALEX + urllib.parse.quote(doi, safe="/:"), "application/json", timeout)
     if st != 200 or not body:
         return None
@@ -109,14 +110,14 @@ def openalex(doi, timeout=20):
 
 
 def download(url, timeout=60):
-    """PDF 바이트를 돌려줍니다. PDF 가 아니면 (None, 이유)."""
+    """Return the PDF bytes. If it is not a PDF, (None, reason)."""
     st, _, ctype, body = _get(url, "application/pdf,*/*;q=0.8", timeout)
     if st != 200:
         return None, f"HTTP {st}"
     if body[:4] != b"%PDF":
-        return None, f"PDF 아님 ({(ctype or '?').split(';')[0]}, {len(body)} B)"
+        return None, f"not a PDF ({(ctype or '?').split(';')[0]}, {len(body)} B)"
     if len(body) < MIN_PDF_BYTES:
-        return None, f"너무 작음 ({len(body)} B)"
+        return None, f"too small ({len(body)} B)"
     return body, ""
 
 
@@ -126,7 +127,7 @@ def _safe(s):
 
 
 def filename_for(e):
-    """라이브러리 관례 — <저자 성>-<제목 앞 56자>.pdf"""
+    """Library convention — <author surname>-<first 56 characters of the title>.pdf"""
     surname = _safe((e.get("author") or "Unknown").split()[0].strip(",;")) or "Unknown"
     title = _safe(e.get("title") or e.get("doi") or "untitled")
     return f"{surname}-{title[:56].rstrip()}.pdf"
@@ -158,7 +159,7 @@ def _rel(path, stg):
 
 
 def _key(rel):
-    """임시 폴더 기준 상대경로를 비교용으로 — 구분자 · 대소문자(Windows)를 맞춥니다."""
+    """A path relative to the staging folder, made comparable — separators and case (Windows) aligned."""
     return os.path.normcase(os.path.normpath(rel))
 
 
@@ -171,7 +172,7 @@ def _md5(path):
 
 
 def _replace(tmp, dst, tries=3):
-    """os.replace — 동기화 프로그램이 대상을 잠깐 잡고 있으면(Windows PermissionError) 잠시 뒤 다시 합니다."""
+    """os.replace — if a sync program briefly holds the target (Windows PermissionError), try again a moment later."""
     for i in range(tries):
         try:
             os.replace(tmp, dst)
@@ -183,10 +184,10 @@ def _replace(tmp, dst, tries=3):
 
 
 def _result_records(results_dir, log=print):
-    """수신 목록 이전 판이 받은 기록 — 결과 JSON 들에 남은 oa_file. {DOI: [{"file", "url", "oa_status"}, …]}
+    """Records of PDFs fetched by versions before the manifest — oa_file values left in result JSON files. {DOI: [{"file", "url", "oa_status"}, …]}
 
-    papertool 이 저장한 형식({"meta", "entries"})과 항목 목록(list)을 읽습니다. 문자열 "oa_file" 이 없는
-    파일은 해석하지 않습니다. 읽을 수 없는 파일은 이름을 알리고 뺍니다."""
+    Reads the format papertool saves ({"meta", "entries"}) and plain entry lists. Files without the string "oa_file"
+    are not parsed. Unreadable files are named and left out."""
     out, bad = {}, []
     if not results_dir or not os.path.isdir(results_dir):
         return out
@@ -212,25 +213,25 @@ def _result_records(results_dir, log=print):
                 out.setdefault(_norm_doi(e["doi"]), []).append(
                     {"file": e["oa_file"], "url": e.get("oa_url") or "", "oa_status": e.get("oa_status") or ""})
     if bad:
-        log(f"  ※ 결과 파일 {len(bad)}개를 읽지 못해 받은 기록에서 뺐습니다: " + ", ".join(bad[:5])
+        log(f"  ※ Could not read {len(bad)} result files; left them out of the fetch records: " + ", ".join(bad[:5])
             + (" …" if len(bad) > 5 else ""))
     return out
 
 
 class Staging:
-    """임시 폴더에 무엇을 받아 두었나 — 수신 목록(`_manifest.json`)과, 목록 이전 판이 결과 JSON 에 남긴 기록."""
+    """What has been fetched into the staging folder — the fetch manifest (`_manifest.json`) and the records versions before the manifest left in result JSON."""
 
     def __init__(self, stg, txt_dir, results_dir="", log=print):
         self.stg, self.txt_dir, self.results_dir, self.log = stg, txt_dir, results_dir, log
         self.path = os.path.join(stg, MANIFEST)
-        self.files, self.added = {}, {}          # 쓸 수 있는 줄 {DOI: 기록} · 이번 실행에 보탠 줄
-        self._legacy = None                       # {DOI: [기록]} — 필요할 때 한 번 읽습니다
-        self._legacy_owners = {}                  # {파일 키: {DOI}}
+        self.files, self.added = {}, {}          # usable lines {DOI: record} · lines added in this run
+        self._legacy = None                       # {DOI: [records]} — read once, when needed
+        self._legacy_owners = {}                  # {file key: {DOI}}
         raw, why = self._read()
         self.usable = raw is not None
         if why:
-            log(f"  ※ 수신 목록을 쓰지 않습니다 — {why}: {self.path}\n"
-                "    이번 실행은 전문 텍스트와 결과 JSON 의 기록으로만 판정하고, 목록은 고치지 않습니다.")
+            log(f"  ※ Not using the fetch manifest — {why}: {self.path}\n"
+                "    This run decides from the full-text files and the records in the result JSON only, and leaves the manifest unchanged.")
         bad = 0
         for doi, rec in (raw or {}).items():
             if isinstance(rec, dict) and isinstance(rec.get("file"), str) and rec["file"]:
@@ -238,28 +239,28 @@ class Staging:
             else:
                 bad += 1
         if bad:
-            log(f"  ※ 수신 목록에서 file 이 없는 줄 {bad}개를 건너뜁니다 (지우지는 않습니다): {self.path}")
+            log(f"  ※ Skipping {bad} manifest lines without a file (they are not deleted): {self.path}")
 
     def _read(self):
-        """(디스크 목록의 files dict, 쓰지 않는 이유). 파일이 없으면 ({}, "")."""
+        """(the files dict of the list on disk, reason for not using it). With no file, ({}, "")."""
         if not os.path.exists(self.path):
             return {}, ""
         try:
             with open(self.path, encoding="utf-8-sig") as f:
                 d = json.load(f)
         except (OSError, ValueError) as ex:
-            return None, f"읽을 수 없음 ({ex})"
+            return None, f"unreadable ({ex})"
         if not (isinstance(d, dict) and d.get("format") == MANIFEST_FORMAT
                 and d.get("version") == MANIFEST_VERSION and isinstance(d.get("files"), dict)):
             got = (d.get("format"), d.get("version")) if isinstance(d, dict) else (type(d).__name__, None)
-            return None, "모르는 형식 (format {!r} · version {!r})".format(*got)
+            return None, "unknown format (format {!r} · version {!r})".format(*got)
         return d["files"], ""
 
     def _ok(self, rel):
         return os.path.isfile(os.path.join(self.stg, rel))
 
     def _rec_ok(self, rec):
-        """목록의 줄이 지금도 맞는가 — 파일이 있고, 적힌 크기와 같습니다."""
+        """Does the line still hold — the file exists and has the recorded size."""
         p = os.path.join(self.stg, rec["file"])
         if not os.path.isfile(p):
             return False
@@ -267,13 +268,13 @@ class Staging:
         return not (isinstance(n, int) and n > 0 and os.path.getsize(p) != n)
 
     def _owners(self, rel):
-        """이 파일을 제 것이라고 적은 DOI 들 — 수신 목록(지금도 맞는 줄)과 결과 JSON."""
+        """The DOIs that claim this file — in the manifest (lines that still hold) and in result JSON."""
         k = _key(rel)
         out = {d for d, r in self.files.items() if _key(r["file"]) == k and self._rec_ok(r)}
         return out | self._legacy_owners.get(k, set())
 
     def _unmapped(self):
-        """임시 폴더의 PDF 가운데 수신 목록에 없는 것 — 이것이 있을 때만 결과 JSON 을 읽습니다."""
+        """PDFs in the staging folder that are not in the manifest — result JSON is read only when there are some."""
         mapped = {_key(r["file"]) for r in self.files.values() if self._rec_ok(r)}
         try:
             names = os.listdir(self.stg)
@@ -293,7 +294,7 @@ class Staging:
         return self._legacy.get(doi, [])
 
     def _adopt_legacy(self):
-        """결과 JSON 의 기록 가운데 임시 폴더에 지금 있고 주인이 하나뿐인 것을 목록에 옮겨 적습니다."""
+        """Copy into the manifest the result-JSON records whose file is in the staging folder now and has a single owner."""
         for d, recs in sorted(self._legacy.items()):
             cur = self.files.get(d)
             if cur and self._rec_ok(cur):
@@ -304,9 +305,9 @@ class Staging:
                     break
 
     def pdf_for(self, e):
-        """이 항목의 DOI 로 받아 둔 PDF — (상대경로, 기록). 지금 임시 폴더에 없으면 ("", 남은 기록 또는 None).
+        """The PDF fetched for this entry's DOI — (relative path, record). If it is not in the staging folder now, ("", remaining record or None).
 
-        PDF 가 없어도 기록을 돌려주는 것은 url · oa_status 를 채우기 위해서입니다."""
+        A record is returned even without a PDF so that url · oa_status can be filled."""
         doi = _norm_doi(e.get("doi"))
         rec = self.files.get(doi)
         if rec and self._rec_ok(rec):
@@ -320,7 +321,7 @@ class Staging:
         return "", rec or (cands[0] if cands else None)
 
     def same_content(self, size, digest):
-        """내용(md5)이 같은 PDF 가 임시 폴더에 이미 있으면 그 이름. 크기가 같은 파일만 읽습니다."""
+        """The name of a PDF with the same content (md5) already in the staging folder. Only files of the same size are read."""
         try:
             names = sorted(os.listdir(self.stg))
         except OSError:
@@ -336,7 +337,7 @@ class Staging:
         self.files[doi] = self.added[doi] = rec
 
     def remember(self, doi, rel, src=None, text=None):
-        """받아 둔 PDF 를 목록에 적습니다 — 이미 같은 줄이 있으면 그대로 둡니다. text 가 None 이면 있는 것을 찾습니다."""
+        """Write a fetched PDF into the manifest — an identical line is left as is. With text None, look for an existing text."""
         if text is None:
             t = os.path.join(self.txt_dir, text_name(doi))
             text = _rel(t, self.stg) if os.path.isfile(t) else ""
@@ -353,13 +354,13 @@ class Staging:
         self.record(doi, rec)
 
     def save(self):
-        """이번 실행에 보탠 줄을 디스크의 목록에 합쳐 씁니다. 목록을 못 읽은 실행이면 쓰지 않습니다."""
+        """Merge the lines added in this run into the list on disk. A run that could not read the list does not write it."""
         if not self.usable or not self.added:
             return
-        raw, why = self._read()                       # 그사이 다른 컴퓨터가 보탠 줄을 살립니다
+        raw, why = self._read()                       # keep lines another computer added meanwhile
         if raw is None:
             self.usable = False
-            self.log(f"  ※ 수신 목록이 그사이 {why} — 고치지 않습니다: {self.path}")
+            self.log(f"  ※ The fetch manifest became {why} meanwhile — leaving it unchanged: {self.path}")
             return
         files = dict(raw)
         files.update(self.added)
@@ -375,13 +376,13 @@ class Staging:
                 os.remove(tmp)
             except OSError:
                 pass
-            self.log(f"  ※ 수신 목록을 쓰지 못했습니다 ({ex}) — 받은 기록은 결과 JSON 에 남습니다: {self.path}")
+            self.log(f"  ※ Could not write the fetch manifest ({ex}) — the fetch records stay in the result JSON: {self.path}")
 
 
 def _settle(e, st, txt_dir, pdftotext):
-    """이미 받아 둔 DOI 면 항목에 oa_file · oa_text 를 채우고 (True, 전문을 새로 만들었나). 아니면 (False, False).
+    """For a DOI already fetched, fill oa_file · oa_text in the entry and return (True, whether the full text was newly made). Otherwise (False, False).
 
-    PDF 는 있는데 전문 텍스트가 없으면 여기서 만듭니다 — 다시 받지 않습니다. 있는 텍스트는 그대로 둡니다.
+    If the PDF is there but its full text is not, the text is made here — nothing is fetched again. Existing text is left as is.
     """
     doi = _norm_doi(e["doi"])
     rel, rec = st.pdf_for(e)
@@ -415,10 +416,10 @@ def _recently_checked(e, today):
 
 
 def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, verbose=True, log=print):
-    """미보유 항목 가운데 OA 인 것을 받습니다. 항목 dict 에 oa_* 필드를 채우고 요약을 돌려줍니다.
+    """Fetch the OA papers among the missing entries. Fills the oa_* fields of the entry dicts and returns a summary.
 
-    이미 받아 둔 DOI 는 다시 받지 않습니다(`_settle`). NoNetwork 는 그대로 올립니다 — 호출 쪽이 안내를
-    내고 결과 저장은 계속합니다. P["scopus"] 가 있으면 그 폴더의 결과 JSON 에서 옛 수신 기록을 찾습니다.
+    DOIs already fetched are not fetched again (`_settle`). NoNetwork is raised as is — the caller prints a note
+    and goes on saving the results. If P["scopus"] is set, old fetch records are looked up in the result JSON there.
     """
     stg, txt_dir = P["oa_staging"], P["oa_text"]
     os.makedirs(txt_dir, exist_ok=True)
@@ -437,9 +438,9 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
                 already += 1
                 made += new_text
                 if new_text and verbose:
-                    log(f"  전문 텍스트 만듦 (이미 받아 둔 PDF): {e['oa_file']}")
+                    log(f"  full text made (PDF already staged): {e['oa_file']}")
                 continue
-            for k in ("oa_file", "oa_text"):          # 임시 폴더에 없는 것을 받았다고 적어 두지 않습니다
+            for k in ("oa_file", "oa_text"):          # do not record as fetched what is not in the staging folder
                 e.pop(k, None)
             if not recheck and not e.get("oa_url") and _recently_checked(e, today):
                 continue
@@ -448,7 +449,7 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
                 continue
             doi = e["doi"]
             checked += 1
-            info = openalex(doi)                     # NoNetwork 는 여기서 올라갑니다
+            info = openalex(doi)                     # NoNetwork is raised here
             e["oa_checked"] = today.isoformat()
             time.sleep(LOOKUP_DELAY)
 
@@ -461,7 +462,7 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
             e["oa_url"] = info.get("pdf_url") or info.get("landing") or ""
             pdf_url = info.get("pdf_url")
             if not pdf_url:
-                e["oa_note"] = "OA 이지만 PDF 직접 주소가 없음 — 링크로 직접 받으십시오"
+                e["oa_note"] = "OA, but no direct PDF address — download it from the link"
                 failed.append((doi, e["oa_note"]))
                 continue
 
@@ -472,9 +473,9 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
             except NoNetwork as ex:
                 data, why = None, str(ex)
             if data is None:
-                # 출판사가 비브라우저 요청을 막는 경우(Springer·MDPI 등)가 흔합니다.
-                # 사용자가 클릭할 수 있게 랜딩 주소를 남기고 다음으로 넘어갑니다.
-                e["oa_note"] = f"다운로드 실패: {why} — 링크로 직접 받으십시오"
+                # Publishers often block non-browser requests (Springer, MDPI and others).
+                # Keep the landing address so the user can click it, and go on to the next.
+                e["oa_note"] = f"download failed: {why} — download it from the link"
                 e["oa_url"] = info.get("landing") or pdf_url
                 failed.append((doi, e["oa_note"]))
                 continue
@@ -483,7 +484,7 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
                 e["year"] = info["year"]
             digest = hashlib.md5(data).hexdigest()
             same = st.same_content(len(data), digest)
-            if same:                                 # 내용이 같은 파일이 이미 있으면 사본을 만들지 않습니다
+            if same:                                 # a file with the same content exists: no copy
                 dest = os.path.join(stg, same)
                 reused += 1
             else:
@@ -493,19 +494,19 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
                     f.write(data)
                 _replace(tmp, dest)
             txt = os.path.join(txt_dir, text_name(doi))
-            ok = os.path.exists(txt) or to_text(pdftotext, dest, txt)    # 있는 텍스트는 덮어쓰지 않습니다
+            ok = os.path.exists(txt) or to_text(pdftotext, dest, txt)    # existing text is not overwritten
             e["oa_file"] = _rel(dest, stg)
             e["oa_text"] = _rel(txt, stg) if ok else ""
             e.pop("oa_note", None)
             st.record(_norm_doi(doi), {"file": e["oa_file"], "text": e["oa_text"], "bytes": len(data),
                                        "md5": digest, "url": pdf_url, "oa_status": e["oa_status"],
                                        "fetched": today.isoformat()})
-            st.save()                                # 받을 때마다 — 도중에 끊겨도 받은 것은 남습니다
+            st.save()                                # after every fetch — what was fetched survives an interruption
             got += 1
             if verbose:
-                log(f"  OA 수신 {got}: {os.path.basename(dest)}  ({len(data):,} B"
-                    + (", 같은 내용의 기존 파일을 씀" if same else "")
-                    + ("" if ok else ", 전문 텍스트 추출 실패") + ")")
+                log(f"  OA fetched {got}: {os.path.basename(dest)}  ({len(data):,} B"
+                    + (", used the existing file with the same content" if same else "")
+                    + ("" if ok else ", full-text extraction failed") + ")")
     finally:
         st.save()
 
@@ -515,7 +516,7 @@ def fetch(entries, cfg, P, limit=DEFAULT_LIMIT, owned_dois=(), recheck=False, ve
 
 
 def prune_text(txt_dir, owned_dois):
-    """이미 라이브러리에 편입된 DOI 의 전문 텍스트를 _obsolete/ 로 치웁니다 (삭제하지 않습니다)."""
+    """Move the full text of DOIs now in the library to _obsolete/ (nothing is deleted)."""
     if not os.path.isdir(txt_dir) or not owned_dois:
         return 0
     import shutil

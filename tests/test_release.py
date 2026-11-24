@@ -332,6 +332,105 @@ class ReadmeParity(unittest.TestCase):
         self.assertEqual([], problems)
 
 
+class ReferenceContents(unittest.TestCase):
+    """Skill reference files longer than 100 lines open with a table of contents that matches their headings."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="release-toc-test-")
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        self.path = self.root / "plugins" / "example" / "skills" / "one" / "references" / "guide.md"
+        self.path.parent.mkdir(parents=True)
+
+    def write(self, text: str) -> list[str]:
+        self.path.write_text(text, encoding="utf-8")
+        return release.toc_problems(self.root, ["example"])
+
+    BODY = ("## First\n\ntext\n\n```text\n## not a heading\n```\n\n### Inner\n\n" + "line\n" * 100 + "## Second\n")
+    TOC = "<!-- toc -->\n- First\n  - Inner\n- Second\n<!-- /toc -->\n\n"
+
+    def test_a_long_file_without_contents_is_reported_with_the_expected_list(self):
+        found = self.write("# Guide\n\n" + self.BODY)
+        self.assertEqual(1, len(found), found)
+        self.assertIn("open it with a table of contents", found[0])
+        self.assertIn("- First\n  - Inner\n- Second", found[0])
+
+    def test_matching_contents_pass_and_headings_in_code_blocks_are_ignored(self):
+        self.assertEqual([], self.write("# Guide\n\n" + self.TOC + self.BODY))
+
+    def test_a_file_without_a_title_line_takes_the_contents_at_the_top(self):
+        self.assertEqual([], self.write(self.TOC + self.BODY))
+
+    def test_contents_that_drift_from_the_headings_are_reported(self):
+        found = self.write("# Guide\n\n" + self.TOC.replace("- Second", "- Later") + self.BODY)
+        self.assertTrue(any("does not match the headings" in problem for problem in found), found)
+
+    def test_contents_after_a_heading_are_reported(self):
+        found = self.write("## Intro\n\n" + self.TOC.replace("- First", "- Intro\n- First") + self.BODY)
+        self.assertTrue(any("must come before the first section heading" in problem for problem in found), found)
+
+    def test_a_short_file_needs_no_contents(self):
+        self.assertEqual([], self.write("# Guide\n\n## Only\n\ntext\n"))
+
+    def test_this_repository_passes(self):
+        root = Path(__file__).resolve().parents[1]
+        _, plugins = cli_common.marketplace(root)
+        self.assertEqual([], release.toc_problems(root, plugins))
+
+
+class KoreanOnlyAsData(unittest.TestCase):
+    """Korean in prose (an English README.md included), comments, names or docstrings stops the check; code spans, README.ko.md and string data do not."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="release-hangul-test-")
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        git(self.root, "init", "-q")
+
+    def problems(self, files: dict) -> list[str]:
+        for rel, text in files.items():
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        git(self.root, "add", "-A")
+        return release.hangul_problems(self.root)[0]
+
+    def test_code_spans_readme_and_string_data_pass(self):
+        found = self.problems({
+            "plugins/p/skills/s/SKILL.md": "Write `확정` when confirmed.\n```text\n상태 확정\n```\n",
+            "plugins/p/README.md": "English text\n",
+            "plugins/p/README.ko.md": "한국어 설명\n",
+            "plugins/p/tool.py": '"""Reads `상태`."""\nLEGACY_STATE = "확정"   # the status `확정`\n',
+        })
+        self.assertEqual([], found)
+
+    def test_prose_comment_name_and_docstring_stop(self):
+        found = self.problems({
+            "plugins/p/skills/s/SKILL.md": "확정 means confirmed.\n",
+            "plugins/p/README.md": "한국어 설명\n",
+            "plugins/p/tool.py": '"""상태를 읽습니다."""\n상태 = 1   # 상태\n',
+        })
+        kinds = sorted(problem.split(": ", 1)[1] for problem in found)
+        self.assertEqual(["Korean in a comment", "Korean in a docstring", "Korean in a name", "Korean in prose", "Korean in prose"], kinds)
+
+    def test_korean_literals_live_in_legacy_tables_only(self):
+        code = ('"""Format tokens."""\n'
+                'LEGACY_BLOCKS = {"now": "지금"}   # now\n'
+                'BLOCKS = {"now": ("now", "지금")}\n'
+                'SEG = r"[A-Za-z가-힣]+"\n'
+                'MIXED = r"[가-힣]+ 상태"\n'
+                'def write(lines):\n'
+                '    lines.append("## 목차")\n'
+                '    return [x for x in lines if x != "지금"]\n')
+        found = self.problems({"plugins/p/tool.py": code, "tests/test_tool.py": 'SAMPLE = 1\nprint("상태")\n'})
+        self.assertEqual(["plugins/p/tool.py:3", "plugins/p/tool.py:5", "plugins/p/tool.py:7", "plugins/p/tool.py:8"],
+                         sorted(f.split(": ", 1)[0] for f in found))
+        self.assertTrue(all("outside a LEGACY table" in f for f in found))
+
+    def test_this_repository_passes(self):
+        self.assertEqual([], release.hangul_problems(Path(__file__).resolve().parents[1])[0])
+
+
 class TryInSession(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="release-try-test-")
@@ -480,7 +579,7 @@ class FindCodex(unittest.TestCase):
         for file in (self.explicit, self.path):
             file.write_text("", encoding="utf-8")
         self.bundles = []
-        for n, folder in enumerate(("aaaa", "bbbb")):            # 폴더 이름은 해시 — 판이 없어 수정 시각이 새것을 정합니다
+        for n, folder in enumerate(("aaaa", "bbbb")):            # folder names are hashes — there is no version, so the modification time decides which is newer
             target = self.base / "OpenAI" / "Codex" / "bin" / folder / "codex.exe"
             target.parent.mkdir(parents=True)
             target.write_text("", encoding="utf-8")

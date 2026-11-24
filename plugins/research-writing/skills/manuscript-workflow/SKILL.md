@@ -1,54 +1,49 @@
 ---
 name: manuscript-workflow
-description: 학술 논문·학위논문 집필의 공통 작업 규칙. 문체 규약과 금지 표현, 근거 등급별 헤지, 인용 확정 원칙, 수정안 제시·확정 선언 프로토콜, 미결 항목 추적 구조, 도판 기술 규칙을 제공합니다. 원고 문장을 쓰거나 고칠 때, 리뷰 대응·개정 작업을 할 때, 원고·답변서를 내기 전 문법을 점검할 때, 세션 간 인수인계를 정리할 때 사용합니다. Claude Code·Codex에서 공통으로 사용하며 프로젝트별 파일·경로·도메인 사실은 적용되는 AGENTS.md·CLAUDE.md 와 지정된 절차 문서를 따릅니다.
+description: Shared working rules for writing academic papers and dissertations — style rules and expressions to avoid, hedging by evidence grade, rules for confirming citations, the protocol for proposing revisions and for the user's confirmation, the structure for tracking open items, and figure rules. Use it when writing or revising manuscript sentences, when handling reviews and revisions, when checking grammar before submitting a manuscript or a response letter, and when organising the hand-over between sessions. Shared by Claude Code and Codex; project-specific files, paths and domain facts come from the applicable AGENTS.md · CLAUDE.md and the procedure document they name.
 ---
 
-# 원고 작업 공통 규칙
+# Shared rules for manuscript work
 
-**여기 있는 것은 "어떻게 일하는가"입니다.** 프로젝트가 무엇을 다루는지 — 챕터 구성, 파일 이름,
-도메인 사실, 인용 금지 사항 — 는 **그 프로젝트의 지침과 절차 문서**에 있습니다.
-호스트의 지침 우선순위와 사용자의 최신 지시를 따르며, 공통 스킬보다 프로젝트 규칙을 우선합니다.
+**This is about "how to work".** What a project covers — chapter layout, file names,
+domain facts, citations it must not use — is in **that project's guidance and procedure documents**.
+Follow the host's instruction priority and the user's latest instructions; project rules come before this shared skill.
 
-## 먼저 확인합니다
+## Check first
 
-1. **적용되는 `AGENTS.md`·`CLAUDE.md`와 지정된 절차 문서를 읽었는가.** 프로젝트 정체·경계·파일
-   지도가 거기 있습니다. 자동 로딩이나 Claude 전용 로컬 스킬 등록을 가정하지 않습니다.
-   기준 루트와 절차가 미확인 상태이면 먼저 `manuscript` 진입 절차로 확인합니다.
-2. **지금 어느 프로젝트인가.** 형제 폴더에 다른 원고가 있을 수 있습니다.
-   폴더가 다르면 **다른 논문**입니다. 한쪽 문장을 다른 쪽으로 옮기지 않습니다.
-3. **원고 파일을 고치기 전에** — 이번 턴 사용자 발화에서 반영 지시 문구를 찾습니다.
-   없으면 고치지 않고 제안만 냅니다 (`references/revision-protocol.md`).
+1. **Have you read the project documents this task needs?** The project guidance's reading guide (§2 of a generated `CLAUDE.md`) names them for each task,
+   the procedure document (`procedure`) included, and none of them is loaded by itself. If the base root is unconfirmed, confirm it first with the `manuscript` entry procedure.
+2. **Which project is this?** Sibling folders may hold other manuscripts.
+   A different folder is **a different paper**. Never move sentences from one to the other.
+3. **Before changing a manuscript file** — find the user's instruction to apply it in this turn's message.
+   Without one, do not change the file; only propose (`references/revision-protocol.md`).
+4. **Is this a review only?** "Review it", "check it" and "take a look" are read-only — being able to open a file is no permission
+   to change it, and neither the manuscript nor the tracker files are changed.
 
-## 참조 문서 — 필요할 때 그것만 읽습니다
+## Reference documents — read only the one you need
 
-| 파일 | 언제 |
+| File | When |
 |---|---|
-| `references/revision-protocol.md` | **원고 문장을 고치기 전에, 그리고 원고·답변서를 내기 전에 반드시.** 역할 경계, 확정 선언, 수정안 제시 방식, 문단 순차 검토, 제목·캡션 검토, 비판적 검토 모드, 제출 전 문법 점검 |
-| `references/style-guide.md` | 문장을 쓰거나 다듬을 때. 시제 · 문장 구조(세미콜론 · gapping · 접속 부사) · 약칭 · 용어 일관성 + 금지 표현과 대체 표현 |
-| `references/evidence-hedging.md` | 관찰·해석·인과를 서술할 때. 근거 등급별 헤지 표 |
-| `references/citation-rules.md` | 인용을 넣거나 확정할 때 |
-| `references/figure-technical.md` | 도판을 만들거나 문서에 넣을 때. 투명 배경 · 도판에 남기지 않는 것 |
-| `references/build-technical.md` | **docx 빌드 스크립트를 만들거나 고칠 때, 산출물을 검증할 때.** 물음 없이 열리는 산출물 · 필드 캐시 · 목차 쪽번호 자리와 넘침 · 서식 파트 보존 · 빌드 뒤 자가 검사 · 캡션 스타일 |
-| `references/tracker-workflow.md` | 미결 항목을 등록·이관할 때, 세션을 마칠 때, **다른 세션과 같은 폴더를 쓸 때** (동시 편집 규칙 다섯 · 쓰기 잠금 · 기록 · 미결 번호 할당 도구 · Write 차단 훅 · `대상` · `위치` 문법) |
-| `references/environment.md` | 셸이 폴더에 닿는지 판별할 때, **문서에 경로·환경값을 적을 때**, 쓰기 범위, 소통 규칙 |
-| `references/project-config.md` | 새 프로젝트에 도구를 붙일 때. `.manuscript/project.json` 스키마 |
+| `references/revision-protocol.md` | **Always before changing manuscript sentences and before submitting a manuscript or a response letter.** Role boundary, the user's confirmation, how to present proposed revisions, paragraph-by-paragraph review, title and caption review, critical review mode, the pre-submission grammar check |
+| `references/style-guide.md` | When writing or polishing sentences. Tense · sentence structure (semicolons · gapping · conjunctive adverbs) · abbreviations · consistent terms, plus expressions to avoid and their replacements |
+| `references/evidence-hedging.md` | When describing observations, interpretations and causes. The hedging table by evidence grade |
+| `references/citation-rules.md` | When adding or confirming a citation |
+| `references/figure-technical.md` | When making figures or putting them into a document. Transparent backgrounds · what figures must not carry |
+| `references/build-technical.md` | **When writing or changing a docx build script, and when verifying its output.** Output that opens without prompting · field caches · page-number slots and overflow in the table of contents · keeping template parts · the self-check after a build · caption style |
+| `references/tracker-workflow.md` | When registering or archiving open items, when ending a session, and **when another session uses the same folder** (the five concurrent-editing rules · write lock · tools that assign record and open-item numbers · the hook that blocks Write · the target · location syntax · format tokens, English and the older Korean spellings) |
+| `references/environment.md` | When deciding whether the shell reaches a folder, **when writing paths or environment values into a document**, write scope, communication rules |
+| `references/project-config.md` | When adding the tools to a new project. The `.manuscript/project.json` schema |
 
-**세 가지는 거의 항상 적용됩니다** — `revision-protocol` · `style-guide` · `evidence-hedging`.
-원고 문장을 다루는 작업이면 먼저 읽으십시오.
+**Three of them apply almost always** — `revision-protocol` · `style-guide` · `evidence-hedging`.
+Read them first for any work on manuscript sentences.
 
-## 가장 자주 깨지는 규칙 셋
+## The three rules broken most often
 
-여기 요약해 둡니다. 세부는 각 참조 문서에 있습니다.
+They are in `references/revision-protocol.md` "Approval and comparison": only the user declares something confirmed ·
+every proposed revision shows the current text directly above it · read the neighbouring paragraphs before revising one.
 
-1. **"확정"은 사용자만 선언합니다.** 파일에 반영한 뒤에도 `확정본`이라 부르지 않습니다.
-   `반영본` · `현재 반영 상태` · `검토 대기`로 적습니다.
-2. **수정안을 낼 때는 직전 원문을 바로 위에 함께 보여 줍니다.** 별도 요청을 기다리지 않습니다.
-   바뀐 부분은 백틱 코드 스팬으로 표시합니다 — 볼드는 터미널에서 묻힙니다.
-3. **문단 하나를 고치기 전에 앞뒤 문단을 읽습니다.** 논거 중복·예고 선행·선행사 부재를
-   수정안보다 **먼저** 냅니다.
+## Project settings
 
-## 프로젝트 설정
-
-도구가 프로젝트에 적응하는 데 쓰는 값(챕터 목록, 추적 파일 이름, 트리거 값)은
-`.manuscript/project.json` 에 둡니다. **없으면 기본값으로 돕니다** — 스키마와 붙이는 절차는
-`references/project-config.md`, 복사할 파일은 `templates/` 에 있습니다.
+The values the tools need to fit a project (chapter list, tracker file names, trigger values) live in
+`.manuscript/project.json`. **Without it the tools run on defaults** — the schema and how to set it up are in
+`references/project-config.md`, and the files to copy are in `templates/`.

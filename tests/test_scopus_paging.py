@@ -53,7 +53,7 @@ finally:
     print("CALLS " + json.dumps(calls))
 '''
 
-# Like the key that exposed the bug: no COMPLETE view, STANDARD pages up to 25 only.
+# A key with no COMPLETE view and STANDARD pages of up to 25 only.
 KEY_25 = {"complete": False, "standard_max": 25, "total": 82}
 
 
@@ -96,7 +96,7 @@ class ScopusPagingTests(unittest.TestCase):
         self.assertEqual("COMPLETE", calls[0][0])                  # abstracts are tried first
         self.assertTrue(all(c[2] <= 25 for c in calls), calls)    # no request the key refuses
         self.assertNotIn("HTTP 400", out)
-        self.assertNotIn("건만 받았습니다", out)
+        self.assertNotIn("expected, only", out)
 
     def test_page_size_above_the_key_limit_falls_back_and_warns_once(self):
         self.write_config({"page_size": 200})
@@ -127,11 +127,11 @@ class ScopusPagingTests(unittest.TestCase):
         self.assertIn("HTTP 400", out)
 
     def test_unknown_or_invalid_scopus_settings_warn_and_use_defaults(self):
-        self.write_config({"pagesize": 200, "page_size": "200", "_주석": "comment keys are skipped"})
+        self.write_config({"pagesize": 200, "page_size": "200", "_note": "comment keys are skipped"})
         out, calls, entries = self.run_scopus(KEY_25, "--all")
         self.assertIn("scopus.pagesize", out)
         self.assertIn("scopus.page_size", out)
-        self.assertNotIn("_주석", out)
+        self.assertNotIn("_note", out)
         self.assertEqual(82, len(entries))
         self.assertTrue(all(c[2] <= 25 for c in calls), calls)
 
@@ -139,7 +139,7 @@ class ScopusPagingTests(unittest.TestCase):
         out, calls, entries = self.run_scopus(KEY_25, "--all", "--start", "50")
         self.assertEqual([f"2-s2.0-{i}" for i in range(50, 82)], self.eids(entries))
         self.assertTrue(all(c[1] + c[2] <= 82 for c in calls), calls)   # nothing past the end
-        self.assertNotIn("건만 받았습니다", out)
+        self.assertNotIn("expected, only", out)
 
     def papertool(self, *args, env=None):
         result = subprocess.run(
@@ -164,11 +164,11 @@ class ScopusPagingTests(unittest.TestCase):
             (index / name).write_text("old launcher", encoding="utf-8")
         (index / "_scopus" / "done.json").write_text('{"entries": []}', encoding="utf-8")
         self.papertool("scopus-tidy")
-        archive = index / "_scopus" / "_실행완료"
+        archive = index / "_scopus" / "_done"
         self.assertEqual(["Scopus검색_done.bat", "Scopus검색_done.query.txt"], sorted(p.name for p in archive.iterdir()))
         self.assertTrue((index / "Scopus검색_pending.bat").exists())      # no result yet: left alone
         self.assertTrue((index / "scopus_search.ps1").exists())            # still beside the pending one
-        self.assertIn("치울 실행 파일이 없습니다", self.papertool("scopus-tidy"))
+        self.assertIn("No launcher files to tidy", self.papertool("scopus-tidy"))
 
     def test_merge_accepts_the_retired_keep_launcher_flag(self):
         saved = self.base / "in.json"

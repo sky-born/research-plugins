@@ -9,10 +9,15 @@
         [--keep]                                                keep the temporary folder (prints its path)
         [--diff]                                                print a unified diff of changed generated files
         [--grammar]                                             also run the grammar_baseline scenarios on a manuscript copy (tests/grammar_scenarios.py)
+        [--state-from <sync-state folder>]                      after the run, check the copy as another computer would — with a copy of that state
 
 What it does — copies tracker files · records · settings · hooks · tools to a temporary folder, overwrites them with the
-canonical files listed in `managed_files.json`, runs `index_records.py` and `tidy_tracker.py --apply` (twice — the second
-run must change nothing) and compares with the original. Reports changed files · line endings · sizes · row counts of index §1 and list §3.
+canonical files listed in `managed_files.json`, runs `update_tools.py --apply` on the copy (the command a user runs — it migrates the
+tracker anchors and rebuilds; a following `migrate_format.py` preview must find nothing), runs `index_records.py` and `tidy_tracker.py --apply` (twice — the second
+run must change nothing) and compares with the original. Reports the format before and after · the migration plan · changed files ·
+line endings · sizes · row counts of index §1 and list §3. With `--state-from`, a copy of a computer's sync state for the project
+(`~/.claude/sync-state/<id>`) is placed under the copy's project id and `check_sync.py` runs with it — what that computer's session
+start would report after Drive delivers the migrated files.
 
 --grammar — copies only the grammar-check scope the settings name (after `--set`: chapter files · `grammar.sources` ·
 `grammar.avoid_lists`) to a temporary folder of its own. Paths outside the root (`../avoid_phrases/…`) keep the same relative place
@@ -171,8 +176,54 @@ def preview_grammar(project: Path, sets: list[tuple[str, object]], keep: bool) -
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+def location_rows(text: str) -> int:
+    """Rows of the list's location table — the markers in either spelling (`_config.BLOCKS`)."""
+    for name in _config.BLOCKS['locations']:
+        n = block_rows(text, f'<!-- {name} -->', f'<!-- /{name} -->')
+        if n >= 0:
+            return n
+    return -1
+
+
+def project_format(root: Path) -> str:
+    """'en' · 'ko' · 'mixed' · 'none' with the files behind it — `_config.project_format` on the given folder."""
+    try:
+        cfg = _config.Config(str(root), names(load_cfg(root)))
+        state, per = _config.project_format(cfg)
+    except (SystemExit, OSError, ValueError) as e:
+        return f'? ({e})'
+    return state + ('' if not per else ' — ' + '; '.join(f'{r}: {"+".join(v)}' for r, v in sorted(per.items())))
+
+
+def other_computer_view(tmp: Path, tools_dir: str, state_from: Path) -> str:
+    """check_sync on the copy with a copy of another computer's sync state for the project."""
+    sys.path.insert(0, str(SKILL / 'tools'))
+    import _sync
+    raw = names(load_cfg(tmp))
+    base = Path(tempfile.mkdtemp(prefix='preview-other-state-'))
+    pid = _sync.project_id(raw.get('project') or tmp.name, str(tmp))
+    shutil.copytree(state_from, base / pid, ignore=shutil.ignore_patterns('write.lock*', '*.tmp*'))
+    env = dict(os.environ, SYNC_STATE_HOME=str(base))
+    go = lambda *extra: subprocess.run(PY + [str(tmp / tools_dir / 'check_sync.py')] + list(extra), cwd=tmp, capture_output=True,   # noqa: E731
+                                       text=True, encoding='utf-8', errors='replace', env=env)
+    start = go()                                       # what that computer's session start reports
+    damage = go('--damage')                            # every lost line — only files present in the copy (the rest were never copied)
+    shutil.rmtree(base, ignore_errors=True)
+    keep, on = [], False
+    for line in (damage.stdout or '').splitlines():
+        m = re.match(r'^\s*! (.+?) — of \d+ lines', line)
+        if m:
+            on = (tmp / m.group(1)).is_file()
+        elif not line.startswith('        '):
+            on = False
+        if on:
+            keep.append(line)
+    return (f'session start (exit {start.returncode}):\n' + (start.stdout or '') + (start.stderr or '')
+            + '\nlost lines in copied files (--damage):\n' + ('\n'.join(keep) or '    none'))
+
+
 def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool, focus: str | None,
-            keep: bool, show_diff: bool) -> int:
+            keep: bool, show_diff: bool, state_from: str | None = None) -> int:
     cfg = load_cfg(project)
     eff = names(cfg)
     t = eff['tracker']
@@ -184,7 +235,7 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
     try:
         for f in tracker_files:
             if (project / f).is_file():
-                (tmp / f).parent.mkdir(parents=True, exist_ok=True)     # even when tracker files sit in a subfolder (`추적/`)
+                (tmp / f).parent.mkdir(parents=True, exist_ok=True)     # even when tracker files sit in a subfolder
                 shutil.copy2(project / f, tmp / f)
         for d in (records_dir, '.manuscript', '.writing', '.claude', tools_dir):
             if (project / d).is_dir():
@@ -197,8 +248,9 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
             s = SKILL / item['src']; d = tmp / item['dst'].replace('{tools_dir}', tools_dir)
             d.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(s, d)
-            if item.get('old'):
-                (d.parent / item['old']).unlink(missing_ok=True)          # remove old-name copies, as update_tools --apply does
+            old_name = _config.LEGACY_TOOL_NAMES.get(item['src'])
+            if old_name:
+                (d.parent / old_name).unlink(missing_ok=True)          # remove old-name copies, as update_tools --apply does
         # put settings values (copy only) — --set and old names the settings do not write
         if sets or cfg != load_raw(project):
             cfg_path = tmp / '.manuscript' / 'project.json'
@@ -212,7 +264,10 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
         print('=' * 78)
         print(f'preview  {project}')
         print(f'temporary folder {tmp}')
+        print(f'--- format of the original: {project_format(project)}')
         logs = []
+        rc, out = run(PY + [str(SKILL / 'update_tools.py'), str(tmp), '--apply'], tmp); logs.append(('update_tools.py --apply', rc, out))
+        rc, out = run(PY + [str(SKILL / 'migrate_format.py'), str(tmp)], tmp); logs.append(('migrate_format.py (after — preview)', rc, out))
         rc, out = run(PY + [str(tmp / tools_dir / 'index_records.py')], tmp); logs.append(('index_records.py', rc, out))
         rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--apply'], tmp); logs.append(('tidy_tracker.py --apply', rc, out))
         snap = {f: (tmp / f).read_bytes() for f in tracker_files if (tmp / f).is_file()}
@@ -224,8 +279,13 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
             rc, out = run(PY + [str(tmp / tools_dir / 'tidy_tracker.py'), '--focus', focus], tmp); logs.append((f'--focus {focus} (diagnostics)', rc, out))
         for name, rc, out in logs:
             print(f'--- {name}  (exit {rc})')
-            print('\n'.join('    ' + l for l in out.rstrip().split('\n')[-12:]))
+            keep_lines = 45 if name.startswith('update_tools.py --apply') else 12
+            print('\n'.join('    ' + l for l in out.rstrip().split('\n')[-keep_lines:]))
         print(f'--- same after two runs: {"yes" if idem else "no — not idempotent"}')
+        print(f'--- format of the copy now: {project_format(tmp)}')
+        if state_from:
+            print('--- check_sync as the computer whose state was copied')
+            print('\n'.join('    ' + l for l in other_computer_view(tmp, tools_dir, Path(state_from)).rstrip().split('\n')))
 
         print('--- differences from the original')
         for f in tracker_files:
@@ -244,7 +304,7 @@ def preview(project: Path, sets: list[tuple[str, object]], with_manuscript: bool
             r1 = block_rows(at, '## 1.', '## 2.'); r2 = block_rows(bt, '## 1.', '## 2.')
             if r1 >= 0 and f == t.get('record_index'):
                 note.append(f'§1 {r1} → {r2} rows')
-            r1 = block_rows(at, '<!-- 위치표 -->', '<!-- /위치표 -->'); r2 = block_rows(bt, '<!-- 위치표 -->', '<!-- /위치표 -->')
+            r1, r2 = location_rows(at), location_rows(bt)
             if r1 >= 0:
                 note.append(f'§3 {r1} → {r2} rows')
             print(f'    {f:24s} changed — ' + ' · '.join(note))
@@ -269,6 +329,7 @@ def main() -> int:
     ap.add_argument('--keep', action='store_true')
     ap.add_argument('--diff', action='store_true')
     ap.add_argument('--grammar', action='store_true')
+    ap.add_argument('--state-from', metavar='DIR')
     a = ap.parse_args()
     sets = []
     for s in a.set:
@@ -276,7 +337,7 @@ def main() -> int:
         sets.append((k.strip(), json.loads(v)))
     rc = 0
     for p in a.projects:
-        rc |= preview(Path(p).resolve(), sets, a.with_manuscript, a.focus, a.keep, a.diff)
+        rc |= preview(Path(p).resolve(), sets, a.with_manuscript, a.focus, a.keep, a.diff, a.state_from)
         if a.grammar:
             rc |= preview_grammar(Path(p).resolve(), sets, a.keep)
     return rc

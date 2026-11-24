@@ -1,8 +1,8 @@
-"""표 행 형식(_config.table_problems · split_cells) — 쪼개진 행 · `\\|` 셀 · 이관 표 구분선 · replace_once 차단 · 훅 알림. 합성 표본으로 검증합니다.
+"""Table row format (_config.table_problems · split_cells) — split rows · `\\|` cells · archive table separator · replace_once blocking · hook notice. Checked with synthetic fixtures.
 
-발단은 한 저널 원고 프로젝트의 2026-10-08 조사(표 행 쪼개짐) — Bash 도구가 명령 문자열의 `'\\n'` 을 줄바꿈으로 줄여 A70 행이
-두 줄로 쪼개졌고, 행만 이관돼 꼬리가 대기 파일에 남았으며, 첫 이관이 이관 표의 구분선을 지웠고, `\\|` 가 든 비고가 포커스에서 잘렸습니다.
-표본은 OS 임시 폴더에 만들고 컴퓨터별 상태도 임시 폴더(`SYNC_STATE_HOME`)에 둡니다. 연구 파일은 건드리지 않습니다.
+Scenarios: the Bash tool turns `'\\n'` in a command string into a line break, so a row is split
+over two lines; only the row is archived and the tail stays in the pending file; the first archiving erases the separator of the archive table; a note that contains `\\|` is cut off in the focus block.
+Fixtures are built in the OS temp folder and the per-computer state also goes to a temp folder (`SYNC_STATE_HOME`). No research files are touched.
 """
 
 from __future__ import annotations
@@ -24,16 +24,16 @@ HOOK = SKILL / "hooks" / "guard_write.py"
 INITIALIZER = SKILL / "init_manuscript.py"
 PY = [sys.executable, "-X", "utf8", "-B"]
 
-os.environ.setdefault("SYNC_STATE_HOME", tempfile.mkdtemp(prefix="table-rows-state-"))   # 먼저 import 된 스위트의 상태 폴더를 덮지 않음
+os.environ.setdefault("SYNC_STATE_HOME", tempfile.mkdtemp(prefix="table-rows-state-"))   # do not override the state folder of a suite imported earlier
 STATE = Path(os.environ["SYNC_STATE_HOME"])
 
 sys.path.insert(0, str(TOOLS))
 import _config  # noqa: E402
 import _sync  # noqa: E402
 
-HDR_PEND = "| ID | 항목 | 위치 | 트리거 | 상태 | 비고 |\n|---|---|---|---|---|---|\n"
-HDR_PRO = "| ID | 제안 | 위치 | 트리거 | 상태 | 비고 |\n|---|---|---|---|---|---|\n"
-HDR_ARCH = "| ID | 항목 | 위치 | 상태 | 비고 |"
+HDR_PEND = "| ID | Item | Location | Trigger | Status | Note |\n|---|---|---|---|---|---|\n"
+HDR_PRO = "| ID | Proposal | Location | Trigger | Status | Note |\n|---|---|---|---|---|---|\n"
+HDR_ARCH = "| ID | Item | Location | Status | Note |"
 SEP_ARCH = "|---|---|---|---|---|"
 
 
@@ -55,7 +55,7 @@ class Fixture(unittest.TestCase):
 
     def project(self, name: str) -> Path:
         p = self.scratch / name
-        run(PY + [str(INITIALIZER), str(p), "--name", "표 행 표본 " + name, "--kind", "journal",
+        run(PY + [str(INITIALIZER), str(p), "--name", "Table row sample " + name, "--kind", "journal",
                   "--source-dir", "manuscript", "--chapters", "intro.md", "results.md", "--references", "references.md"],
             self.scratch)
         return p
@@ -79,205 +79,210 @@ class Fixture(unittest.TestCase):
                 "cwd": str(p), "tool_use_id": tid}
 
 
-# ---------------------------------------------------------------- 문법 — 한 곳의 정의
+# ---------------------------------------------------------------- grammar — defined in one place
 class GrammarTests(unittest.TestCase):
     def test_split_cells_keeps_escaped_pipe(self):
-        self.assertEqual(_config.split_cells("| A1 | 값 \\| 둘 | 끝 |"), ["A1", "값 \\| 둘", "끝"])
+        self.assertEqual(_config.split_cells("| A1 | value \\| two | end |"), ["A1", "value \\| two", "end"])
         self.assertEqual(_config.split_cells("|a|b|"), ["a", "b"])
-        self.assertEqual(_config.split_cells("| A1 | 끝이 \\|"), ["A1", "끝이 \\|"], "끝의 \\| 는 닫는 세로줄이 아닙니다")
+        self.assertEqual(_config.split_cells("| A1 | ends with \\|"), ["A1", "ends with \\|"], "a trailing \\| is not a closing pipe")
         self.assertEqual(_config.unescape_cell("x \\| y"), "x | y")
 
     def test_row_regex_is_shared_by_sync_and_tidy(self):
         self.assertIs(_sync.ROW_ID_RE, _config.TABLE_ROW_RE_M)
         for ok in ("| A70 | x |", "| AB1-2 | x |", "|D14|x|"):
             self.assertTrue(_config.TABLE_ROW_RE.match(ok), ok)
-        for no in ("| ID | 항목 |", "| P006·P007 | x |", "|---|---|", " | A1 | x |"):
+        for no in ("| ID | Item |", "| P006·P007 | x |", "|---|---|", " | A1 | x |"):
             self.assertFalse(_config.TABLE_ROW_RE.match(no), no)
 
     def test_table_problems_finds_split_rows_and_skips_breakers(self):
         text = "\n".join([
-            "| ID | 항목 | 상태 |",            # 1 머리
-            "|---|---|---|",                   # 2
-            "| A1 | 첫째 | 완료 |",             # 3
-            "'` 해 해시하고 S4 는 … 꼬리 |",    # 4 orphan — 저널 원고 프로젝트의 A70 모양
-            "| A2 | 둘째 | 대기 |",             # 5
-            " **2026-09-02 (E221)** — 꼬리 |",  # 6 orphan — 학위논문 프로젝트의 125행 모양(앞 공백)
-            "| A3 | 셋째 | 대기 |",             # 7
-            "<!-- /이관목록:A -->",              # 8 주석은 표를 끝냄
-            "",                                 # 9
-            "### A3 상세",                      # 10
-            "| ID | 항목 | 상태 |",            # 11 새 표
-            "| A4 | 셀이 | 넷 | 이다 |",        # 12 cells
-            "| A5 | 끝 세로줄 없음",             # 13 cells + tail
-            "| P006·P007 | ID 없는 행 |",       # 14 ID 없음 — 검사하지 않음
-            "- 목록 줄",                        # 15 목록은 표를 끝냄
-            "```",                              # 16
-            "| x |",                            # 17 코드 펜스 안
-            "펜스 안의 꼬리",                    # 18
-            "```",                              # 19
-            "| ID | a |",                       # 20
-            "| A6 | b |",                       # 21
-            "> 인용",                           # 22 인용은 표를 끝냄
-            "| ID | a |",                       # 23
-            "| A7 | c |",                       # 24
-            "# 제목",                           # 25
+            "| ID | Item | Status |",                 # 1 header
+            "|---|---|---|",                           # 2
+            "| A1 | first | done |",                   # 3
+            "'` and hash it, then S4 … tail |",        # 4 orphan — a split-off tail
+            "| A2 | second | waiting |",               # 5
+            " **2026-09-02 (E221)** — tail |",         # 6 orphan — with a leading space
+            "| A3 | third | waiting |",                # 7
+            "<!-- /archived-list:A -->",               # 8 a comment ends the table
+            "",                                        # 9
+            "### A3 details",                          # 10
+            "| ID | Item | Status |",                 # 11 a new table
+            "| A4 | cells | four | here |",            # 12 cells
+            "| A5 | no closing pipe",                  # 13 cells + tail
+            "| P006·P007 | row without an ID |",       # 14 no ID — not checked
+            "- a list line",                           # 15 a list ends the table
+            "```",                                     # 16
+            "| x |",                                   # 17 inside a code fence
+            "a tail inside the fence",                 # 18
+            "```",                                     # 19
+            "| ID | a |",                              # 20
+            "| A6 | b |",                              # 21
+            "> quotation",                             # 22 a quotation ends the table
+            "| ID | a |",                              # 23
+            "| A7 | c |",                              # 24
+            "# Heading",                               # 25
             "", ])
         got = [(n, c) for n, c, _p in _config.table_problems(text)]
         self.assertEqual(got, [(4, "orphan"), (6, "orphan"), (12, "cells"), (13, "cells"), (13, "tail")])
-        self.assertEqual([(n, c) for n, c, _p in _config.table_problems(text.replace("\n", "\r\n"))], got, "CRLF 도 같게")
-        self.assertEqual(_config.table_problems("| ID | a |\n|---|---|\n| A1 | b \\| c |\n\n글\n"), [], "\\| 는 셀 경계가 아닙니다")
-        self.assertIn("4행", _config.describe_table_problem((4, "orphan", "꼬리")))
+        self.assertEqual([(n, c) for n, c, _p in _config.table_problems(text.replace("\n", "\r\n"))], got, "the same with CRLF")
+        self.assertEqual(_config.table_problems("| ID | a |\n|---|---|\n| A1 | b \\| c |\n\ntext\n"), [], "\\| is not a cell boundary")
+        self.assertIn("line 4", _config.describe_table_problem((4, "orphan", "tail")))
+        # old-format data: a Korean marker (pre-0.14 spelling) ends a table the same way
+        old_marker = "<!-- /%s -->" % _config.BLOCKS["archived_list"][1].format("A")
+        self.assertEqual(_config.table_problems("| ID | a |\n|---|---|\n| A1 | b |\n" + old_marker + "\n"), [])
 
 
-# ---------------------------------------------------------------- 정리 도구 — 경고 · 이관 보류 · 구분선
+# ---------------------------------------------------------------- tidy tool — warning · archiving held · separator
 class TidyTests(Fixture):
     def test_warns_split_row_holds_migration_and_restores_separator(self):
-        p = self.project("쪼개진행")
+        p = self.project("split-row")
         trig = self.trig(p)
         pend, arch = p / "tracker_pending.md", p / "records" / "archive.md"
-        tail = "'` 해 해시하고 꼬리 — 남은 것 |"
+        tail = "'` and hash it, then the tail — what is left |"
         self.add_rows(pend, HDR_PEND,
-                      f"| A1 | 닫힘 | `manuscript/results.md` ③ | {trig} | 완료 (2026-10-06) | 비고 |\n"
+                      f"| A1 | closed | `manuscript/results.md` ③ | {trig} | done (2026-10-06) | note |\n"
                       f"{tail}\n"
-                      f"| A2 | 열림 | `manuscript/intro.md` ¶1 | {trig} | 대기 | |\n")
-        # 옛 판의 첫 이관이 지운 구분선을 흉내 냅니다
+                      f"| A2 | open | `manuscript/intro.md` ¶1 | {trig} | waiting | |\n")
+        # imitates a separator that went missing from the archive table
         arch.write_text(arch.read_text(encoding="utf-8").replace(SEP_ARCH + "\n", "", 1), encoding="utf-8", newline="\n")
         self.assertNotIn(SEP_ARCH, arch.read_text(encoding="utf-8"))
         n = pend.read_text(encoding="utf-8").split("\n").index(tail) + 1
 
-        r = self.tidy(p)                                                   # 진단만
-        self.assertIn("대기: 표 행 형식", r.stdout)
-        self.assertIn(f"{n}행", r.stdout)
-        self.assertIn("A1: 행 바로 아래", r.stdout)
-        self.assertIn("이관을 보류", r.stdout)
-        self.assertIn("구분선 복원", r.stdout)
-        self.assertIn("archive.md", r.stdout.split("바뀔 파일", 1)[1])
-        self.assertNotIn(SEP_ARCH, arch.read_text(encoding="utf-8"), "진단만으로는 쓰지 않습니다")
+        r = self.tidy(p)                                                   # diagnosis only
+        self.assertIn("pending: table row format", r.stdout)
+        self.assertIn(f"line {n}", r.stdout)
+        self.assertIn("A1: a non-table line (line ", r.stdout)
+        self.assertIn("archiving is held", r.stdout)
+        self.assertIn("restored the separator", r.stdout)
+        self.assertIn("archive.md", r.stdout.split("Files that would change", 1)[1])
+        self.assertNotIn(SEP_ARCH, arch.read_text(encoding="utf-8"), "a diagnosis alone does not write")
         self.assertIn("| A1 |", pend.read_text(encoding="utf-8"))
 
         r = self.tidy(p, "--apply")
-        self.assertIn("이관을 보류", r.stdout)
-        self.assertIn("| A1 |", pend.read_text(encoding="utf-8"), "쪼개진 완료 행은 옮기지 않습니다")
+        self.assertIn("archiving is held", r.stdout)
+        self.assertIn("| A1 |", pend.read_text(encoding="utf-8"), "a split completed row is not moved")
         self.assertIn(tail, pend.read_text(encoding="utf-8"))
         lines = arch.read_text(encoding="utf-8").split("\n")
-        self.assertEqual(lines[lines.index(HDR_ARCH) + 1], SEP_ARCH, "구분선이 머리 바로 아래로 복원")
+        self.assertEqual(lines[lines.index(HDR_ARCH) + 1], SEP_ARCH, "the separator is restored right below the header")
         self.assertNotIn("| A1 |", arch.read_text(encoding="utf-8"))
 
-        # 꼬리를 행에 합치면 이관됩니다 — 구분선은 그대로, 행은 그 아래
-        _sync.replace_once(str(pend), f"| 비고 |\n{tail}", f"| 비고 {tail}")
+        # once the tail is joined to the row it is archived — the separator stays and the row goes below it
+        _sync.replace_once(str(pend), f"| note |\n{tail}", f"| note {tail}")
         r = self.tidy(p, "--apply")
-        self.assertNotIn("표 행 형식", r.stdout)
-        self.assertNotIn("보류", r.stdout)
+        self.assertNotIn("table row format", r.stdout)
+        self.assertNotIn("held", r.stdout)
         self.assertNotIn("| A1 |", pend.read_text(encoding="utf-8"))
         text = arch.read_text(encoding="utf-8")
         lines = text.split("\n")
         i = lines.index(HDR_ARCH)
         self.assertEqual(lines[i + 1], SEP_ARCH)
         self.assertTrue(lines[i + 2].startswith("| A1 |"), lines[i + 2])
-        self.assertIn("남은 것 |", lines[i + 2])
+        self.assertIn("what is left |", lines[i + 2])
+        self.assertIn(f"(trigger: {trig}) note", lines[i + 2], "the trigger is kept in the note of the archived row")
         self.assertEqual(text.count(SEP_ARCH), 1)
         before = arch.read_bytes()
         self.tidy(p, "--apply")
-        self.assertEqual(before, arch.read_bytes(), "두 번 돌려도 같아야 합니다")
+        self.assertEqual(before, arch.read_bytes(), "two runs must give the same result")
         self.assertEqual(_config.table_problems(text), [])
 
     def test_skips_migration_when_archive_holds_a_stray_line(self):
-        p = self.project("이관표꼬리")
+        p = self.project("archive-tail")
         trig = self.trig(p)
         pend, arch = p / "tracker_pending.md", p / "records" / "archive.md"
-        self.add_rows(pend, HDR_PEND, f"| A1 | 닫힘 | `manuscript/results.md` ③ | {trig} | 완료 (2026-10-06) | |\n")
-        arch.write_text(arch.read_text(encoding="utf-8").replace(SEP_ARCH + "\n", SEP_ARCH + "\n| B1 | 옛 이관 | x | 완료 | 비고 |\n꼬리만 남은 줄 |\n", 1),
-                        encoding="utf-8", newline="\n")
+        self.add_rows(pend, HDR_PEND, f"| A1 | closed | `manuscript/results.md` ③ | {trig} | done (2026-10-06) | |\n")
+        arch.write_text(arch.read_text(encoding="utf-8").replace(
+            SEP_ARCH + "\n", SEP_ARCH + "\n| B1 | archived earlier | x | done | note |\na line with only a tail |\n", 1),
+            encoding="utf-8", newline="\n")
         r = self.tidy(p, "--apply")
-        self.assertIn("이관을 건너뜁니다", r.stdout)
-        self.assertIn("이관_DB: 표 행 형식", r.stdout)
-        self.assertIn("| A1 |", pend.read_text(encoding="utf-8"), "이관 표를 고칠 때까지 옮기지 않습니다")
-        self.assertIn("꼬리만 남은 줄 |", arch.read_text(encoding="utf-8"), "이관 표를 다시 쓰지 않아 줄이 지워지지 않습니다")
-        self.assertNotIn("이관 대상 없음", r.stdout)
+        self.assertIn("archiving is skipped", r.stdout)
+        self.assertIn("archive: table row format", r.stdout)
+        self.assertIn("| A1 |", pend.read_text(encoding="utf-8"), "nothing is moved until the archive table is fixed")
+        self.assertIn("a line with only a tail |", arch.read_text(encoding="utf-8"), "the archive table is not rewritten, so the line is not erased")
+        self.assertNotIn("Nothing to archive", r.stdout)
 
     def test_focus_copies_cell_with_escaped_pipe_in_full(self):
-        p = self.project("포커스세로줄")
+        p = self.project("focus-pipe")
         trig = self.trig(p)
         self.add_rows(p / "tracker_proposals.md", HDR_PRO,
-                      f"| H1 | 보충 자료 안 | `manuscript/results.md` ③ | {trig} | 대기 | 앞부분 `@FIG a.png \\| 캡션` 뒷부분 끝말 |\n")
+                      f"| H1 | supplementary material | `manuscript/results.md` ③ | {trig} | waiting | before `@FIG a.png \\| caption` after, last words |\n")
         r = self.tidy(p, "--focus", "ch2", "--apply")
         listing = (p / "tracker_index.md").read_text(encoding="utf-8")
-        focus = listing.split("<!-- 포커스 -->", 1)[1].split("<!-- /포커스 -->", 1)[0]
+        focus = listing.split("<!-- focus -->", 1)[1].split("<!-- /focus -->", 1)[0]
         self.assertIn("#### H1 ", focus)
-        self.assertIn("앞부분 `@FIG a.png | 캡션` 뒷부분 끝말", focus, "\\| 뒤가 잘리지 않고 문단에서는 | 로")
-        self.assertNotIn("표 행 형식", r.stdout)
-        table = listing.split("<!-- 위치표 -->", 1)[1].split("<!-- /위치표 -->", 1)[0]
+        self.assertIn("before `@FIG a.png | caption` after, last words", focus, "the part after \\| is not cut off and shows as | in the paragraph")
+        self.assertNotIn("table row format", r.stdout)
+        table = listing.split("<!-- location-table -->", 1)[1].split("<!-- /location-table -->", 1)[0]
         self.assertIn("| `results.md` | ③ | H1 |", table)
 
 
-# ---------------------------------------------------------------- 쓰는 쪽 — replace_once
+# ---------------------------------------------------------------- writing side — replace_once
 class ReplaceOnceTests(Fixture):
     def test_blocks_edit_that_splits_a_row_and_passes_escaped_pipe(self):
-        p = self.project("치환차단")
+        p = self.project("replace-blocked")
         trig = self.trig(p)
         pend = p / "tracker_pending.md"
-        self.add_rows(pend, HDR_PEND, f"| A1 | 열림 | `manuscript/results.md` ③ | {trig} | 대기 | 비고 |\n")
+        self.add_rows(pend, HDR_PEND, f"| A1 | open | `manuscript/results.md` ③ | {trig} | waiting | note |\n")
         before = pend.read_bytes()
         with self.assertRaises(ValueError) as cm:
-            _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고\n꼬리 |")
-        self.assertIn("표 행", str(cm.exception))
-        self.assertEqual(before, pend.read_bytes(), "막혔으면 파일은 그대로")
+            _sync.replace_once(str(pend), "| waiting | note |", "| waiting | note\ntail |")
+        self.assertIn("table rows", str(cm.exception))
+        self.assertEqual(before, pend.read_bytes(), "when blocked, the file stays as it is")
         with self.assertRaises(ValueError):
-            _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고 | 셀 하나 더 |")      # 셀 수
+            _sync.replace_once(str(pend), "| waiting | note |", "| waiting | note | one more cell |")      # cell count
         with self.assertRaises(ValueError):
-            _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고")                     # 끝 세로줄
-        _sync.replace_once(str(pend), "| 대기 | 비고 |", "| 대기 | 비고 \\| 덧붙임 |")           # 셀 안의 세로줄은 \\|
+            _sync.replace_once(str(pend), "| waiting | note |", "| waiting | note")                        # trailing pipe
+        _sync.replace_once(str(pend), "| waiting | note |", "| waiting | note \\| added |")               # a pipe inside a cell is \\|
         self.assertEqual(_config.table_problems(pend.read_text(encoding="utf-8")), [])
-        _sync.replace_once(str(pend), "| 대기 | 비고 \\| 덧붙임 |", "| 대기 | 비고\n꼬리 |", check_tables=False)
+        _sync.replace_once(str(pend), "| waiting | note \\| added |", "| waiting | note\ntail |", check_tables=False)
         self.assertEqual(sorted(c for _n, c, _p in _config.table_problems(pend.read_text(encoding="utf-8"))),
-                         ["orphan", "tail"], "알고 하는 치환은 통과 — 끝 세로줄 없는 행 + 꼬리")
+                         ["orphan", "tail"], "a deliberate replacement passes — a row without a trailing pipe + a tail")
 
     def test_existing_problem_only_warns(self):
-        p = self.project("치환경고")
+        p = self.project("replace-warns")
         trig = self.trig(p)
         pend = p / "tracker_pending.md"
-        self.add_rows(pend, HDR_PEND, f"| A1 | 열림 | `manuscript/results.md` ③ | {trig} | 대기 | |\n이미 있던 꼬리 |\n")
+        self.add_rows(pend, HDR_PEND, f"| A1 | open | `manuscript/results.md` ③ | {trig} | waiting | |\na tail that was already there |\n")
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            out = _sync.replace_once(str(pend), "| A1 | 열림 |", "| A1 | 열림 (고침) |")
+            out = _sync.replace_once(str(pend), "| A1 | open |", "| A1 | open (fixed) |")
         self.assertEqual(out["count"], 1)
-        self.assertIn("이미 있던 표 결함", err.getvalue())
-        self.assertIn("열림 (고침)", pend.read_text(encoding="utf-8"))
+        self.assertIn("already had", err.getvalue())
+        self.assertIn("open (fixed)", pend.read_text(encoding="utf-8"))
 
 
-# ---------------------------------------------------------------- 훅 — 쓰기 뒤 그 턴에 알림
+# ---------------------------------------------------------------- hook — notice in the same turn after a write
 class HookTests(Fixture):
     def test_post_hook_reports_broken_rows_in_tracker_files_only(self):
-        p = self.project("훅알림")
+        p = self.project("hook-notice")
         trig = self.trig(p)
         pend = p / "tracker_pending.md"
-        run(PY + [str(p / "tools" / "check_sync.py")], p, codes=(0, 1))          # 지문 기준
-        good = f"| A1 | 열림 | `manuscript/results.md` ③ | {trig} | 대기 | 비고 |\n"
-        self.add_rows(pend, HDR_PEND, good + "쪼개진 꼬리 |\n")
+        run(PY + [str(p / "tools" / "check_sync.py")], p, codes=(0, 1))          # fingerprint baseline
+        good = f"| A1 | open | `manuscript/results.md` ③ | {trig} | waiting | note |\n"
+        self.add_rows(pend, HDR_PEND, good + "split tail |\n")
         r = hook("post", self.edit_payload(p, "tracker_pending.md", "e1"), p)
         out = json.loads(r.stdout)
-        self.assertIn("표 행", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("Table rows", out["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(out["hookSpecificOutput"]["hookEventName"], "PostToolUse")
         self.assertIn("tracker_pending.md", out["systemMessage"])
-        self.assertIn("쪼개진 꼬리", out["systemMessage"])
-        # 고치면 조용합니다
-        pend.write_text(pend.read_text(encoding="utf-8").replace("쪼개진 꼬리 |\n", ""), encoding="utf-8", newline="\n")
+        self.assertIn("split tail", out["systemMessage"])
+        # once fixed, it is quiet
+        pend.write_text(pend.read_text(encoding="utf-8").replace("split tail |\n", ""), encoding="utf-8", newline="\n")
         r = hook("post", self.edit_payload(p, "tracker_pending.md", "e2"), p)
         self.assertEqual(r.stdout.strip(), "")
-        # 셸 도구 경로 — 지문이 바뀐 추적 파일을 찾아 같은 알림. PowerShell 도 Bash 와 같이 봅니다
-        pend.write_text(pend.read_text(encoding="utf-8").replace(good, good + "다시 쪼개진 꼬리 |\n"), encoding="utf-8", newline="\n")
+        # shell tool path — finds the tracker file whose fingerprint changed and gives the same notice. PowerShell is treated like Bash
+        pend.write_text(pend.read_text(encoding="utf-8").replace(good, good + "split tail again |\n"), encoding="utf-8", newline="\n")
         r = hook("post", {"tool_name": "PowerShell", "tool_input": {"command": "python x.py"}, "cwd": str(p), "tool_use_id": "ps1"}, p)
-        self.assertIn("다시 쪼개진 꼬리", json.loads(r.stdout)["systemMessage"])
+        self.assertIn("split tail again", json.loads(r.stdout)["systemMessage"])
         r = hook("post", {"tool_name": "PowerShell", "tool_input": {"command": "python x.py"}, "cwd": str(p), "tool_use_id": "ps2"}, p)
-        self.assertEqual(r.stdout.strip(), "", "지문이 안 바뀌면 다시 알리지 않습니다")
-        # 추적 파일이 아닌 공용 파일(원고)은 표 검사 대상이 아닙니다
+        self.assertEqual(r.stdout.strip(), "", "no second notice when the fingerprint is unchanged")
+        # a shared file that is not a tracker file (the manuscript) is not checked for tables
         res = p / "manuscript" / "results.md"
-        res.write_text("@H1 Results\n\n| a | b |\n|---|---|\n| A1 | x |\n표 아래 문장 — 원고에서는 그냥 둡니다.\n", encoding="utf-8")
+        res.write_text("@H1 Results\n\n| a | b |\n|---|---|\n| A1 | x |\nA sentence below the table — left alone in the manuscript.\n", encoding="utf-8")
         r = hook("post", self.edit_payload(p, "manuscript/results.md", "e3"), p)
         self.assertEqual(r.stdout.strip(), "")
 
     def test_pre_hook_accepts_powershell_without_alerts(self):
-        p = self.project("훅PS")
+        p = self.project("hook-ps")
         r = hook("pre", {"tool_name": "PowerShell", "tool_input": {"command": "Get-Content tracker_pending.md"}, "cwd": str(p), "tool_use_id": "pp1"}, p)
         self.assertEqual(r.stdout.strip(), "")
 

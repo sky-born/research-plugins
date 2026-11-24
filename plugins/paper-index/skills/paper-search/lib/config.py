@@ -1,26 +1,27 @@
 # -*- coding: utf-8 -*-
-"""설정 로드 — 라이브러리 경로·인덱스 경로·프리셋을 한 곳에서 관리."""
+"""Loading the config — library path, index path and preset, managed in one place."""
 import json, os, sys
 
+from .legacy import LEGACY_OA_STAGING   # default of 0.10 and earlier — used when the config has no oa_staging and only this folder exists
+
 DEFAULT = {
-    "name": "",                 # 라이브러리 이름 (보고용)
-    "library": "",              # PDF 원본 폴더 (읽기 전용으로 취급)
-    "index_dir": "",            # 인덱스·캐시를 쓸 폴더
-    "preset": "",               # presets/*.json 파일명 (없으면 자동 태깅)
+    "name": "",                 # library name (for reports)
+    "library": "",              # source PDF folder (treated as read-only)
+    "index_dir": "",            # folder for the index and caches
+    "preset": "",               # presets/*.json file name (empty: automatic tagging)
     "id_prefix": "P",
     "pdftotext": "pdftotext",
-    "min_tag_score": 4,         # 태그 부여 임계값 (1차)
+    "min_tag_score": 4,         # threshold for assigning a tag (first pass)
     "min_tag_score_fallback": 2,
     "max_tags": 5,
-    "oa_staging": "_oa_inbox",  # OA 논문을 임시로 받아 두는 폴더 (index_dir 기준 상대경로). 라이브러리가 아닙니다
+    "oa_staging": "_oa_inbox",  # staging folder for OA papers (relative to index_dir). Not the library
 }
-LEGACY_OA_STAGING = "_수신"     # 0.10 이하의 기본값 — 설정에 oa_staging 이 없고 이 폴더만 있으면 그대로 씁니다
 
 CONFIG_NAMES = ("paperindex.config.json", "config.json")
 
 
 def find_config(start=None):
-    """작업 폴더 → 상위로 올라가며 설정 파일을 찾습니다."""
+    """Look for the config file from the working folder upward."""
     d = os.path.abspath(start or os.getcwd())
     while True:
         for n in CONFIG_NAMES:
@@ -36,7 +37,7 @@ def find_config(start=None):
 def load(path=None, start=None):
     p = path or find_config(start)
     if not p:
-        sys.exit("설정 파일을 찾을 수 없습니다. `papertool.py init <라이브러리경로>` 로 만드십시오.")
+        sys.exit("Config file not found. Create one with `papertool.py init <library path>`.")
     cfg = dict(DEFAULT)
     raw = json.load(open(p, encoding="utf-8"))
     cfg.update(raw)
@@ -44,10 +45,10 @@ def load(path=None, start=None):
     base = os.path.dirname(os.path.abspath(p))
 
     def resolve(v, want_dir=True):
-        """문자열이면 그대로, 리스트면 실제로 존재하는 첫 경로를 씁니다.
+        """Use a string as is; for a list, use the first path that exists.
 
-        같은 라이브러리가 환경에 따라 다른 경로로 보일 때(예: 호스트의 Windows 경로와
-        에이전트 셸의 마운트 경로) 후보를 여러 개 적어 두면 됩니다.
+        When the same library shows up under different paths in different environments (e.g. a Windows path
+        on the host and a mount path in the agent shell), list several candidates.
         """
         cands = v if isinstance(v, list) else [v]
         out = []
@@ -59,8 +60,8 @@ def load(path=None, start=None):
         for c in out:
             if (os.path.isdir(c) if want_dir else os.path.exists(c)):
                 return c
-        # 어느 후보도 없으면 — 에이전트 셸의 마운트 경로는 세션마다 바뀌므로
-        # 같은 이름의 폴더를 마운트 지점에서 찾아 봅니다.
+        # No candidate exists — the agent shell's mount path changes every session,
+        # so look for a folder of the same name under the mount points.
         import glob
         for c in out:
             bname = os.path.basename(c.rstrip("/\\").replace("\\", "/"))
@@ -74,7 +75,7 @@ def load(path=None, start=None):
 
     _raw_lib = cfg["library"]
     cfg["library"] = resolve(_raw_lib)
-    # 어느 후보를 골랐는지, 실재하는지 명령 쪽에서 판단할 수 있게 남깁니다 (v0.7.2)
+    # Keep which candidates there were and whether the chosen one exists, so the commands can decide
     cfg["_library_candidates"] = [
         (c if os.path.isabs(c) else os.path.normpath(os.path.join(base, c)))
         for c in (_raw_lib if isinstance(_raw_lib, list) else [_raw_lib]) if c]
@@ -83,7 +84,7 @@ def load(path=None, start=None):
     cfg["_path"] = p
     cfg["_base"] = base
     if not cfg["library"]:
-        sys.exit(f"{p}: `library` 가 비어 있습니다.")
+        sys.exit(f"{p}: `library` is empty.")
     if not cfg["index_dir"]:
         cfg["index_dir"] = os.path.join(base, "index")
     return cfg
@@ -109,15 +110,16 @@ def paths(cfg):
         "json": os.path.join(d, "papers_index.json"),
         "md": os.path.join(d, "papers_index.md"),
         "csv": os.path.join(d, "papers_index.csv"),
+        "backup": os.path.join(d, "_backup"),       # copies of papers_index.json taken before old spellings are rewritten
         "vocab": os.path.join(d, "_fulltext", "_vocab.json"),
-        "scopus": os.path.join(d, "_scopus"),        # Scopus 결과 json · md (oafetch 가 옛 수신 기록도 여기서 읽음)
-        "oa_staging": stg,                          # OA 임시 보관 (라이브러리 아님, 인덱스 대상 아님)
-        "oa_text": os.path.join(stg, "_text"),      # 받은 OA 의 전문 텍스트
+        "scopus": os.path.join(d, "_scopus"),        # Scopus results json · md (oafetch also reads old fetch records here)
+        "oa_staging": stg,                          # OA staging (not the library, not indexed)
+        "oa_text": os.path.join(stg, "_text"),      # full text of fetched OA papers
     }
 
 
 def load_preset(cfg, tool_root):
-    """프리셋 파일을 읽습니다. 없으면 None (자동 태깅으로 넘어감)."""
+    """Read the preset file. None if there is none (falls back to automatic tagging)."""
     name = cfg.get("preset") or ""
     if not name:
         return None
@@ -127,7 +129,7 @@ def load_preset(cfg, tool_root):
                  os.path.join(tool_root, "presets", name + ".json")):
         if os.path.exists(cand):
             return json.load(open(cand, encoding="utf-8"))
-    # 인덱스 폴더에 자동 생성된 프리셋
+    # a preset generated automatically in the index folder
     auto = os.path.join(cfg["index_dir"], "tags.auto.json")
     if os.path.exists(auto):
         return json.load(open(auto, encoding="utf-8"))

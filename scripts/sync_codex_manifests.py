@@ -122,7 +122,7 @@ def expected_outputs(root: Path) -> dict[Path, dict[str, Any]]:
             "developerName": manifest["author"]["name"],
             "category": category,
             "capabilities": [],
-            "defaultPrompt": [f"{display_name} 스킬로 현재 프로젝트 작업을 도와주세요."],
+            "defaultPrompt": [f"Help me with the current project using the {display_name} skill."],
         }
         outputs[Path("plugins") / name / ".codex-plugin" / "plugin.json"] = codex_manifest
         codex_marketplace["plugins"].append({

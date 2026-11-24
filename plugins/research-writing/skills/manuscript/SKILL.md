@@ -1,94 +1,89 @@
 ---
 name: manuscript
-description: 원고 작업 세션의 진입점입니다. 지금 열린 폴더가 어떤 원고 프로젝트인지 판정하고 그 프로젝트의 절차로 넘깁니다. 원고 프로젝트가 아니면 초기화만 안내합니다. "논문 작업 시작", "원고 보자", "이 폴더에서 논문 쓰자" 같은 요청이나 원고 폴더에서 세션을 시작할 때 사용합니다.
+description: Entry point of a manuscript session. Decides which manuscript project the open folder is and hands over to that project's procedure; if the folder is not a manuscript project, it only explains how to set one up. Use it for requests such as "start working on the paper", "let's look at the manuscript" or "let's write the paper in this folder", and when a session starts in a manuscript folder.
 ---
 
-# 원고 작업 진입
+# Entering manuscript work
 
-**이 스킬은 얇습니다.** 하는 일은 **판정과 분기**뿐입니다. **논문별 절차는 여기 없습니다** —
-파일 이름, 폴더 구조, 서식 원본, 도판 원본, 도메인 제약은 프로젝트마다 다르므로 그 프로젝트가 갖습니다.
+**This skill is thin.** All it does is **decide and branch**. **Paper-specific procedures are not here** —
+file names, folder layout, document templates, figure sources and domain constraints differ per project, so each project keeps its own.
 
-어느 폴더에서든 부를 수 있습니다. 그래서 **판정이 먼저입니다.**
+It can be called from any folder. That is why **deciding comes first.**
 
-## 0. 앱의 프로젝트 지침을 먼저 읽습니다
+## 0. Both apps use the same documents — confirm the base root first
 
-- Claude Code·Codex에서 **같은 이 문서와 공통 참조 문서**를 사용합니다.
-  앱별 차이는 등록 방식과 실제 제공되는 도구뿐이며, 원고 규칙을 별도 사본으로 만들지 않습니다.
-- 현재 작업 폴더에 적용되는 `AGENTS.md`와 `CLAUDE.md`를 확인합니다. **자동으로 로드됐다고
-  가정하지 말고**, 읽지 않은 프로젝트 지침은 실제 파일에서 읽습니다. 호스트가 정한 지침 우선순위와
-  사용자의 최신 지시를 따르며, 공통 스킬이 프로젝트별 보호 규칙을 덮어쓰지 않습니다.
-- 현재 폴더가 원고 소스로 연결하는 작업 폴더라면, 프로젝트 지침이 지정한 **상대 경로와 마커**로
-  기준 루트를 먼저 확인합니다. 이후 모든 `project.json`·`markers`·`procedure` 경로는 그 루트에서
-  해석합니다. 경로가 모호하면 다른 드라이브를 추측해 탐색하지 않습니다.
+- Claude Code and Codex use **this same document and the same shared reference documents**.
+  The apps differ only in how they register skills and which tools they provide; manuscript rules are never copied per app.
+- If the current folder is a working folder linked to manuscript sources, first confirm the base root from the **relative path and markers**
+  that the project guidance names. Resolve every `project.json` · `markers` · `procedure` path from that root.
+  If the path is ambiguous, do not search other drives by guessing.
 
-## 1. 이 폴더가 무엇인지 판정합니다 — 세 갈래
+## 1. Decide what this folder is — three cases
 
-기준 루트의 `.manuscript/project.json`을 읽고, 프로젝트 지침의 정체·파일 지도를 확인합니다.
-파일 읽기와 존재 확인은 **현재 환경에서 제공된 도구**를 사용합니다.
+Read `.manuscript/project.json` in the base root, and check the project guidance for the project's identity and its reading guide
+(§2 of a generated `CLAUDE.md`, "What to read for which task"; in older projects §2 has a Korean title, or a file map takes its place).
+Read and check files with **the tools this environment provides**.
 
-| 판정 | 조건 | 다음 |
+| Case | Condition | Next |
 |---|---|---|
-| **A. 초기화된 원고 프로젝트** | `.manuscript/project.json` 이 있고 비어 있지 않은 `markers` 목록의 파일이 **모두 실재** | §2 |
-| **B. 추적 체계를 쓰지 않는 원고 프로젝트** | `project.json` 은 없으나 그 폴더의 프로젝트 지침(`CLAUDE.md` 또는 `AGENTS.md`)이 **정체·파일 지도로 원고 작업임을 명시** | §3 |
-| **C. 원고 프로젝트가 아님** | 둘 다 아님 | §4 |
+| **A. An initialised manuscript project** | `.manuscript/project.json` exists and **every** file in its non-empty `markers` list exists | §2 |
+| **B. A manuscript project without the tracking system** | No `project.json`, but the folder's project guidance (`CLAUDE.md` or `AGENTS.md`) **states, through its identity and reading guide, that this is manuscript work** | §3 |
+| **C. Not a manuscript project** | Neither | §4 |
 
-- `markers` 가 있는데 **하나라도 없으면** 하위 폴더에서 세션을 연 것일 수 있습니다.
-  루트로 한 번 올라가 다시 확인하고, 그래도 없으면 그 사실을 보고하고 **멈춥니다.**
-- **파일을 추측해서 열지 않습니다.** 판정이 서지 않으면 무엇이 없어서 서지 않는지 보고합니다.
-  설정을 해석할 수 없거나 `markers`가 비어 있으면 기존 프로젝트의 설정 문제로 보고합니다.
-  초기화를 실행해 덮어쓰지 않습니다.
+- If `markers` exist but **any one is missing**, the session may have been opened in a subfolder.
+  Go up to the root once and check again; if they are still missing, report that and **stop.**
+- **Do not open files by guessing.** If you cannot decide, report what is missing.
+  If the settings cannot be parsed or `markers` is empty, report it as a settings problem of the existing project.
+  Never run the initialiser over it.
 
-**B 를 A 로 바꾸라고 권하지 않습니다.** 추적 파일과 도구가 필요 없는 원고도 있습니다.
-연속성 노트 몇 개로 충분한 개정 작업이 그렇습니다. 사용자가 **미결 항목이 흩어져 관리가 안 된다**고
-할 때만 `new-manuscript` 를 제안합니다.
+**Do not suggest turning B into A.** Some manuscripts need no tracker files or tools —
+a revision that a few continuity notes cover is one. Suggest `new-manuscript` only when the user says
+**open items are scattered and no longer manageable.**
 
-## 2. A — 초기화된 원고 프로젝트
+## 2. A — an initialised manuscript project
 
-읽는 순서가 정해져 있습니다. **이 순서를 바꾸지 않습니다.**
+The order is fixed. **Do not change it.**
 
-| 순서 | 무엇 | 어디 | 없으면 |
+| Order | What | Where | If missing |
 |---|---|---|---|
-| 1 | 프로젝트 정체·파일 지도·도메인 근거 한계 | 적용되는 `AGENTS.md`·`CLAUDE.md`와 그 지침이 지정한 공통 문서 | 없는 지침을 있다고 가정하지 않습니다 |
-| 2 | 그 논문의 상세 절차 | `project.json` 의 `procedure` 가 가리키는 파일 | 키가 없으면 건너뛰고, 명시된 파일이 없으면 누락을 보고합니다 |
-| 3 | 미결 항목 색인 | `project.json` 의 `tracker.index` | 키가 없으면 건너뛰고, 명시된 파일이 없으면 누락을 보고합니다 |
+| 1 | Project identity · reading guide · domain limits | The applicable `AGENTS.md` · `CLAUDE.md` and the shared documents they name | Do not assume guidance that is not there |
+| 2 | That the paper's procedure document exists — **check only; do not read it here** | The file that `procedure` in `project.json` points to | Skip if the key is absent; if the named file is missing, report it |
+| 3 | The open-item index | `tracker.index` in `project.json` | Skip if the key is absent; if the named file is missing, report it |
 
-- `procedure` 는 **프로젝트 루트 기준 상대 경로**입니다. 프로젝트 로컬 스킬
-  (`.claude/skills/<이름>/SKILL.md` 등)이어도 **그 파일을 직접 읽으면 됩니다.** Codex에 같은
-  이름의 로컬 스킬이 등록돼 있다고 가정하지 않습니다. 실제 등록된 환경에서는 직접 호출해도 됩니다.
-  설정에 경로가 명시돼 있는데 파일이 없으면 누락을 보고하며, 필수 보호 절차를 추측해 대체하지 않습니다.
-- **`tracker.index` 는 매 세션 통독합니다.** 설정에 없으면 추적 체계를 요구하지 않습니다.
-  설정된 파일이 없으면 누락을 보고하고, 관련 미결·확정 상태를 추측해 편집하지 않습니다.
+- **Open the procedure document by task, not at entry.** Open it — or only the part a task needs — when a row of the project guidance's
+  reading guide points to it; a session whose tasks never need it never loads it. `procedure` is a path relative to the project root;
+  how Claude and Codex reach a project-local skill is in [project-config.md](../manuscript-workflow/references/project-config.md)
+  "`markers` and `procedure` — two values the entry skill uses".
+  If the settings name a path and the file is missing, report it — never substitute a guessed version of a required protective procedure.
+- **Read `tracker.index` in full every session.** If the settings do not name one, do not require the tracking system.
+  If the named file is missing, report it, and do not edit open or confirmed items by guessing their state.
 
-**여기서부터는 이 스킬이 판단하지 않습니다.** 절차 문서가 지정한 순서를 그대로 따릅니다.
-**충돌하면 프로젝트 쪽이 이깁니다.**
+**From here on, this skill makes no decisions.** Follow the project guidance's reading guide — it says which document to open for each task,
+the procedure document included. **If they conflict, the project wins.**
 
-## 3. B — 추적 체계를 쓰지 않는 원고 프로젝트
+## 3. B — a manuscript project without the tracking system
 
-**그 폴더의 프로젝트 지침이 절차입니다.** 「작업 파일」 표가 있으면 그것이 인수인계 문서를
-가리킵니다 — 먼저 읽어 맥락을 복원하고, 그 문서가 정한 순서를 따릅니다.
+**The folder's project guidance is the procedure.** If it has a table of working files, that table points to the hand-over documents —
+read them first to restore the context, then follow the order they set.
 
-**초기화를 권하지 않고, 다른 프로젝트의 절차를 끌어오지 않습니다.**
+**Do not suggest initialising, and do not pull in another project's procedure.**
 
-## 4. C — 원고 프로젝트가 아님
+## 4. C — not a manuscript project
 
-**원고 작업 절차를 진행하지 않습니다.** 둘 중 하나로 끝냅니다.
+**Do not run the manuscript procedure.** End in one of two ways.
 
-- 사용자가 **새 논문을 시작**하려는 것이면 → `new-manuscript` 스킬로 넘깁니다. 폴더 위치와
-  장 구성만 확인하고 나머지는 기본값으로 진행합니다.
-- 그 폴더가 원고 폴더가 아니면 → **그 사실을 알리고 멈춥니다.** 어느 폴더에서 열어야 하는지
-  함께 알려 줍니다.
+- If the user wants to **start a new paper** → hand over to the `new-manuscript` skill. Confirm only the folder location
+  and the chapter layout, and use the defaults for the rest.
+- If the folder is simply not a manuscript folder → **say so and stop**, and tell the user which folder to open instead.
 
-## 어느 갈래든 공통
+## In every case
 
-**파일이 최신인지 먼저 봅니다.** 프로젝트 폴더가 클라우드로 동기화되는 경우, 다른 컴퓨터에서 한
-작업이 아직 내려오지 않았을 수 있습니다. 파일 목록이 아니라 **수정 시각**을 봅니다.
-사용자가 "이건 이미 했다"고 하면 **사용자 기억이 맞다고 보고 파일을 다시 읽습니다.**
+**Check first that the files are current.** When the project folder is synced through the cloud, work done on another computer
+may not have arrived yet. Look at **modification times**, not at the file list.
+If the user says "this is already done", **assume the user remembers correctly and read the files again.**
 
-집필 공통 규약은 `manuscript-workflow` 스킬에 있습니다 — 문체, 근거 등급과 헤지, 인용 확정,
-수정안 제시와 확정 선언, 미결 항목 추적, 도판 기술 규칙. **원고 문장을 고치기 전과 원고·답변서를 내기 전에
-[revision-protocol.md](../manuscript-workflow/references/revision-protocol.md)를 읽습니다.**
+The shared writing rules are in the `manuscript-workflow` skill — style, evidence grades and hedging, confirming citations,
+proposing revisions and the user's confirmation, tracking open items, figure rules. **Before changing manuscript sentences and before
+submitting a manuscript or a response letter, read [revision-protocol.md](../manuscript-workflow/references/revision-protocol.md).**
 
-**형제 논문 폴더의 문장을 가져오지 않습니다.** 같은 데이터를 다루더라도 별개 문서이며,
-옮기는 것은 자기표절이 됩니다. 근거가 필요하면 원본을 읽되 문장은 새로 씁니다.
-
-**진입은 한 세션에 한 번입니다.** 같은 세션에서 이 스킬을 다시 부르지 않습니다.
+**Enter once per session.** Do not call this skill again in the same session.

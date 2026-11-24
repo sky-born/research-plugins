@@ -1,45 +1,45 @@
 # -*- coding: utf-8 -*-
-r"""_location.py — 「파일 · 절」 위치 문법. 완료기록의 `대상` 과 미결 · 제안의 `위치` 를 (파일, 절) 로 가릅니다.
+r"""_location.py — the "file · section" location syntax. Splits the target of completion records and the location of open items and proposals into (file, section).
 
-한 정의를 세 곳이 씁니다 — 완료 색인 §1(`index_records.py`) · 목록 §3 위치 표와 포커스(`tidy_tracker.py`) ·
-새 기록의 검사(`new_record.py`). 쓰는 법의 규약은 플러그인 문서
-`manuscript-workflow/references/tracker-workflow.md` 「대상 · 위치 문법」에 있습니다.
+Three places share this one definition — record index §1 (`index_records.py`), list §3 location table and focus (`tidy_tracker.py`),
+and the check of new records (`new_record.py`). The rules for writing it are in the plugin document
+`manuscript-workflow/references/tracker-workflow.md` "Target and location syntax — the location table and the reverse index are built from it".
 
     from _location import Grammar
-    g = Grammar(cfg)                     # cfg 는 _config.load()
-    p = g.parse('`manuscript/results.md` ③ · ④b · `도판소스/INDEX.md`')
-    p.files       -> OrderedDict  'manuscript/results.md': ['③', '④b'],  '도판소스/INDEX.md': []
-    p.unresolved  -> 폴더를 확인하지 못해 쓴 그대로 둔 이름들 (경고 대상이 아님)
-    p.orphans     -> 앞에 파일이 없어 붙이지 못한 절 표기들 (경고 대상)
-    p.free_text   -> 파일도 절 표기도 없을 때 그 글 그대로(예: '전체'), 아니면 None
-    p.empty       -> 빈 칸
-    g.display('manuscript/results.md') -> 'results.md'    원고 폴더 안은 원고 폴더 기준 이름(결정 D5)
-    g.sort_key('manuscript/results.md', '③')             색인 · 위치 표의 행 순서
-    Excluder(cfg).hit(path, written)                       완료 색인 §1 의 제외 판정(해석 경로 · 쓴 이름 둘 다)
+    g = Grammar(cfg)                     # cfg is _config.load()
+    p = g.parse('`manuscript/results.md` ③ · ④b · `fig_src/INDEX.md`')
+    p.files       -> OrderedDict  'manuscript/results.md': ['③', '④b'],  'fig_src/INDEX.md': []
+    p.unresolved  -> names kept as written because no folder was confirmed (not warned about)
+    p.orphans     -> section markers that could not be attached because no file came before them (warned about)
+    p.free_text   -> the text as written when there is neither a file nor a section marker (e.g. 'whole manuscript'), otherwise None
+    p.empty       -> empty cell
+    g.display('manuscript/results.md') -> 'results.md'    files inside the manuscript folder are named relative to that folder
+    g.sort_key('manuscript/results.md', '③')             row order of the index and the location table
+    Excluder(cfg).hit(path, written)                       exclusion test of record index §1 (both the resolved path and the written name)
 
-토큰 — 백틱 안 경로 · 맨 경로 · 백틱 안 「경로 + 절」 · 절 표기 · 범위 · 코드 파일 뒤 식별자 · 글롭.
-절 표기(기본) — ①–⑳(뒤 a–z) · ¶n · §n.n… · Figure n / Table n(평면 · 장-번호 둘 다, 표지 정의는 `_config.py`) ·
-「절 이름」 · 범위 X–Y(구분자 – ~ 만. 하이픈은 장-번호의 일부이고 양쪽이 온전한 표기일 때만 범위).
-이어지는 번호 — 절 표기 뒤에 · , / and 로 이어지는 세 자리까지의 맨 번호는 앞 표기의 종류를 물려받습니다.
-식별자 — 코드 파일(.py .ps1 .bat .sh .js) 뒤에 · / , 로 이어진 동안의 `[A-Za-z_][A-Za-z0-9_]*`(백틱 · () 허용).
-글롭 — * { } 가 든 이름은 해석하지 않고 쓴 그대로 둡니다. 모르는 조각은 무시합니다.
-맨 이름 해석 — 앞 경로의 폴더(없으면 그 상위) → 루트 → 원고 폴더 → 장 · 참고문헌 파일 이름 → 프로젝트 상위 폴더 → 쓴 그대로.
-칸 안의 모든 경로가 위치입니다 — 「함께 볼 곳」 같은 말 뒤의 경로도 같습니다.
+Tokens — path in backticks · bare path · "path + section" in backticks · section marker · range · identifier after a code file · glob.
+Section markers (default) — ①–⑳ (followed by a–z) · ¶n · §n.n… · Figure n / Table n (flat and chapter-number both; the labels are defined in `_config.py`) ·
+「section name」 · range X–Y (separators – and ~ only. A hyphen is part of a chapter number and makes a range only when both sides are complete markers).
+Continued numbers — after a section marker, a bare number of up to three digits joined by · , / or and inherits the kind of the marker before it.
+Identifiers — after a code file (.py .ps1 .bat .sh .js), `[A-Za-z_][A-Za-z0-9_]*` for as long as they are joined by · / , (backticks and () allowed).
+Globs — names containing * { } are not resolved and stay as written. Unknown fragments are ignored.
+Bare name resolution — folder of the previous path (else its parent) → root → manuscript folder → chapter and reference file names → the project's parent folder → as written.
+Every path in the cell is a location — including paths after words such as "see also".
 """
 import collections, fnmatch, os, re, unicodedata
 
-from _config import FIG_TAB_WORDS, FIG_TAB_NUM_ANY
+from _config import FIG_TAB_WORDS, FIG_TAB_NUM_ANY, LEGACY_RECORDS_FILE
 
 EXT = (r'(?:md|py|json|csv|pptx|png|docx|html|txt|xlsx|jpg|jpeg|ps1|pdf|tif|tiff|bat|sh|js|emd|svg|xml'
        r'|yaml|yml|toml|ini|cfg|zip|plugin)')
 CODE_EXT = ('.py', '.ps1', '.bat', '.sh', '.js')
-# 경로 조각 — 글롭 `{a,b}` 는 한 덩어리로, 그 밖에는 쉼표를 넣지 않습니다(목록 구분자와 섞이지 않게)
+# path segment — a glob `{a,b}` is one piece; otherwise no commas (so they do not mix with list separators)
 SEG = r'(?:[A-Za-z0-9가-힣_.\-*~]|\{[^}]*\})+'
-BARE = (r'(?:\.\./)*(?:' + SEG + r'/)+(?:' + SEG + r')?'        # 폴더가 든 경로 · 폴더 자체
-        r'|(?:\.\./)*' + SEG + r'\.' + EXT + r'(?![A-Za-z0-9가-힣_])')  # 확장자가 있는 파일 이름
-LIST_CONN = ('·', ',', '/', 'and')     # 이어지는 번호 · 식별자 사슬
-RANGE_CONN = ('–', '~')                # 범위 (뒤 맨 번호는 표지를 물려받음)
-HYPHEN = '-'                           # 양쪽이 온전한 표기일 때만 범위
+BARE = (r'(?:\.\./)*(?:' + SEG + r'/)+(?:' + SEG + r')?'        # path with a folder · the folder itself
+        r'|(?:\.\./)*' + SEG + r'\.' + EXT + r'(?![A-Za-z0-9가-힣_])')  # file name with an extension
+LIST_CONN = ('·', ',', '/', 'and')     # chain of continued numbers and identifiers
+RANGE_CONN = ('–', '~')                # range (the bare number after it inherits the label)
+HYPHEN = '-'                           # a range only when both sides are complete markers
 
 
 def _strip_md(s):
@@ -48,11 +48,11 @@ def _strip_md(s):
 
 class Parsed(object):
     def __init__(self):
-        self.files = collections.OrderedDict()   # 루트 기준 경로(또는 쓴 그대로) -> [절, ...]
-        self.kinds = {}                          # 경로 -> 'ctx' 'root' 'src' 'chapter' 'parent' 'outside' 'glob' 'asis'
-        self.written = {}                        # 경로 -> 처음 쓴 이름 (제외 판정이 쓴 이름에도 대조할 때)
-        self.unresolved = []                     # 쓴 그대로 둔 이름
-        self.orphans = []                        # 파일 없이 나온 절 표기
+        self.files = collections.OrderedDict()   # path relative to the root (or as written) -> [section, ...]
+        self.kinds = {}                          # path -> 'ctx' 'root' 'src' 'chapter' 'parent' 'outside' 'glob' 'asis'
+        self.written = {}                        # path -> name as first written (for the exclusion test on written names)
+        self.unresolved = []                     # names kept as written
+        self.orphans = []                        # section markers that came without a file
         self.free_text = None
         self.empty = False
 
@@ -80,7 +80,7 @@ class Grammar(object):
     def __init__(self, cfg):
         self.cfg = cfg
         self.root = cfg.root
-        self.src = cfg.source_rel                       # 예: 'manuscript'  (없으면 '')
+        self.src = cfg.source_rel                       # e.g. 'manuscript'  ('' if none)
         self.chapters = [f for _, f in cfg.chapters]
         self.refs = cfg.references
         extra = [re.compile(x) for x in cfg.section_markers]
@@ -100,7 +100,7 @@ class Grammar(object):
                   r'(?P<other>\S)']
         self.token = re.compile('|'.join(parts))
 
-    # ------------------------------------------------------------ 경로
+    # ------------------------------------------------------------ paths
     def _exists(self, rel):
         return os.path.exists(os.path.join(self.root, rel.rstrip('/')))
 
@@ -124,8 +124,8 @@ class Grammar(object):
         return p if p.endswith('/') else (p.rsplit('/', 1)[0] + '/' if '/' in p else '')
 
     def resolve(self, t, ctx=''):
-        """(루트 기준 경로, 종류). 추측으로 붙이지 않습니다 — 확인되지 않으면 쓴 그대로.
-        실재하는 폴더는 끝에 `/` 를 붙여 `fig_src` 와 `fig_src/` 가 한 행이 되게 합니다."""
+        """(path relative to the root, kind). Never guesses — an unconfirmed name stays as written.
+        An existing folder gets a trailing `/` so that `fig_src` and `fig_src/` make one row."""
         t = self._clean(t)
         if '*' in t or '{' in t:
             return self._resolve_glob(t, ctx), 'glob'
@@ -135,8 +135,8 @@ class Grammar(object):
         return path, kind
 
     def _resolve_glob(self, t, ctx):
-        """글롭은 내용을 해석하지 않고, 폴더만 같은 순서(앞 경로 → 루트 → 원고 폴더)로 찾아 `ch*.md` 와
-        `manuscript_src/ch*.md` 가 한 행이 되게 합니다. 어디에도 맞는 파일이 없으면 쓴 그대로."""
+        """A glob is not resolved itself; only its folder is looked up in the same order (previous path → root → manuscript folder), so that
+        `ch*.md` and `manuscript_src/ch*.md` make one row. If no file matches anywhere, it stays as written."""
         if t.startswith('../'):
             return t
         import glob as _glob
@@ -170,7 +170,7 @@ class Grammar(object):
         return t, 'asis'
 
     def display(self, path):
-        """원고 폴더 안 파일은 원고 폴더 기준 이름, 그 밖은 루트 기준. 같은 이름이 루트에도 있으면 루트 기준."""
+        """Files inside the manuscript folder are named relative to that folder, others relative to the root. If the same name also exists at the root, relative to the root."""
         if self.src and path.startswith(self.src + '/') and len(path) > len(self.src) + 1:
             rel = path[len(self.src) + 1:]
             if not self._exists(rel):
@@ -178,7 +178,7 @@ class Grammar(object):
         return path
 
     def classify(self, path):
-        """행 순서를 위한 분류 — 장 파일 · 원고 폴더의 다른 파일 · 루트 기준 · 밖 · 쓴 그대로."""
+        """Class for the row order — chapter files · other files of the manuscript folder · relative to the root · outside · as written."""
         if self.src and path.startswith(self.src + '/'):
             rel = path[len(self.src) + 1:]
             if rel in self.chapters:
@@ -195,13 +195,13 @@ class Grammar(object):
     def sort_key(self, path, sec=''):
         return self.classify(path) + (path, section_key(sec))
 
-    # ------------------------------------------------------------ 절 표기
+    # ------------------------------------------------------------ section markers
     @staticmethod
     def _ft(word, num):
         return ('Table ' if word.lower().startswith('tab') else 'Figure ') + num
 
     def _sec_of(self, m):
-        """토큰이 절 표기이면 (문자열, 종류) 를, 아니면 None 을 돌려줍니다."""
+        """(string, kind) if the token is a section marker, otherwise None."""
         k = m.lastgroup
         if k == 'ft':
             return self._ft(m.group('ft'), m.group('ftn')), 'Figure' if not m.group('ft').lower().startswith('tab') else 'Table'
@@ -221,7 +221,7 @@ class Grammar(object):
     def _inherit(kind, num):
         return {'Figure': 'Figure ' + num, 'Table': 'Table ' + num, '§': '§' + num, '¶': '¶' + num}.get(kind)
 
-    # ------------------------------------------------------------ 본체
+    # ------------------------------------------------------------ main
     def parse(self, text):
         p = Parsed()
         text = text or ''
@@ -238,7 +238,7 @@ class Grammar(object):
         return p
 
     def _put_sec(self, p, st, sec, kind, short=None):
-        """절을 현재 파일에 붙입니다. 범위가 걸려 있으면 앞 절과 합칩니다 — 물려받은 번호는 번호만(`Figure 3–10`)."""
+        """Attaches the section to the current file. With an open range, joins it to the previous section — an inherited number adds the number only (`Figure 3–10`)."""
         st['had_sec'] = True
         if st['pending_range'] is not None and (not st['range_hyphen'] or kind == st['last_kind']):
             base = st['pending_range']
@@ -253,8 +253,13 @@ class Grammar(object):
         st['last_kind'], st['last_sec'], st['prev'] = kind, sec, 'sec'
 
     def _scan(self, text, p, st):
-        for m in self.token.finditer(text):
+        toks = list(self.token.finditer(text))
+        for i, m in enumerate(toks):
             k = m.lastgroup
+            nxt = toks[i + 1] if i + 1 < len(toks) else None
+            # what may follow a list item: the end, a list connector, an opening parenthesis (a remark) or non-ASCII prose (older records)
+            st['list_next'] = nxt is None or (nxt.lastgroup == 'conn' and nxt.group('conn') in LIST_CONN) \
+                or (nxt.lastgroup == 'other' and (nxt.group() == '(' or not nxt.group().isascii()))
             if k == 'bt':
                 c = m.group('bt').strip()
                 if c.startswith('@'):
@@ -266,10 +271,12 @@ class Grammar(object):
                     if rest.strip():
                         self._scan(rest, p, st)
                     continue
-                if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*(?:\(\))?', c):
+                if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*(?:\(\))?', c):   # `name`, `name()`, `Class.method`
                     self._ident(p, st, c)
                     continue
-                self._scan(c, p, st)          # 백틱 안의 절 표기 등
+                st['in_bt'] = True            # section markers etc. inside backticks — a plain word there is part of a name, not a list item
+                self._scan(c, p, st)
+                st['in_bt'] = False
                 continue
             sec = self._sec_of(m)
             if sec is not None:
@@ -298,34 +305,40 @@ class Grammar(object):
                     st['prev'] = 'other'; st['pending_range'] = None; st['last_kind'] = None
                 continue
             if k == 'ident':
-                self._ident(p, st, m.group('ident'))
+                self._ident(p, st, m.group('ident'), bare=True)
                 continue
-            # other — 사슬을 끊습니다. 파일(cur)은 그대로 둡니다.
+            # other — breaks the chain. The file (cur) stays.
             st['prev'] = 'other'; st['pending_range'] = None; st['last_kind'] = None
 
     def _file(self, p, st, raw):
         path, kind = self.resolve(raw, st['ctx'])
         p.add_file(path, kind)
         p.written.setdefault(path, self._clean(raw))
-        # 밖(`../`)의 경로는 뒤에 오는 맨 이름의 기준이 되지 않습니다 — `../CLAUDE.md · CLAUDE.md` 의 둘째는 루트의 파일입니다(A57 후속).
+        # A path outside (`../`) is not the base for the bare names after it — the second name in `../CLAUDE.md · CLAUDE.md` is the root's file.
         if kind not in ('asis', 'glob', 'outside', 'parent'):
             st['ctx'] = self._dir_of(path) or st['ctx']
         st['cur'] = path
         st['prev'] = 'file'; st['last_kind'] = None; st['pending_range'] = None; st['last_sec'] = None
 
-    def _ident(self, p, st, name):
+    def _ident(self, p, st, name, bare=False):
+        """An identifier right after a code file is a section of it. In backticks, or when the word looks like code (`_`, a digit, `()`
+        or an upper-case letter after the first), it continues the chain as before. A plain word without backticks counts only as a
+        list item — right after the file or a list connector, and followed by a list connector or the end (`tail · cover`); otherwise
+        it is prose and ends the chain (`tail block`, `and the caption text`)."""
         cur = st['cur']
+        code_like = not bare or bool(re.search(r'[_\d]|\(\)$', name) or re.search(r'.[A-Z]', name))
+        list_item = st['prev'] in ('file', 'conn') and st.get('list_next', True) and not st.get('in_bt')
         if cur is not None and cur.lower().endswith(CODE_EXT) and st['prev'] in ('file', 'ident', 'conn') \
-                and st['last_kind'] is None:
+                and st['last_kind'] is None and (code_like or list_item):
             p.add_section(cur, name[:-2] if name.endswith('()') else name)
             st['prev'] = 'ident'
         else:
             st['prev'] = 'other'; st['pending_range'] = None; st['last_kind'] = None
 
 
-# ---------------------------------------------------------------- 절 정렬
+# ---------------------------------------------------------------- section order
 def section_key(s):
-    """절 없음 → ①–⑳ → ¶ → § → Figure → Table → 「」 → 추가 표기 → 식별자(글자순). 범위는 시작 값으로."""
+    """no section → ①–⑳ → ¶ → § → Figure → Table → 「」 → extra markers → identifiers (alphabetical). A range sorts by its start."""
     if not s:
         return (0,)
     a = s.split('–')[0].strip()
@@ -347,15 +360,15 @@ def section_key(s):
     return (7, s)
 
 
-# ---------------------------------------------------------------- 완료 색인의 제외
+# ---------------------------------------------------------------- exclusions of the record index
 class Excluder(object):
-    """완료 색인 §1 에서 뺄 파일 — 설정이 가리키는 추적 파일(플러그인 개념) + `record_index_exclude` + `output_pattern`.
-    해석된 루트 기준 경로와 쓴 그대로의 이름 둘 다에 대조합니다(지운 빌드 docx 처럼 실재하지 않는 이름도 걸리게)."""
+    """Files left out of record index §1 — the tracker files the settings point to (a plugin concept) + `record_index_exclude` + `output_pattern`.
+    Matches both the resolved path relative to the root and the name as written (so names that no longer exist, such as a deleted build docx, match too)."""
 
     def __init__(self, cfg):
         t = cfg.raw['tracker']
         self.files = {t[k].replace('\\', '/') for k in ('index', 'pending', 'record_index', 'archive') if t.get(k)}
-        self.files.add('수정필요_완료기록.md')                      # 항목당 파일로 나누기 전의 옛 통합 파일
+        self.files.add(LEGACY_RECORDS_FILE)                        # old single file, before records were split into one file per item
         self.dirs = [cfg.records_dir.replace('\\', '/').rstrip('/') + '/']
         self.globs = list(cfg.record_index_exclude) + ([cfg.output_pattern] if cfg.output_pattern else [])
 

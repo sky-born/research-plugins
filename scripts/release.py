@@ -21,11 +21,14 @@ Standard library only; runs the same on Windows, macOS and Linux.
 from __future__ import annotations
 
 import argparse
+import ast
+import io
 import json
 import os
 import re
 import subprocess
 import sys
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -113,7 +116,7 @@ def outline(text: str) -> tuple[list[tuple[int, str]], list[tuple[str, list[str]
 
 def code_lines(body: list[str]) -> list[str]:
     """A fenced block without comments and blank lines, with <placeholders> emptied - what a translation must keep."""
-    kept = (re.sub(r"<[^<>\n]*>", "<>", re.sub(r"(^|\s)#.*$", "", line)).strip() for line in body)
+    kept = (re.sub(r"<[^<>\n]*>", "<>", re.sub(r"(^|\s)(#|//).*$", "", line)).strip() for line in body)
     return [line for line in kept if line]
 
 
@@ -155,7 +158,7 @@ def readme_parity(root: Path) -> tuple[list[str], int]:
     """Compare every README.<lang>.md with the README.md beside it. Returns (problems, pairs checked)."""
     problems: list[str] = []
     pairs = 0
-    folders = [root] + sorted(path for path in (root / "plugins").glob("*") if path.is_dir())
+    folders = [root] + sorted({path.parent for path in (root / "plugins").rglob("README*.md")})
     for folder in folders:
         base = folder / "README.md"
         for other in sorted(folder.glob("README.*.md")):
@@ -223,6 +226,115 @@ def changelog_problems(root: Path, bumped: list[Bump], plugins: list[str]) -> li
 
 # ------------------------------------------------------------------ check
 
+TOC_OPEN, TOC_CLOSE = "<!-- toc -->", "<!-- /toc -->"
+TOC_MIN_LINES = 100     # skill authoring guidance: reference files longer than this open with a table of contents
+
+
+def toc_headings(text: str) -> list[tuple[int, str]]:
+    """`##` and `###` headings outside fenced code blocks, in order."""
+    found: list[tuple[int, str]] = []
+    fence = None
+    for line in text.splitlines():
+        marker = re.match(r"^\s*(```|~~~)", line)
+        if marker:
+            fence = marker.group(1) if fence is None else (None if marker.group(1) == fence else fence)
+            continue
+        heading = None if fence else re.match(r"^(#{2,3}) (.+?)\s*$", line)
+        if heading:
+            found.append((len(heading.group(1)), heading.group(2)))
+    return found
+
+
+def toc_items(headings: list[tuple[int, str]]) -> list[str]:
+    """The list lines of a table of contents: `##` at the margin, `###` indented by two spaces."""
+    return ["  " * (level - 2) + "- " + title for level, title in headings]
+
+
+def toc_problems(root: Path, plugins: list[str]) -> list[str]:
+    """A skill reference file longer than TOC_MIN_LINES opens with a table of contents matching its headings."""
+    problems = []
+    for name in plugins:
+        for path in sorted((root / "plugins" / name / "skills").glob("*/references/*.md")):
+            rel = path.relative_to(root).as_posix()
+            body = path.read_text(encoding="utf-8").splitlines()
+            if TOC_OPEN not in body:
+                if len(body) > TOC_MIN_LINES:
+                    problems.append(f"{rel}: {len(body)} lines - open it with a table of contents between "
+                                    f"'{TOC_OPEN}' and '{TOC_CLOSE}':\n" + "\n".join(toc_items(toc_headings("\n".join(body)))))
+                continue
+            start = body.index(TOC_OPEN)
+            if TOC_CLOSE not in body[start:]:
+                problems.append(f"{rel}: '{TOC_OPEN}' has no '{TOC_CLOSE}'")
+                continue
+            end = body.index(TOC_CLOSE, start)
+            if toc_headings("\n".join(body[:start])):
+                problems.append(f"{rel}: the table of contents must come before the first section heading")
+            listed = [line for line in body[start + 1:end] if re.match(r"^ *- ", line)]
+            wanted = toc_items(toc_headings("\n".join(body[end + 1:])))
+            if listed != wanted:
+                problems.append(f"{rel}: the table of contents does not match the headings; expected:\n" + "\n".join(wanted))
+    return problems
+
+
+HANGUL = re.compile(r"[\uac00-\ud7a3]")
+CODE_SPAN = re.compile(r"`[^`\n]*`")
+HANGUL_RANGE = re.compile(r"[\uac00-\ud7a3]-[\uac00-\ud7a3]")
+LEGACY_NAME = re.compile(r"_?LEGACY[A-Z0-9_]*")
+
+
+def legacy_literals(tree: ast.Module) -> set[int]:
+    """ids of the string literals inside module-level `LEGACY*` constants — the tables of older spellings a plugin still reads."""
+    out: set[int] = set()
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        names = [n for t in targets for n in (t.elts if isinstance(t, ast.Tuple) else [t])]
+        if names and all(isinstance(n, ast.Name) and LEGACY_NAME.fullmatch(n.id) for n in names) and node.value is not None:
+            out |= {id(c) for c in ast.walk(node.value) if isinstance(c, ast.Constant)}
+    return out
+
+
+def hangul_problems(root: Path) -> tuple[list[str], int]:
+    """Korean belongs only to data. Stops on it in Markdown prose (translated `README.<lang>.md` aside), Python comments, names and docstrings
+    unless it sits in a code span. In plugin and script code a Korean string literal must sit in a module-level `LEGACY*` constant (the table of
+    older spellings a plugin still reads, each entry explained in English) or be a character range for Korean data (`가-힣`); those are counted.
+    Test fixtures are old-format data, so literals in tests are not checked."""
+    problems, data = [], 0
+    prose = lambda text: HANGUL.search(CODE_SPAN.sub("", text)) is not None     # noqa: E731
+    for rel in git(root, "ls-files").splitlines():
+        path = root / rel
+        if rel.endswith(".md") and not re.fullmatch(r"README\.[a-z-]+\.md", Path(rel).name) and (rel.startswith("plugins/") or "/" not in rel):
+            fence = None
+            for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                mark = re.match(r"^\s*(```|~~~)", line)
+                if mark:
+                    fence = mark.group(1) if fence is None else (None if mark.group(1) == fence else fence)
+                elif not fence and prose(line):
+                    problems.append(f"{rel}:{n}: Korean in prose")
+        elif rel.endswith(".py"):
+            src = path.read_text(encoding="utf-8")
+            for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+                if tok.type == tokenize.COMMENT and prose(tok.string) or tok.type == tokenize.NAME and HANGUL.search(tok.string):
+                    problems.append(f"{rel}:{tok.start[0]}: Korean in a {'comment' if tok.type == tokenize.COMMENT else 'name'}")
+            docs = set()
+            tree = ast.parse(src)              # one tree for docstrings and literals — node ids are compared below
+            for node in ast.walk(tree):
+                body = getattr(node, "body", None)
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and body \
+                        and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+                    docs.add(id(body[0].value))
+                    problems += [f"{rel}:{body[0].value.lineno + i}: Korean in a docstring"
+                                 for i, line in enumerate(body[0].value.value.splitlines()) if prose(line)]
+            if not rel.startswith("tests/"):
+                tables = legacy_literals(tree)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs and HANGUL.search(node.value):
+                        if id(node) in tables or not HANGUL.search(HANGUL_RANGE.sub("", node.value)):
+                            data += 1
+                        else:
+                            problems.append(f"{rel}:{node.lineno}: Korean in a string literal outside a LEGACY table")
+    return problems, data
+
+
 def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
     root: Path = args.root.resolve()
     baseline: str = args.baseline
@@ -275,6 +387,14 @@ def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
         raise Stop("README translations differ:\n" + lines(problems))
     if pairs:
         ok(f"README translations match in headings, code blocks and link targets ({pairs} pair(s))")
+    problems = toc_problems(root, plugins)
+    if problems:
+        raise Stop("skill reference tables of contents:\n" + lines(problems))
+    ok(f"skill reference files over {TOC_MIN_LINES} lines open with a matching table of contents")
+    problems, data = hangul_problems(root)
+    if problems:
+        raise Stop("Korean outside data (put data in a code span, write prose in English):\n" + lines(problems))
+    ok(f"Korean only as data ({data} string literals in LEGACY tables and character ranges)")
 
     step("Claude manifests")
     if args.skip_claude:

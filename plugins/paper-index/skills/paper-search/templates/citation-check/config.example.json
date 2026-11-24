@@ -2,8 +2,8 @@
   "papers_index": "../../index/papers_index.json",
 
   "manuscripts": [
-    "원고/*.md",
-    "원고/**/*.md"
+    "manuscript_src/*.md",
+    "manuscript_src/**/*.md"
   ],
 
   "citation_patterns": [
@@ -12,19 +12,19 @@
 
   "threshold": 0.62,
 
-  "_주석": [
-    "citation_patterns 는 정규식이고, 이름 있는 그룹 num / author / title 을 씁니다.",
-    "셋 다 있을 필요는 없습니다. author 만 있어도 대조는 됩니다(정확도는 떨어집니다).",
+  "_comment": [
+    "citation_patterns are regexes using the named groups num / author / title.",
+    "Not all three are needed. author alone is enough for matching (with lower accuracy).",
     "",
-    "형식별 예시",
+    "Examples by format",
     "  [34 Wang \"Intermixing of...\"]  →  \\[(?P<num>\\d+)\\s+(?P<author>[A-Za-z]+)(?:\\s+\"(?P<title>[^\"]+)\")?\\]",
     "  \\cite{wang2025intermixing}    →  \\\\cite\\{(?P<author>[a-z]+)(?P<num>\\d{4})[a-z]*\\}",
     "  (Wang et al., 2025)           →  \\((?P<author>[A-Z][a-z]+)\\s+et al\\.,?\\s*(?P<num>\\d{4})\\)",
-    "  [12]                          →  \\[(?P<num>\\d+)\\]   ← 번호만이면 참고문헌 목록도 함께 파싱해야 합니다",
+    "  [12]                          →  \\[(?P<num>\\d+)\\]   ← numbers alone also need the reference list parsed",
     "",
-    "번호만 쓰는 형식이라면 manuscripts 에 참고문헌 목록 파일(references.md 등)을 넣고",
-    "그 파일의 항목 형식에 맞는 패턴을 하나 더 추가하는 편이 정확합니다.",
+    "For a numbers-only format, it is more accurate to add the reference-list file (references.md etc.) to manuscripts",
+    "and add one more pattern that fits the entry format of that file.",
     "",
-    "threshold 는 제목 유사도 하한입니다. 매칭이 헐거우면 올리고, 너무 많이 놓치면 내리십시오."
+    "threshold is the lower bound of title similarity. Raise it if matching is too loose; lower it if too many are missed."
   ]
 }

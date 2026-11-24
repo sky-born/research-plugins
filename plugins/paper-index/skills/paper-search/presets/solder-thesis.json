@@ -1,25 +1,25 @@
 {
   "name": "solder-thesis",
-  "description": "저온 솔더(Sn-Bi-In)·계면반응·전자패키징 분야의 예시 프리셋. 한 학위논문의 문헌에 맞춰 손질한 규칙입니다.",
+  "description": "Example preset for low-temperature solder (Sn-Bi-In), interfacial reactions and electronic packaging. Its rules were tuned to the literature of one dissertation.",
   "tags": {
-    "Sn-Bi-In 삼원계": [
+    "Sn-Bi-In ternary": [
       "Sn[\\s\\-–]?Bi[\\s\\-–]?In",
       "\\bSBI\\b",
       "Sn-\\d+Bi-\\d+In"
     ],
-    "Sn-Bi 이원계/저온솔더": [
+    "Sn-Bi binary / low-temperature solder": [
       "Sn[\\s\\-–]?Bi\\b",
       "\\b58Bi42Sn\\b",
       "\\bSn-?57Bi",
       "low[- ]temperature solder",
       "\\bLTS\\b"
     ],
-    "Sn-In / In 첨가": [
+    "Sn-In / In addition": [
       "Sn[\\s\\-–]?In\\b",
       "\\bSn52In\\b",
       "indium addition"
     ],
-    "상평형·CALPHAD·응고": [
+    "Phase equilibria · CALPHAD · solidification": [
       "CALPHAD",
       "phase diagram",
       "phase equilibri",
@@ -45,14 +45,14 @@
       "Cu6Sn5",
       "Cu3Sn"
     ],
-    "OSP / 표면처리(surface finish)": [
+    "OSP / surface finish": [
       "\\bOSP\\b",
       "organic solderability",
       "surface finish",
       "pad finish",
       "metal finish"
     ],
-    "IMC 성장속도론 (LSW/FDR/ripening)": [
+    "IMC growth kinetics (LSW/FDR/ripening)": [
       "\\bripening\\b",
       "Ostwald",
       "Lifshitz",
@@ -61,7 +61,7 @@
       "coarsening",
       "growth kinetic"
     ],
-    "전단시험·기계물성": [
+    "Shear test · mechanical properties": [
       "shear (test|strength|speed|rate|properties)",
       "ball shear",
       "tensile (test|strength)",
@@ -69,43 +69,43 @@
       "nanoindentation",
       "creep"
     ],
-    "충격·낙하·고변형률": [
+    "Impact · drop · high strain rate": [
       "drop (test|impact)",
       "shock",
       "high strain rate",
       "impact (test|reliability|load)"
     ],
-    "파괴·균열·fractography": [
+    "Fracture · cracking · fractography": [
       "fracture (surface|path|behavior|mode|mechanic)",
       "crack (path|propagation|initiation)",
       "brittle fracture",
       "fractograph"
     ],
-    "시효(aging)·신뢰성": [
+    "Aging · reliability": [
       "isothermal aging",
       "thermal aging",
       "aging treatment",
       "thermal cycling",
       "reliability (test|assessment|analysis)"
     ],
-    "전자이동(EM)·Joule heating": [
+    "Electromigration (EM) · Joule heating": [
       "electromigration",
       "current stressing",
       "Joule heating"
     ],
-    "리플로우·공정": [
+    "Reflow · process": [
       "reflow (profile|process|cycle|soldering)",
       "multiple reflow",
       "solder paste",
       "\\bwetting\\b"
     ],
-    "도금·전착": [
+    "Plating · electrodeposition": [
       "electroplating",
       "electrodeposit",
       "electroless plating",
       "도금"
     ],
-    "어드밴스드 패키징 (ECTC)": [
+    "Advanced packaging (ECTC)": [
       "Electronic Components and Technology Conference",
       "heterogeneous integration",
       "hybrid bonding",
@@ -114,19 +114,19 @@
       "\\bRDL\\b",
       "chiplet"
     ],
-    "표준·규격": [
+    "Standards · specifications": [
       "JEDEC (STANDARD|JESD)",
       "IPC/JEDEC",
       "JESD22",
       "J-STD-"
     ],
-    "교과서·일반이론": [
+    "Textbooks · general theory": [
       "Fourth Edition",
       "10th Edition",
       "Phase Transformations in Metals",
       "Lecture Notes"
     ],
-    "비주제(참고용)": [
+    "Off-topic (reference)": [
       "perovskite solar",
       "convolutional neural network",
       "high entropy alloy",
@@ -135,5 +135,24 @@
       "photonic",
       "buck converter"
     ]
+  },
+  "renamed": {
+    "Sn-Bi-In 삼원계": "Sn-Bi-In ternary",
+    "Sn-Bi 이원계/저온솔더": "Sn-Bi binary / low-temperature solder",
+    "Sn-In / In 첨가": "Sn-In / In addition",
+    "상평형·CALPHAD·응고": "Phase equilibria · CALPHAD · solidification",
+    "OSP / 표면처리(surface finish)": "OSP / surface finish",
+    "IMC 성장속도론 (LSW/FDR/ripening)": "IMC growth kinetics (LSW/FDR/ripening)",
+    "전단시험·기계물성": "Shear test · mechanical properties",
+    "충격·낙하·고변형률": "Impact · drop · high strain rate",
+    "파괴·균열·fractography": "Fracture · cracking · fractography",
+    "시효(aging)·신뢰성": "Aging · reliability",
+    "전자이동(EM)·Joule heating": "Electromigration (EM) · Joule heating",
+    "리플로우·공정": "Reflow · process",
+    "도금·전착": "Plating · electrodeposition",
+    "어드밴스드 패키징 (ECTC)": "Advanced packaging (ECTC)",
+    "표준·규격": "Standards · specifications",
+    "교과서·일반이론": "Textbooks · general theory",
+    "비주제(참고용)": "Off-topic (reference)"
   }
 }

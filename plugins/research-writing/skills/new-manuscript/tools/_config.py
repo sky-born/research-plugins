@@ -1,36 +1,36 @@
-r"""원고 프로젝트 설정 로더 — `.manuscript/project.json`
+r"""Manuscript project settings loader — `.manuscript/project.json`
 
-도구가 프로젝트에 적응하는 데 쓰는 값(챕터 목록, 추적 파일 이름, 트리거)을 한 곳에서 읽습니다.
-**설정 파일이 없으면 기본값을 씁니다.** 기존 동작과 같으므로, 이 파일을 넣지 않은 프로젝트에서도
-도구가 그대로 돕니다.
+Reads in one place the values the tools use to adapt to a project (chapter list, tracker file names, triggers).
+**Without a settings file the defaults apply.** The defaults match the tools' built-in behaviour, so the tools
+also run in projects that have no settings file.
 
     from _config import load
     cfg = load()
     cfg.chapters          -> [(1, 'ch1.md'), ...]
     cfg.tracker_files     -> ['tracker_index.md', ...]
-    cfg.triggers          -> ['지금', ...]
+    cfg.triggers          -> `['now', ...]`
 
-다른 논문에서 쓰려면 `.manuscript/project.json` 만 만들면 됩니다. 도구는 고치지 않습니다.
-(2026-09-01 에 `.writing/` 에서 이름을 바꿨습니다 — 원고 전용임이 이름에 드러나게. 옛 경로도 읽습니다.)
+To use the tools in another manuscript, create `.manuscript/project.json` only. The tools stay unchanged.
+The old location `.writing/project.json` is still read.
 """
 
 import importlib.abc, importlib.util, io, json, os, re, sys, unicodedata
 
 
 def nfc(s):
-    """유니코드 정규화 NFC — 파일 이름 · 경로 · 줄을 **비교하거나 키로 쓸 때** 거칩니다.
-    맥(구글드라이브 미러 · HFS+)은 한글 이름을 NFD 로 저장해 `os.listdir` 가 돌려주는 이름이 설정 · 본문의 NFC 문자열과 다릅니다.
-    파일을 **열** 때는 어느 쪽이든 됩니다(APFS · HFS+ 는 정규화에 둔감) — 다른 것은 문자열 비교뿐입니다."""
+    """Unicode NFC normalization — apply it when file names, paths and lines are **compared or used as keys**.
+    macOS (Google Drive mirrors, HFS+) stores Korean names in NFD, so the names `os.listdir` returns differ from the NFC strings in settings and text.
+    **Opening** a file works either way (APFS and HFS+ ignore normalization) — only string comparison differs."""
     return unicodedata.normalize('NFC', s) if isinstance(s, str) else s
 
 
 class _NFCFinder(importlib.abc.MetaPathFinder):
-    """NFD 로 저장된 한글 이름 모듈을 import 할 수 있게 하는 마지막 순위 finder.
+    """Last-resort finder that lets modules with Korean names stored in NFD be imported.
 
-    Python 의 FileFinder 는 폴더 목록을 문자열 그대로 캐시해 대조하므로 한글 이름 모듈의 import 는 NFD 로 저장된 파일을 못 찾아
-    ModuleNotFoundError 가 됩니다(맥 구글드라이브 미러에서 확인 · 도구 README 「방법 메모」). 기본 finder 가 실패한 **한글 이름**에 한해
-    이 파일이 든 폴더와 sys.path 의 폴더에서 NFC 로 같은 이름의 .py 를 찾아 경로로 적재합니다. ASCII 이름은 건드리지 않습니다.
-    관리 도구의 이름은 ASCII 라 해당하지 않고, 프로젝트가 따로 둔 한글 이름 모듈을 위한 것입니다 — 그런 도구는 `_config` 부터 import 합니다."""
+    Python's FileFinder caches folder listings as raw strings, so importing a module with a Korean name does not find a file stored in NFD
+    and raises ModuleNotFoundError (seen on a Google Drive mirror on macOS). Only for **Korean names** that the default finders failed on,
+    this finder looks in this file's folder and the sys.path folders for a .py whose NFC name matches, and loads it by path. ASCII names are left alone.
+    The managed tools have ASCII names, so this is for Korean-named modules a project keeps itself — such tools import `_config` first."""
 
     def find_spec(self, fullname, path=None, target=None):
         if path is not None or '.' in fullname or fullname.isascii():
@@ -57,50 +57,193 @@ if not any(isinstance(f, _NFCFinder) for f in sys.meta_path):
     sys.meta_path.append(_NFCFinder())
 
 
-def _콘솔_UTF8():
-    """Windows 기본 콘솔(cp949)은 '—' 같은 문자를 못 써서 출력 도중 죽습니다.
-    어느 셸에서 돌려도 되도록 표준 출력을 UTF-8 로 맞춥니다.
-    `PYTHONIOENCODING` 을 앞에 붙일 필요가 없어집니다."""
+def _utf8_console():
+    """The default Windows console (cp949) cannot print characters such as '—' and dies mid-output.
+    Switches standard output to UTF-8 so the tools run from any shell,
+    without a `PYTHONIOENCODING` prefix."""
     for _s in (sys.stdout, sys.stderr):
         try:
             _s.reconfigure(encoding='utf-8', errors='replace')
         except (AttributeError, ValueError, OSError):
             pass
 
-CONFIG_REL = os.path.join('.manuscript', 'project.json')
-CONFIG_REL_OLD = os.path.join('.writing', 'project.json')   # 2026-09-01 이전 이름 — 폴백
+# ================================================================ legacy spellings — the one place for Korean
+# Projects made before 0.14, and projects that stay in that format, use Korean names and format tokens. The tools read them forever
+# and never write them. Every Korean string of the tools lives in this section (`LEGACY_*`); each entry says in English what it is.
+# The release check stops on Korean anywhere else in the code.
+LEGACY_SPELLINGS = {
+    'blocks': {                                    # block markers `<!-- name -->`
+        'standing': '상시F',                       # standing items (F)
+        'locations': '위치표',                     # location table
+        'triggers': '트리거표',                    # trigger table
+        'now': '지금',                             # items that can be done now
+        'focus': '포커스',                         # focus (chapter in progress)
+        'archive_body': '본문:이관',               # archive table body
+        'archived_list': '이관목록:{}',            # list of archived items, per class letter
+        'hand_locations': '{}위치',                # hand-kept location table, per class letter
+    },
+    'stamp': '생성스탬프',                         # generation stamp
+    'columns': {
+        'item': '항목', 'location': '위치', 'trigger': '트리거', 'status': '상태', 'note': '비고',   # item · location · trigger · status · note
+        'proposal': '제안', 'basis': '근거',       # proposal · basis
+        'file': '파일', 'section': '절', 'linked': '걸린 항목',     # file · section · items (tied to it)
+        'condition': '조건이 풀리면', 'take_up': '꺼낼 항목',      # when this clears · items to take up
+        'completed': '완료일',                     # date completed
+    },
+    'fields': {'completed': '완료일', 'target': '대상', 'status': '상태'},   # record fields: completed · target · status
+    'focus': '작업 중인 장',                       # chapter in progress
+    'triggers': {
+        'now': '지금',                             # now
+        'section': '해당 절 작업 시',              # when working on the section
+        'user': '사용자 판단',                     # user decision
+        'data': '자료 확보 후',                    # when data is available
+        'final': '최종 제출 직전',                 # before final submission
+    },
+    'placeholders': {'no_location': '(위치 미기재)', 'not_given': '(미기재)', 'excluded_only': '(제외 파일만)'},  # no location · not given · excluded files only
+    'states': {
+        'applied_unconfirmed': '반영 (확정 대기)',  # applied (awaiting confirmation)
+        'partly_confirmed': '부분 확정',           # partly confirmed
+        'confirmed': '확정',                       # confirmed
+        'closed': '종결',                          # closed
+        'logged': '기록',                          # logged
+        'on_hold': '보류',                         # on hold
+        'in_progress': '진행',                     # in progress
+        'applied': '반영',                         # applied
+        'done': '완료',                            # done
+        'waiting': '대기',                         # waiting
+        'standing': '상시',                        # standing
+        'refresh': '갱신',                         # refresh
+    },
+    'open_hints': {'needed': '필요', 'waiting': '대기'},   # needed · waiting
+    'superseded': '대체됨',                        # superseded (by E<n>)
+    'refs': ' · 관련 ',                            # ' · see ' (E numbers after a status head)
+    'baseline_keys': {'fingerprint': '지문', 'time': '시각', 'computer': '컴퓨터', 'file': '파일', 'phrase': '문구'},
+    'packet_keys': {'format': '형식', 'created': '만든 시각', 'computer': '컴퓨터', 'root': '루트', 'baseline': '기준',
+                    'units': '단위', 'fingerprint': '지문', 'text': '글', 'locations': '위치', 'file': '파일', 'line': '줄',
+                    'avoid': '피할'},              # the same English words as the keys
+    'packet_format': '문법기준-묶음/1',            # grammar-baseline packet, version 1
+}
+LEGACY_NAMES = {'_콘솔_UTF8': '_utf8_console'}   # identifiers that locally modified tool copies from before 0.14.0 still import
+# Default names of projects made by 0.12 or earlier. A project whose settings lack such a key and whose disk has only the old name is an old project —
+# load() stops and shows the values to add to the settings (this table as is). New projects use DEFAULTS (English).
+LEGACY_DEFAULTS = {
+    "tools_dir": "도구",                                       # tools
+    "manuscript": {"source_dir": "초안_소스"},                 # draft sources
+    "tracker": {
+        "index": "수정필요_목록.md",                           # tracker index
+        "pending": "수정필요_대기.md",                         # pending items
+        "record_index": "수정필요_색인.md",                    # record index
+        "literature": "수정필요_문헌.md",                      # literature
+        "proposals": "수정필요_제안.md",                       # proposals
+        "records_dir": "완료기록",                             # completion records
+        "archive": "완료기록/이관_DB.md",                      # archive
+    },
+    "sync": {
+        "snapshot_dir": "보관/추적_백업",                      # archive/tracker backup
+        "exclude": [".git/", "__pycache__/", "node_modules/", "보관/", ".manuscript/도구_백업/", ".manuscript/tools_backup/"],   # `보관/` archive/ · `도구_백업/` tools_backup/
+    },
+}
+LEGACY_TOOL_NAMES = {                              # file names of the managed tools in 0.12 or earlier — update_tools.py moves them
+    'tools/_location.py': '_위치.py',              # location syntax
+    'tools/check_numbers.py': '번호점검.py',       # number check
+    'tools/tidy_tracker.py': '수정필요_정리.py',   # tracker tidy
+    'tools/index_records.py': '완료기록_색인.py',  # record index
+    'tools/new_record.py': '완료기록_새항목.py',   # new record
+    'tools/new_pending.py': '미결_새항목.py',      # new open item
+    'tools/_sync.py': '_동기화.py',                # sync
+    'tools/check_sync.py': '동기화_점검.py',       # sync check
+    'tools/grammar_baseline.py': '문법기준.py',    # grammar baseline
+}
+LEGACY_RECORDS_FILE = '수정필요_완료기록.md'       # the single records file of the oldest projects, before one file per item
+LEGACY_GRAMMAR = ('.manuscript/문법기준.jsonl', '문법묶음')   # grammar_baseline's baseline file and packet folder of 0.12 or earlier
+LEGACY_FLAGS = {'--검사': '--check-targets'}       # old command-line flags, still accepted
+_L = LEGACY_SPELLINGS
+globals().update({old: globals()[new] for old, new in LEGACY_NAMES.items()})
 
-# ---------------------------------------------------------------- 공유 정의 — 같은 개념은 여기 한 곳에
-# 도판 · 표 표지. check_numbers 는 kind 에 따라 평면 · 장-번호 중 하나만 받고, 위치 문법(_location.py)은 둘 다 받습니다.
+
+CONFIG_REL = os.path.join('.manuscript', 'project.json')
+CONFIG_REL_OLD = os.path.join('.writing', 'project.json')   # old name — fallback
+
+# ---------------------------------------------------------------- shared definitions — one place per concept
+# Figure and table labels. check_numbers accepts either the flat or the chapter-number form depending on kind; the location syntax (_location.py) accepts both.
 FIG_TAB_WORDS = r'(?:Figs?\.|Figures?|Tables?)'
 FIG_TAB_NUM_FLAT = r'\d+'
 FIG_TAB_NUM_CHAPTER = r'\d+-\d+'
 FIG_TAB_NUM_ANY = r'\d+(?:-\d+)?'
 
-# 상태 어휘. 정리 도구(이관 판정 · 상태 값 점검)와 색인 도구(상태 머리)가 함께 씁니다.
-STATE_HEADS = ('반영 (확정 대기)', '부분 확정', '확정', '종결', '기록', '보류', '진행', '반영', '완료')
-STATE_KNOWN = ('대기', '진행', '보류', '완료', '종결', '반영', '상시', '갱신')
-STATE_CLOSED = ('완료', '종결')
-STATE_OPEN_HINTS = ('필요', '대기')
-STATE_PENDING_PREFIX = '반영'
+# ---------------------------------------------------------------- format tokens — every string the tools find in or write into project files
+# Each pair is (English, older spelling). The tools write the English one; every reader accepts both forever (`tracker-workflow.md`
+# "Format tokens"). The older spellings come from LEGACY_SPELLINGS above. `update_tools.py --apply` rewrites the anchors of an older
+# project (`migrate_format.py`); history (records, archive rows, the grammar baseline) and values stay as written.
+_BLOCK_EN = {'standing': 'standing-F', 'locations': 'location-table', 'triggers': 'trigger-table', 'now': 'now', 'focus': 'focus',
+             'archive_body': 'archive-body', 'archived_list': 'archived-list:{}', 'hand_locations': '{}-locations'}
+BLOCKS = dict((k, (en, _L['blocks'][k])) for k, en in _BLOCK_EN.items())   # block markers `<!-- name -->` … `<!-- /name -->` — `{}` is a class letter
+STAMP_WORDS = ('generated-stamp', _L['stamp'])    # `<!-- generated-stamp … -->` — what a generated file was made from
+_COLUMN_EN = {'item': 'Item', 'location': 'Location', 'trigger': 'Trigger', 'status': 'Status', 'note': 'Note', 'proposal': 'Proposal',
+              'basis': 'Basis', 'file': 'File', 'section': 'Section', 'linked': 'Items', 'condition': 'When this clears',
+              'take_up': 'Take up', 'completed': 'Completed'}
+COLUMNS = dict((k, (en, _L['columns'][k])) for k, en in _COLUMN_EN.items())   # column names of `| ID |` tables and of the generated tables
+FIELDS = dict((k, (en, _L['fields'][k])) for k, en in (('completed', 'Completed'), ('target', 'Target'), ('status', 'Status')))   # record lines `**name** value`
+FOCUS_LABEL = ('Working chapter', _L['focus'])
+TRIGGER_NOW = ('now', _L['triggers']['now'])      # the one trigger whose meaning the tools know (list §5)
+DEFAULT_TRIGGERS = (TRIGGER_NOW, ('when working on the section', _L['triggers']['section']), ('user decision', _L['triggers']['user']),
+                    ('when data is available', _L['triggers']['data']), ('before final submission', _L['triggers']['final']))
+PLACEHOLDERS = dict((k, (en, _L['placeholders'][k])) for k, en in
+                    (('no_location', '(no location)'), ('not_given', '(not given)'), ('excluded_only', '(excluded files only)')))
+# Status vocabulary — (key, English, older spelling), shared by the tidy tool (archive decision, status check) and the index tool (status head).
+# English matches whole words at the head of the cell; the open hints match anywhere and win. The older spelling keeps its old rule
+# (substring of the cell with spaces removed), so `done (visual check needed)` and its older form both stay open.
+_STATE_EN = (('applied_unconfirmed', 'applied (awaiting confirmation)'), ('partly_confirmed', 'partly confirmed'), ('confirmed', 'confirmed'),
+             ('closed', 'closed'), ('logged', 'logged'), ('on_hold', 'on hold'), ('in_progress', 'in progress'), ('applied', 'applied'),
+             ('done', 'done'), ('waiting', 'waiting'), ('standing', 'standing'), ('refresh', 'refresh'))
+STATES = tuple((k, en, _L['states'][k]) for k, en in _STATE_EN)
+STATE_HEAD_KEYS = ('applied_unconfirmed', 'partly_confirmed', 'confirmed', 'closed', 'logged', 'on_hold', 'in_progress', 'applied', 'done')
+STATE_KNOWN_KEYS = ('waiting', 'in_progress', 'on_hold', 'done', 'closed', 'applied', 'standing', 'refresh')
+STATE_CLOSED_KEYS = ('done', 'closed')
+STATE_OPEN_HINTS = tuple((en, _L['open_hints'][en]) for en in ('needed', 'waiting'))
+STATE_PENDING_KEY = 'applied'                      # applied — in the file but not yet confirmed by the user; stays in the list
+SUPERSEDED = ('superseded by', _L['superseded'])   # `superseded by E<n>` — a record replaced by a later one
+STATE_REFS = (' · see ', _L['refs'])              # what the record index appends to a status head
+_STATE = {k: (en, ko) for k, en, ko in STATES}
+# grammar_baseline.py — keys of the baseline `.jsonl` (append-only history: new lines use English keys, old lines keep theirs)
+# and of the packet JSON. Both spellings are read.
+BASELINE_KEYS = dict((k, (k, v)) for k, v in _L['baseline_keys'].items())
+PACKET_KEYS = dict((k, (k, v)) for k, v in _L['packet_keys'].items())
+PACKET_FORMAT = ('grammar-packet/2', _L['packet_format'])
 
-# 추적 표의 행 문법. 정리 도구(행 읽기 · 이관 · 포커스) · 동기화(S7 ID 모음 · replace_once 의 표 검사) · 훅(쓰기 뒤 경고)이
-# 같은 정의를 씁니다 — `| ID | … |` 한 줄이 항목 하나이고 셀 안의 `|` 는 `\|` 입니다(규약은 tracker-workflow.md 「표 행 형식」).
-TABLE_ID = r'[A-Z]{1,2}\d+(?:-\d+)?'                                        # 행 ID — 글자 1–2 + 번호(-가지 번호)
-TABLE_ROW_RE = re.compile(r'^\|\s*(' + TABLE_ID + r')\s*\|')                 # 한 줄에 match
-TABLE_ROW_RE_M = re.compile(r'^\|\s*(' + TABLE_ID + r')\s*\|', re.M)         # 파일 전체에 findall
-TABLE_SEP_RE = re.compile(r'^\|\s*:?-{3,}')                                  # 머리 아래 구분선 `|---|`
-_TABLE_BREAK_RE = re.compile(r'^(?:<|#|>|[-*+] |\d+[.)] |```|---|\*\*\*)')  # 표를 끝내는 블록의 시작 — 고아 줄이 아닙니다
+
+def english_keys(obj, table):
+    """A dict (or a list of dicts, recursively) with every key of `table` renamed to its English spelling — for reading old files."""
+    if isinstance(obj, list):
+        return [english_keys(x, table) for x in obj]
+    if not isinstance(obj, dict):
+        return obj
+    rename = dict((ko, en) for en, ko in table.values())
+    return dict((rename.get(k, k), english_keys(v, table)) for k, v in obj.items())
+
+
+def tok(pair, *fmt):
+    """The spelling to write — English — of a token pair, with `{}` filled in."""
+    return pair[0].format(*fmt)
+
+# Row grammar of the tracker tables, shared by the tidy tool (reading rows, archive, focus), sync (S7 ID collection, the table check
+# in replace_once) and the hook (post-write warning) — one `| ID | … |` line is one item, and `|` inside a cell is `\|`
+# (rules: `tracker-workflow.md` "Table row format — one item per line").
+TABLE_ID = r'[A-Z]{1,2}\d+(?:-\d+)?'                                        # row ID — 1–2 letters + number (-branch number)
+TABLE_ROW_RE = re.compile(r'^\|\s*(' + TABLE_ID + r')\s*\|')                 # match on one line
+TABLE_ROW_RE_M = re.compile(r'^\|\s*(' + TABLE_ID + r')\s*\|', re.M)         # findall over a whole file
+TABLE_SEP_RE = re.compile(r'^\|\s*:?-{3,}')                                  # separator under the header `|---|`
+_TABLE_BREAK_RE = re.compile(r'^(?:<|#|>|[-*+] |\d+[.)] |```|---|\*\*\*)')  # start of a block that ends a table — not an orphan line
 _CELL_SPLIT_RE = re.compile(r'(?<!\\)\|')
 TABLE_PROBLEM_TEXT = {
-    'orphan': '행 바로 아래에 표가 아닌 줄 — 행이 두 줄로 쪼개진 것. 위 행 끝에 합치거나(한 항목은 한 줄) 지우십시오',
-    'cells': '셀 수가 머리와 다름 — 셀 안의 `|` 는 `\\|` 로 적습니다',
-    'tail': '행 끝에 `|` 가 없음',
+    'orphan': 'non-table line right below a row — the row is split over two lines. Join it to the end of the row above (one item per line) or delete it',
+    'cells': 'cell count differs from the header — write `|` inside a cell as `\\|`',
+    'tail': 'row does not end with `|`',
 }
 
 
 def split_cells(line):
-    """'| a | b \\| c |' -> ['a', 'b \\| c'] — 셀 안의 `\\|` 는 경계가 아니고 그대로 둡니다(표 밖에 옮겨 적을 때는 unescape_cell)."""
+    """'| a | b \\| c |' -> ['a', 'b \\| c'] — `\\|` inside a cell is not a boundary and stays as is (use unescape_cell when copying out of the table)."""
     t = line.strip()
     if t.startswith('|'):
         t = t[1:]
@@ -110,17 +253,18 @@ def split_cells(line):
 
 
 def unescape_cell(cell):
-    """셀 값을 표 밖(문단)에 옮겨 적을 때 — `\\|` 를 `|` 로."""
+    """For copying a cell value out of the table (into a paragraph) — `\\|` becomes `|`."""
     return cell.replace('\\|', '|')
 
 
 def table_problems(text):
-    """표 결함 — [(줄 번호(1부터), 코드, 그 줄 미리보기)]. 코드의 뜻은 TABLE_PROBLEM_TEXT.
+    """Table defects — [(line number (from 1), code, preview of the line)]. Codes are explained in TABLE_PROBLEM_TEXT.
 
-    표는 `|` 로 시작하는 줄의 연속이고 첫 줄이 머리입니다. 빈 줄과 다른 블록(주석 `<!-- -->` · 제목 · 인용 · 목록 · 코드 펜스 · 가로줄)이
-    표를 끝냅니다. 그 밖의 줄이 행 바로 아래 붙어 있으면 `orphan` — GFM 은 그 줄을 셀 하나짜리 행으로 그리고 도구는 ID 가 없어
-    보지 못하므로, 행이 두 줄로 쪼개진 흔적입니다. 셀 수 · 끝 `|` 는 ID 를 읽을 수 있는 행만 봅니다(문헌의 상세 표처럼 ID 없는
-    표는 형식이 자유롭습니다). 코드 펜스 안은 보지 않습니다. 줄끝은 CRLF 여도 됩니다.
+    A table is a run of lines starting with `|`; the first line is the header. A blank line or another block (comment `<!-- -->`, heading,
+    quote, list, code fence, horizontal rule) ends the table. Any other line directly below a row is `orphan` — GFM draws it as a one-cell
+    row and the tools cannot see it (it has no ID), so it is the trace of a row split over two lines. Cell count and the trailing `|` are
+    checked only for rows whose ID can be read (tables without IDs, such as the detail tables of the literature file, are free-form).
+    Code fences are skipped. CRLF line endings are fine.
     """
     out = []
     hdr_n, prev_row, in_code = None, False, False
@@ -148,13 +292,13 @@ def table_problems(text):
 
 
 def describe_table_problem(prob):
-    """(줄 번호, 코드, 미리보기) → 사람이 읽는 한 줄."""
+    """(line number, code, preview) → one human-readable line."""
     n, code, preview = prob
-    return '%d행 %s: `%s`' % (n, TABLE_PROBLEM_TEXT.get(code, code), preview)
+    return 'line %d — %s: `%s`' % (n, TABLE_PROBLEM_TEXT.get(code, code), preview)
 
 
 def is_orphan_after(lines, i):
-    """lines[i] 가 행일 때, 그 바로 아래 줄이 고아 줄(쪼개진 꼬리)인지."""
+    """When lines[i] is a row: whether the line right below it is an orphan line (a split-off tail)."""
     if i + 1 >= len(lines):
         return False
     nxt = lines[i + 1]
@@ -165,8 +309,8 @@ _ROWISH_STRIP_RE = re.compile(r'[*`~\s]')
 
 
 def row_like_id(line):
-    """`|` 줄의 첫 셀이 ID 로 보이면 그 ID — 강조 · 코드 · 취소선 표시(`**A1**` · `` `A1` `` · `~~A1~~`)를 걷어 TABLE_ID 와 맞을 때. 아니면 None.
-    TABLE_ROW_RE 로 읽히는 행도 같은 ID 를 돌려줍니다 — 부르는 쪽이 읽은 행과 견줘 「행처럼 보이는데 행으로 읽지 못한 줄」을 가려냅니다."""
+    """The ID if the first cell of a `|` line looks like one — after stripping emphasis, code and strike-through marks (`**A1**` · `` `A1` `` · `~~A1~~`) it matches TABLE_ID. Otherwise None.
+    Rows that TABLE_ROW_RE reads return the same ID — callers compare with the rows they read to find lines that look like rows but were not read as rows."""
     if not line.startswith('|') or TABLE_SEP_RE.match(line):
         return None
     first = _ROWISH_STRIP_RE.sub('', split_cells(line)[0])
@@ -174,19 +318,19 @@ def row_like_id(line):
 
 
 def id_key(rid):
-    """ID 정렬 키 — `A2` < `A12` < `A12-1` < `B1`. 정리 도구(numkey) · 동기화(S3 · S7)가 함께 씁니다."""
+    """ID sort key — `A2` < `A12` < `A12-1` < `B1`. Shared by the tidy tool (numkey) and sync (S3, S7)."""
     m = re.match(r'^([A-Z]+)(\d+)(?:-(\d+))?$', rid)
     return (m.group(1), int(m.group(2)), int(m.group(3) or 0)) if m else (rid, 0, 0)
 
 
-# 새 미결 항목의 번호 — 도구(`new_pending.py`)가 정합니다. 범위의 정의는 여기 한 곳이고, 도구(배정)와 훅(손 등록 거부)이 함께 씁니다.
-PROPOSAL_PREFIX = 'H'                                                        # 제안 파일의 ID 글자
-NEW_ROW_RE = re.compile(r'^\|\s*([A-Z]{1,2})\?\s*\|')                        # 번호 자리가 `?` 인 새 행 — `| D? | … |`
+# Numbers of new open items are assigned by a tool (`new_pending.py`). The scope is defined here only; the tool (assignment) and the hook (refusing hand-added rows) share it.
+PROPOSAL_PREFIX = 'H'                                                        # ID letter of the proposals file
+NEW_ROW_RE = re.compile(r'^\|\s*([A-Z]{1,2})\?\s*\|')                        # new row whose number is `?` — `| D? | … |`
 
 
 def allocation_scope(cfg):
-    """{글자: 루트 기준 파일(`/` 구분 · NFC)} — 번호를 도구가 정하는 표. 대기 파일의 분류 글자(tracker.movable_prefixes)와 제안 파일의 글자.
-    문헌 파일은 표가 여러 종류라 넣지 않습니다. 이 밖의 파일 · 글자는 도구가 배정하지 않고 훅도 가리지 않습니다."""
+    """{letter: file relative to the root (`/`-separated, NFC)} — the tables whose numbers the tool assigns: the pending file's category letters (tracker.movable_prefixes) and the proposals file's letter.
+    The literature file holds several kinds of table and is left out. Other files and letters are not assigned by the tool, and the hook does not check them."""
     rel = lambda p: nfc(str(p).replace('\\', '/'))                           # noqa: E731
     out = dict((str(l), rel(cfg.pending_file)) for l in cfg.movable)
     out[PROPOSAL_PREFIX] = rel(cfg.proposals_file)
@@ -194,28 +338,31 @@ def allocation_scope(cfg):
 
 
 def id_stem(rid):
-    """가지 번호의 줄기 — `D35-1` → `D35`. 가지가 없으면 그대로."""
+    """Stem of a branch number — `D35-1` → `D35`. Unchanged when there is no branch."""
     return rid.split('-', 1)[0]
 
 
-# 목록(색인 파일)의 생성 블록에서 미결 ID 가 놓이는 자리. 정리 도구가 이 모양으로 쓰고, 동기화 S3 · 정리 도구의 자체 점검은 이 자리만 읽습니다 —
-# 항목 · 위치 · 비고 같은 본문은 다른 문서의 라벨(반영계획의 결정 번호 `D4`, 다른 프로젝트의 `A40`)을 그대로 옮겨 싣기 때문입니다.
-#   위치표   `| 파일 | 절 | ID · ID |`          끝 셀
-#   트리거표 `| **조건** | ID · ID (n건) |`     끝 셀
-#   지금     `| **ID** | 항목 | 위치 | 상태 |`  첫 셀
-#   포커스   `#### ID — 항목`                   항목 머리(그 아래 비고 사본은 읽지 않음)
-LIST_BLOCK_RE = re.compile(r'<!-- (위치표|트리거표|지금|포커스) -->(.*?)<!-- /\1 -->', re.S)
+# Where open-item IDs sit in the generated blocks of the list (index file). The tidy tool writes this shape; sync S3 and the tidy tool's own check
+# read only these positions — free text such as item, location and notes copies labels from other documents verbatim (decision numbers of a plan, IDs of another project).
+#   locations  `| File | Section | ID · ID |`          last cell
+#   triggers   `| **condition** | ID · ID (n) |`      last cell
+#   now        `| **ID** | Item | Location | Status |`  first cell
+#   focus      `#### ID — item`                         item heading (the notes copy below it is not read)
+_LIST_KEYS = ('locations', 'triggers', 'now', 'focus')
+_LIST_NAME_KEY = dict((name, k) for k in _LIST_KEYS for name in BLOCKS[k])
+LIST_BLOCK_RE = re.compile(r'<!-- (%s) -->(.*?)<!-- /\1 -->' % '|'.join(re.escape(n) for n in _LIST_NAME_KEY), re.S)
 LIST_FOCUS_HEAD_RE = re.compile(r'^#### (' + TABLE_ID + r')\s+—', re.M)
 _ID_TOKEN_RE = re.compile(r'(?<![\w-])(' + TABLE_ID + r')(?![\w-])')
 
 
 def list_block_ids(text):
-    """목록 text → ({블록 이름: [ID …]}, [모양을 읽지 못한 블록 …]).
-    모양을 읽지 못함 — 블록 안에 ID 꼴 글자가 있는데 ID 자리에서는 하나도 읽지 못함(옛 판 · 손편집). 부르는 쪽이 경고합니다."""
+    """List text → ({block key: [ID …]}, [blocks whose shape could not be read …]). Keys are those of `BLOCKS` (`locations` …);
+    both spellings of the markers are read. Shape not read — the block contains ID-like text but no ID could be read from the ID
+    positions (old version or hand edit). Callers warn."""
     ids, unknown = {}, []
     for m in LIST_BLOCK_RE.finditer(text.replace('\r\n', '\n')):
-        name, body = m.group(1), m.group(2)
-        if name == '포커스':
+        key, body = _LIST_NAME_KEY[m.group(1)], m.group(2)
+        if key == 'focus':
             got = LIST_FOCUS_HEAD_RE.findall(body)
         else:
             got = []
@@ -223,41 +370,96 @@ def list_block_ids(text):
                 if not line.startswith('|') or TABLE_SEP_RE.match(line):
                     continue
                 cs = split_cells(line)
-                got += _ID_TOKEN_RE.findall(cs[0] if name == '지금' else cs[-1])
-        ids.setdefault(name, []).extend(got)
+                got += _ID_TOKEN_RE.findall(cs[0] if key == 'now' else cs[-1])
+        ids.setdefault(key, []).extend(got)
         if not got and _ID_TOKEN_RE.search(body):
-            unknown.append(name)
+            unknown.append(key)
     return ids, unknown
 
 
 def _norm(s):
-    """마크다운 강조 · 공백을 걷어낸 비교용 문자열"""
-    import re, unicodedata
-    return re.sub(r'\s+', '', re.sub(r'\*\*|`', '', unicodedata.normalize('NFC', s)))
+    """Comparison string with Markdown emphasis and whitespace removed"""
+    return re.sub(r'\s+', '', re.sub(r'\*\*|`', '', unicodedata.normalize('NFC', s or '')))
+
+
+def _plain(s):
+    """Lower-case text with Markdown emphasis removed and whitespace collapsed — for English whole-word matching."""
+    return re.sub(r'\s+', ' ', re.sub(r'\*\*|`', '', unicodedata.normalize('NFC', s or ''))).strip().lower()
+
+
+def _en_head(text, words):
+    """The English word or phrase among `words` that opens `text` as whole words (case-insensitive), else None."""
+    t = _plain(text)
+    for w in sorted(words, key=len, reverse=True):
+        if re.match(re.escape(w.lower()) + r'(?![a-z])', t):
+            return w
+    return None
+
+
+def column_key(cell):
+    """Key of a column name in either spelling (`Status` or its older spelling → `status`), else None."""
+    n = _norm(cell)
+    for k, (en, ko) in COLUMNS.items():
+        if n == _norm(ko) or n.lower() == _norm(en).lower():
+            return k
+    return None
+
+
+def field_pattern(key):
+    """Regex text for a record field label in either spelling — `\\*\\*(?:Target|<older spelling>)\\*\\*`."""
+    return r'\*\*(?:%s)\*\*' % '|'.join(re.escape(s) for s in FIELDS[key])
+
+
+FOCUS_RE = re.compile(r'\*\*(?:%s)\*\*\s+(ch\d+)' % '|'.join(re.escape(s) for s in FOCUS_LABEL))
+
+
+def trigger_key(value):
+    """Comparison form of a trigger cell — the English spelling for the default triggers in either spelling, otherwise the
+    value with emphasis and spaces removed. Projects keep their own trigger list (`tracker.triggers`); this only makes
+    the two spellings of `now` (and of the other default triggers) the same trigger."""
+    n = _norm(value)
+    for pair in DEFAULT_TRIGGERS:
+        if n == _norm(pair[1]) or n.lower() == _norm(pair[0]).lower():
+            return _norm(pair[0]).lower()
+    return n
+
+
+def is_now(value):
+    return trigger_key(value) == _norm(TRIGGER_NOW[0])
 
 
 def state_is_closed(status):
-    """이 상태 값이면 목록에서 완료기록으로 넘깁니다.
+    """With this status value the item moves from the list to the completion records.
 
-    넘기지 않는 것 — `반영 (E61)`(사용자 확정 전) · `완료(육안 확인 필요)`(할 일이 남음) · `대기` `진행` `보류`.
+    Not moved — `applied (E<n>)` (before the user's confirmation), `done (visual check needed)` (work remains),
+    `waiting` `in progress` `on hold` — and the same in the older spellings.
     """
+    s, t = _norm(status), _plain(status)
+    en_applied, ko_applied = _STATE[STATE_PENDING_KEY]
+    if s.startswith(ko_applied) or _en_head(status, [en_applied]):
+        return False
+    if any(ko in s for _en, ko in STATE_OPEN_HINTS) or \
+            re.search(r'(?<![a-z])(?:%s)(?![a-z])' % '|'.join(en for en, _ko in STATE_OPEN_HINTS), t):
+        return False
+    return any(_STATE[k][1] in s for k in STATE_CLOSED_KEYS) or bool(_en_head(status, [_STATE[k][0] for k in STATE_CLOSED_KEYS]))
+
+
+def state_known(status):
+    """True when the status uses the vocabulary — a Korean word anywhere (old rule) or an English one at the head."""
     s = _norm(status)
-    if s.startswith(STATE_PENDING_PREFIX):
-        return False
-    if any(h in s for h in STATE_OPEN_HINTS):
-        return False
-    return any(c in s for c in STATE_CLOSED)
+    return any(_STATE[k][1] in s for k in STATE_KNOWN_KEYS) or bool(_en_head(status, [_STATE[k][0] for k in STATE_KNOWN_KEYS]))
 
 
 def state_head(status):
-    """긴 상태 문자열의 머리 + 「관련 E…」. 색인 §2 가 씁니다.
+    """Head of a long status string + ` · see E…`. Used by record index §2.
 
-    머리는 STATE_HEADS 중 첫 일치 또는 `… 대체됨 E<n>`, 없으면 첫 절(` — ` `(` `「` 앞, 24자까지).
-    「관련」은 머리 뒤에 나오는 E 번호를 순서대로 중복 없이 붙입니다.
+    The head is the first match among the head words (either spelling) or `… superseded by E<n>` (either spelling); otherwise
+    the first clause (before ` — `, `(` or `「`, at most 24 characters). The head is kept as written — the record's own words.
+    ` · see` appends the E numbers that follow the head, in order and without duplicates.
     """
-    import re
-    heads = sorted(STATE_HEADS, key=len, reverse=True)
-    pat = re.compile(r'^\**\s*(' + '|'.join(re.escape(h) for h in heads) + r'|[^—(「\n]{0,20}?대체됨\s*E\d+)')
+    heads = sorted([s for k in STATE_HEAD_KEYS for s in _STATE[k]], key=len, reverse=True)
+    pat = re.compile(r'^\**\s*(' + '|'.join(re.escape(h) + (r'(?![a-z])' if h.isascii() else '') for h in heads)
+                     + r'|[^—(「\n]{0,20}?(?:%s)\s*E\d+)' % '|'.join(re.escape(w) for w in SUPERSEDED), re.I)
     m = pat.match(status)
     if m:
         h, rest = m.group(1).strip('* '), status[m.end():]
@@ -268,10 +470,10 @@ def state_head(status):
     for r in re.findall(r'E\d+', rest):
         if r not in refs and r not in h:
             refs.append(r)
-    return h + ((' · 관련 ' + ' '.join(refs)) if refs else '')
+    return h + ((STATE_REFS[0] + ' '.join(refs)) if refs else '')
 
 DEFAULTS = {
-    "tools_dir": "tools",                         # 관리 도구를 두는 폴더(루트 바로 아래)
+    "tools_dir": "tools",                         # folder for the managed tools (directly under the root)
     "manuscript": {
         "source_dir": "manuscript_src",
         "chapters": [{"n": i, "file": "ch%d.md" % i} for i in (1, 2, 3, 4)],
@@ -290,58 +492,39 @@ DEFAULTS = {
         "record_prefix": "E",
         "movable_prefixes": ["A", "B", "C", "D"],
         "index_size_limit_kb": 40,
-        # 공통 다섯 — 심사 · 투고 일정에 걸린 값은 프로젝트의 project.json(tracker.triggers)이 더합니다
-        "triggers": ["지금", "해당 절 작업 시", "사용자 판단", "자료 확보 후", "최종 제출 직전"],
-        # 위치 문법(_location.py) — 프로젝트가 더하는 절 표기(정규식 목록)와 완료 색인 §1 에서 뺄 파일(글롭 목록)
+        # the five shared triggers — values tied to review or submission dates are added by the project's project.json (tracker.triggers)
+        "triggers": [tok(pair) for pair in DEFAULT_TRIGGERS],
+        # location syntax (_location.py) — section markers the project adds (regex list) and files left out of record index §1 (glob list)
         "section_markers": [],
         "record_index_exclude": [],
-        # 인수인계(현재 상태) 파일 — 갈아쓰는 문서라 동기화 손실 보고(S6)에서 뺍니다. 없으면 빈 문자열
+        # handover (current state) file — rewritten wholesale, so left out of the sync loss report (S6). Empty string if none
         "checkpoint": "",
     },
-    # 공용 파일 동기화 안전장치(_sync.py) — 값의 뜻은 tracker-workflow.md 「동기화」. 핵심 검사는 이 기본값만으로도 돕니다.
+    # sync guard for the shared files (_sync.py) — meanings in `tracker-workflow.md` "Sync — several computers write the shared files". The core checks run on these defaults alone.
     "sync": {
-        "shared_extra": [],                        # 추적 파일 · 완료기록 · 원고 md 말고도 공용인 파일(루트 기준 글롭)
-        "snapshot_dir": "archive/tracker_backup",    # 드라이브 쪽 스냅샷 폴더(루트 기준)
-        "conflict_patterns": [" \\d+$", " \\(\\d+\\)$", "conflicted copy"],   # 충돌 사본 이름(확장자 뺀 이름에 대조)
+        "shared_extra": [],                        # shared files besides tracker files, completion records and manuscript .md (globs relative to the root)
+        "snapshot_dir": "archive/tracker_backup",    # snapshot folder on the drive side (relative to the root)
+        "conflict_patterns": [" \\d+$", " \\(\\d+\\)$", "conflicted copy"],   # conflict-copy names (matched against the name without extension)
         "exclude": [".git/", "__pycache__/", "node_modules/", "archive/", ".manuscript/tools_backup/"],
         "stale_days": 2,
-        "snapshot_days": 30,                       # 자기 컴퓨터 스냅샷의 보존 기간(드라이브 — 로컬은 2배)
-        "snapshot_days_others": 90,                # 다른 컴퓨터가 만든 스냅샷을 지울 수 있는 나이
-        "snapshot_min": 10,                        # 파일마다 늘 남기는 최근 개수
-        "snapshot_max": 20,                        # 파일마다 자기 컴퓨터 스냅샷의 개수 상한(드라이브)
-        "snapshot_max_local": 100,                 # 같은 상한(로컬 — 쓰기마다 남기므로 더 큼)
+        "snapshot_days": 30,                       # retention of this computer's snapshots in days (drive — local keeps them twice as long)
+        "snapshot_days_others": 90,                # age after which snapshots made by other computers may be deleted
+        "snapshot_min": 10,                        # most recent snapshots always kept per file
+        "snapshot_max": 20,                        # cap on this computer's snapshots per file (drive)
+        "snapshot_max_local": 100,                 # same cap (local — larger, since every write leaves one)
         "ack_hours": 4,
-        "known_gaps": [],                          # 완료기록 번호 가운데 원래 비어 있는 것
-        "rewrite_ok": [],                          # 갈아쓰는 문서 — 손실 보고에서 뺌(checkpoint 는 자동)
+        "known_gaps": [],                          # completion record numbers that are missing on purpose
+        "rewrite_ok": [],                          # documents rewritten wholesale — left out of the loss report (checkpoint is automatic)
         "survival_pct": 70,
     },
 }
 
 
-# 0.12 이하가 만든 프로젝트의 기본 이름. 설정에 이 키가 없고 디스크에 이 이름만 있으면 옛 프로젝트입니다 — load() 가 멈추고
-# 설정에 적을 값(이 표 그대로)을 보입니다. 새 프로젝트는 DEFAULTS(영어)를 씁니다.
-LEGACY_DEFAULTS = {
-    "tools_dir": "도구",
-    "manuscript": {"source_dir": "초안_소스"},
-    "tracker": {
-        "index": "수정필요_목록.md",
-        "pending": "수정필요_대기.md",
-        "record_index": "수정필요_색인.md",
-        "literature": "수정필요_문헌.md",
-        "proposals": "수정필요_제안.md",
-        "records_dir": "완료기록",
-        "archive": "완료기록/이관_DB.md",
-    },
-    "sync": {
-        "snapshot_dir": "보관/추적_백업",
-        "exclude": [".git/", "__pycache__/", "node_modules/", "보관/", ".manuscript/도구_백업/", ".manuscript/tools_backup/"],
-    },
-}
-TOOLS_BACKUP = os.path.join('.manuscript', 'tools_backup')     # update_tools.py 가 바꾸기 전 사본을 두는 곳
+TOOLS_BACKUP = os.path.join('.manuscript', 'tools_backup')     # where update_tools.py keeps copies before replacing files
 
 
 def _items(table):
-    """[(절 또는 None, 키, 값)] — 최상위 값은 절이 None."""
+    """[(section or None, key, value)] — top-level values have section None."""
     out = []
     for k, v in table.items():
         if isinstance(v, dict):
@@ -356,8 +539,8 @@ def _has(raw, sec, key):
 
 
 def legacy_pins(root, raw):
-    """옛 프로젝트이면 설정에 적을 값 {절: {키: 값}}(최상위 키는 그대로), 아니면 {}.
-    옛 프로젝트 — 설정에 없는 경로 키 가운데 하나라도 새 이름은 없고 옛 이름이 디스크에 있음. 적을 값은 설정에 없는 옛 키 전부입니다."""
+    """For an old project, the values to add to the settings {section: {key: value}} (top-level keys as is); otherwise {}.
+    Old project — among the path keys missing from the settings, at least one has no new name on disk while its old name exists. The values to add are all old keys missing from the settings."""
     absent = [(s, k, v) for s, k, v in _items(LEGACY_DEFAULTS) if not _has(raw, s, k)]
     new = dict(((s, k), v) for s, k, v in _items(DEFAULTS))
     old_only = lambda rel_old, rel_new: (os.path.exists(os.path.join(root, *rel_old.split('/')))       # noqa: E731
@@ -374,19 +557,19 @@ def legacy_pins(root, raw):
 
 
 class LegacyNames(SystemExit):
-    """설정 없이 옛 기본 이름(한글)을 쓰는 프로젝트 — 멈추고 설정에 적을 값을 보입니다."""
+    """A project that uses the old default (Korean) names without settings — stops and shows the values to add to the settings."""
     def __init__(self, root, pins):
         self.root, self.pins = root, pins
         SystemExit.__init__(self, legacy_message(pins))
 
 
 def legacy_message(pins):
-    return ('이 프로젝트는 옛 기본 이름(한글)을 씁니다. `%s` 에 아래 값을 더한 뒤 다시 돌리십시오 — 지금 이름 그대로입니다:\n%s'
+    return ('This project uses the old default (Korean) names. Add the values below to `%s` and run again — they keep the current names:\n%s'
             % (CONFIG_REL.replace(os.sep, '/'), json.dumps(pins, ensure_ascii=False, indent=2)))
 
 
 def project_root(start=None):
-    """주어진 폴더, 아니면 이 파일의 폴더나 그 상위 가운데 설정 파일이 있는 곳. 둘 다 없으면 도구 폴더(`tools` · `도구`)의 상위."""
+    """The given folder; otherwise this file's folder or its parent, whichever holds a settings file. If neither does, the parent of the tools folder (`tools` or its old default name)."""
     if start:
         return os.path.abspath(start)
     d = os.path.dirname(os.path.abspath(__file__))
@@ -412,16 +595,16 @@ class Config(object):
         self._m = raw['manuscript']
         self._t = raw['tracker']
 
-    # ---- 도구
+    # ---- tools
     @property
     def tools_dir(self):
         return self.raw['tools_dir']
 
     def tool(self, name):
-        """안내 문구에 쓰는 도구 경로(루트 기준, `/` 구분) — 예: `tools/tidy_tracker.py`."""
+        """Tool path for messages (relative to the root, `/`-separated) — e.g. `tools/tidy_tracker.py`."""
         return '%s/%s' % (str(self.tools_dir).replace('\\', '/').strip('/'), name)
 
-    # ---- 원고
+    # ---- manuscript
     @property
     def source_dir(self):
         p = os.path.join(self.root, self._m['source_dir'])
@@ -429,17 +612,17 @@ class Config(object):
 
     @property
     def source_rel(self):
-        """원고 폴더의 루트 기준 이름(`/` 구분, 끝 `/` 없음). 위치 문법이 표시 · 해석에 씁니다."""
+        """Name of the manuscript folder relative to the root (`/`-separated, no trailing `/`). The location syntax uses it for display and resolution."""
         return str(self._m['source_dir']).replace('\\', '/').strip('/')
 
     @property
     def output_pattern(self):
-        """빌드 산출물 이름 글롭(예: `원고_v*.docx`). 없으면 None — 완료 색인이 그 파일을 뺄 때 씁니다."""
+        """Glob of build output names (e.g. `manuscript_v*.docx`). None if unset — the record index uses it to leave those files out."""
         return self._m.get('output_pattern') or None
 
     @property
     def chapters(self):
-        """[(번호, 파일명), ...] — check_numbers · 빌드가 쓰는 형태"""
+        """[(number, file name), ...] — the form check_numbers and the build use"""
         return [(c['n'], c['file']) for c in self._m['chapters']]
 
     @property
@@ -450,10 +633,10 @@ class Config(object):
     def build_script(self):
         return self._m['build_script']
 
-    # ---- 추적
+    # ---- tracking
     @property
     def tracker_files(self):
-        """정리 도구가 다루는 다섯 파일. 순서는 기존 동작과 같게 유지합니다."""
+        """The five files the tidy tool handles. Keep this order."""
         t = self._t
         return [t['index'], t['pending'], t['record_index'], t['literature'], t['proposals']]
 
@@ -499,23 +682,23 @@ class Config(object):
 
     @property
     def section_markers(self):
-        """프로젝트가 더하는 절 표기 — 정규식 문자열 목록. 기본은 빈 목록입니다."""
+        """Section markers the project adds — list of regex strings. Empty by default."""
         return list(self._t.get('section_markers') or [])
 
     @property
     def record_index_exclude(self):
-        """완료 색인 §1 에서 뺄 파일 · 폴더의 글롭 목록(루트 기준, 폴더는 끝 `/`). 기본은 빈 목록입니다."""
+        """Globs of files and folders left out of record index §1 (relative to the root, folders end in `/`). Empty by default."""
         return list(self._t.get('record_index_exclude') or [])
 
     @property
     def checkpoint(self):
-        """인수인계 파일(루트 기준). 없으면 None."""
+        """Handover file (relative to the root). None if unset."""
         return (self._t.get('checkpoint') or None)
 
-    # ---- 동기화
+    # ---- sync
     @property
     def sync(self):
-        """동기화 안전장치 설정(기본값과 합쳐진 dict). 뜻은 tracker-workflow.md 「동기화」."""
+        """Sync guard settings (dict merged with the defaults). Meanings in `tracker-workflow.md` "Sync — several computers write the shared files"."""
         return dict(self.raw.get('sync') or {})
 
     def __getitem__(self, k):
@@ -523,7 +706,7 @@ class Config(object):
 
 
 def load(root=None, strict=True):
-    """strict — 설정 없이 옛 기본 이름을 쓰는 프로젝트면 LegacyNames 로 멈춥니다. update_tools.py 만 False 로 읽고 직접 보고합니다."""
+    """strict — stop with LegacyNames in a project that uses the old default names without settings. Only update_tools.py reads with False and reports by itself."""
     root = project_root(root)
     path = os.path.join(root, CONFIG_REL)
     if not os.path.isfile(path):
@@ -536,18 +719,111 @@ def load(root=None, strict=True):
             with io.open(path, encoding='utf-8') as f:
                 raw = json.load(f)
         except ValueError as e:
-            raise SystemExit('%s 를 읽지 못했습니다: %s' % (CONFIG_REL, e))
+            raise SystemExit('Could not read %s: %s' % (CONFIG_REL, e))
     if strict:
         pins = legacy_pins(root, raw)
         if pins:
             raise LegacyNames(root, pins)
     cfg = Config(root, _merge(DEFAULTS, raw))
-    cfg.raw_file = raw                     # 설정 파일에 적힌 그대로(기본값과 합치기 전)
+    cfg.raw_file = raw                     # as written in the settings file (before merging with the defaults)
     return cfg
 
 
+# ---------------------------------------------------------------- format of a project — read from its anchors
+# The anchors are what the tools own in the tracker files: block markers, generated-stamp lines and the known column names of
+# `| ID |` header rows. Each tracker file shows English, Korean, both or none; the project's format is their union. There is no
+# settings key — the files say which format they are in, and the tools do not write `project.json`.
+def _marker_re(lang):
+    names = [re.escape(pair[lang]).replace(r'\{\}', '[A-Z]{1,2}') for pair in BLOCKS.values()]
+    return re.compile(r'^<!-- /?(?:%s) -->\s*$' % '|'.join(names))
+
+
+_MARKER_RES = (_marker_re(0), _marker_re(1))
+STAMP_RE = re.compile(r'^<!-- (?:%s) (.*?) -->\s*$' % '|'.join(re.escape(w) for w in STAMP_WORDS), re.M)
+_STAMP_LANG = tuple(re.compile(r'^<!-- %s ' % re.escape(w)) for w in STAMP_WORDS)
+LANGS = ('en', 'ko')
+
+
+def text_format(text):
+    """{'en', 'ko'} — the spellings of the anchors in one file's text (code fences are skipped)."""
+    out, fence = set(), False
+    for line in text.replace('\r\n', '\n').split('\n'):
+        if line.startswith('```'):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        for i in (0, 1):
+            if _MARKER_RES[i].match(line) or _STAMP_LANG[i].match(line):
+                out.add(LANGS[i])
+        if line.startswith('|'):
+            cells = split_cells(line)
+            if cells and cells[0] == 'ID':
+                for c in cells[1:]:
+                    k = column_key(c)
+                    if k:
+                        out.add('ko' if _norm(c) == _norm(COLUMNS[k][1]) else 'en')
+    return out
+
+
+def is_anchor_line(line):
+    """True for a line the tools own as structure — a block marker or a generated-stamp line in either spelling, or an `| ID |` header row.
+    The sync loss report (S6) leaves these out: they are not anyone's content, and the format migration rewrites them."""
+    t = (line or '').strip()
+    return bool(_MARKER_RES[0].match(t) or _MARKER_RES[1].match(t) or _STAMP_LANG[0].match(t) or _STAMP_LANG[1].match(t)
+                or re.match(r'^\|\s*ID\s*\|', t))
+
+
+def tracker_anchor_files(cfg):
+    """The files whose anchors decide the format — the five tracker files and the archive (relative to the root, `/`)."""
+    t = cfg.raw['tracker']
+    return [str(t[k]).replace('\\', '/') for k in ('index', 'pending', 'archive', 'proposals', 'literature', 'record_index') if t.get(k)]
+
+
+def project_format(cfg):
+    """('en' | 'ko' | 'mixed' | 'none', {file: sorted languages}) — 'none' when no tracker file shows an anchor."""
+    per = {}
+    for rel in tracker_anchor_files(cfg):
+        p = os.path.join(cfg.root, *rel.split('/'))
+        if os.path.isfile(p):
+            with io.open(p, encoding='utf-8') as f:
+                langs = text_format(f.read())
+            if langs:
+                per[rel] = sorted(langs)
+    union = set(x for v in per.values() for x in v)
+    state = 'mixed' if len(union) > 1 else (union.pop() if union else 'none')
+    return state, per
+
+
+RC_FORMAT = 5      # exit code of a writing tool that refuses an old-format or mixed project
+
+
+def format_problem(cfg, tool):
+    """None when the project may be written by this version (English anchors or none), otherwise the message to show."""
+    state, per = project_format(cfg)
+    if state in ('en', 'none'):
+        return None
+    where = '; '.join('%s: %s' % (rel, '+'.join(v)) for rel, v in sorted(per.items()))
+    fix = 'python -X utf8 <plugin>/skills/new-manuscript/update_tools.py "%s"' % cfg.root
+    if state == 'ko':
+        return ('%s: this project still uses the pre-0.14 Korean anchors (%s). This version writes English anchors only, so it stops '
+                'here — reading and diagnosis still work. Preview the migration with `%s`, then add --apply after the user agrees.'
+                % (tool, where, fix))
+    return ('%s: the tracker files mix English and Korean anchors (%s) — Drive may not have caught up, or a tool from an older plugin '
+            'version wrote here. Nothing is written. Check that Drive is up to date and every computer has the new plugin, then run '
+            '`%s --apply` (the migration is idempotent).' % (tool, where, fix))
+
+
+def require_writable_format(cfg, tool):
+    """Writing tools call this first — exits with RC_FORMAT and the message when the format is old or mixed."""
+    msg = format_problem(cfg, tool)
+    if msg:
+        sys.stderr.write(msg + '\n')
+        raise SystemExit(RC_FORMAT)
+
+
 if __name__ == '__main__':
-    _콘솔_UTF8()
+    _utf8_console()
     c = load()
     print('project    :', c.name, '(%s)' % c.kind)
     print('root       :', c.root)
@@ -556,5 +832,5 @@ if __name__ == '__main__':
     print('references :', c.references)
     print('tracker    :', c.tracker_files)
     print('records    :', c.records_dir, '/ archive:', c.archive)
-    print('triggers   :', len(c.triggers), '개')
+    print('triggers   :', len(c.triggers), 'values')
     print('movable    :', c.movable, '/ limit:', c.index_limit)

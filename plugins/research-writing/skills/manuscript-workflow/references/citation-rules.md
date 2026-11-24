@@ -1,19 +1,17 @@
-# 인용 및 참고문헌 — 공통 규칙
+# Citations and references — shared rules
 
-- 전문과 근거 문장을 직접 확인하기 전에는 참고문헌을 확정하지 않습니다. 초록만 일치하는 것으로는 부족합니다.
-- 원문의 내용과 구조를 바꿔 씁니다. 문단을 그대로 옮기지 않습니다. 원문 대조는 사용자가 최종 수행합니다.
-- 분야 내 문헌을 우선합니다. 일반 원리는 원전·고전·교과서와 분야 내 적용 사례를 함께 씁니다.
-- **명명된 이론은 원전을 인용합니다. 다만 분야의 표준 지식으로 굳은 것은 예외입니다.**
-  교과서에 표준 항목으로 실리고 분야 논문이 인용 없이 이름만으로 쓰는 이론에는 원전을 달지 않습니다 —
-  `F = ma` 를 쓰면서 뉴턴 원전을 인용하지 않는 것과 같습니다.
-  **판별 기준은 용도입니다** — 그 이론의 내용을 검증·반박하거나 가정을 따지는 자리면 원전이 필요하고,
-  확립된 도구로 가져다 쓰기만 하는 자리면 필요 없습니다.
-  **계산 소프트웨어도 같습니다** — 본문에 버전과 데이터베이스를 명시하면 별도 인용을 달지 않습니다.
-  예: `CALPHAD software (Thermo-Calc; 2017b, TCSLD3 v3.2)`.
-  원전이 필요한 경우에 한해, 교과서는 원전과 함께 쓸 수 있으나 대체할 수 없습니다.
-- 대조나 정성적 유비로만 안전한 출처는 그렇게 표시하고 조건 불일치를 명시합니다.
-- 집필 중에는 `[번호 + 제1저자 (+ 제목 일부)]`로 표기합니다. 예: `[29 Wang "Intermixing of..."]`.
-  번호는 개정 중 바뀌므로 번호만 쓰지 않습니다. 신규 문헌은 최종 재번호 전까지 `N1`, `N2`로 씁니다.
-- 인용은 뒷받침하는 문장·절 끝에 둡니다. 여러 문헌을 한 문장에 묶기 전에 각 출처가 어느 절을 지지하는지 대응시킵니다.
-- 문헌을 넣거나 빼거나 옮기면 이후 인용 번호 전체를 즉시 확인합니다.
-- 제출 전 한 번의 통제된 패스로 최종 형식으로 변환하고 참고문헌 목록과 대조합니다.
+- Do not confirm a reference before checking the full text and the supporting sentence directly. A matching abstract alone is not enough.
+- Rewrite the content and structure of the source. Do not carry a paragraph over as it is. The user performs the final comparison with the source.
+- Prefer literature from the field. For a general principle, cite the original work, classic works or textbooks together with an application in the field.
+- **Cite the original work for a named theory, except where it has become standard knowledge in the field.**
+  Do not attach the original to a theory that textbooks list as a standard entry and that papers in the field use by name without a citation — it is the same as writing `F = ma` without citing Newton's original.
+  **The test is the use** — where the text verifies, disputes or questions the assumptions of the theory, the original is needed; where it only takes up an established tool, it is not.
+  **Calculation software works the same way** — when the text states the version and database, no separate citation is added.
+  Example: `CALPHAD software (Thermo-Calc; 2017b, TCSLD3 v3.2)`.
+  Only where the original is needed, a textbook may accompany the original but cannot replace it.
+- Mark a source that is safe only as a contrast or a qualitative analogy as such, and state the mismatch in conditions.
+- While writing, mark a citation as `[number + first author (+ part of the title)]`. Example: `[29 Wang "Intermixing of..."]`.
+  Numbers change during revision, so do not write the number alone. Write new references as `N1`, `N2` until the final renumbering.
+- Place a citation at the end of the sentence or clause it supports. Before grouping several references in one sentence, match each source to the clause it supports.
+- When a reference is added, removed or moved, check all later citation numbers at once.
+- Before submission, convert to the final format in one controlled pass and check against the reference list.

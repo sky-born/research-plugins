@@ -1,331 +1,380 @@
-# 미결 항목 추적 — 파일 구조와 생애주기
+# Tracking open items — file structure and life cycle
 
-여러 세션에 걸치는 원고 작업에서 **무엇이 아직 안 끝났는지**를 잃지 않기 위한 구조입니다.
-파일 이름과 위치는 프로젝트마다 다릅니다 — 실제 이름 · 경로(루트 기준 · `추적/tracker_index.md` 같은 하위 폴더도 됨)는 프로젝트 설정(`.manuscript/project.json` 의 `tracker`)이나
-프로젝트 지침(`CLAUDE.md`·`AGENTS.md` 또는 그 지침이 지정한 공통 문서)이 정합니다. 여기서는 **역할**로 부릅니다.
+<!-- toc -->
+**Contents**
 
-## 파일은 역할별로 나눕니다 — 매 세션 읽는 것은 하나
+- Files split by role — only one is read every session
+- Finding an item takes two steps — never read a file end to end
+- Item life cycle — a change of status moves the item to another file
+- Triggers — a fixed set of values
+- Focus — kept by the assistant
+- Concurrent editing — the user may be editing the same file in another window
+- Sync — several computers write the shared files
+- Target and location syntax — the location table and the reverse index are built from it
+- Table row format — one item per line
+- Format tokens — English written, the old Korean spellings read
+- Category letters of the open-item tables — set by the project
+- Ending a session
+- One source for the working rules
+<!-- /toc -->
 
-한 파일에 다 담으면 세션마다 통독해야 하고, 곧 40 KB를 넘겨 읽기 부담이 됩니다.
-**색인과 본문을 분리하는 것**이 핵심입니다.
+This structure keeps track of **what is not finished yet** in manuscript work that spans several sessions.
+File names and locations differ per project — the actual names and paths (relative to the root; a subfolder such as `tracking/tracker_index.md` also works) are set by the project settings (`tracker` in `.manuscript/project.json`) or
+the project guidance (`CLAUDE.md` · `AGENTS.md`, or a shared document that guidance names). This document calls the files by their **role**.
 
-| 역할 | 내용 | 여는 시점 |
+## Files split by role — only one is read every session
+
+If everything goes in one file, it must be read end to end every session, and it soon grows past 40 KB and becomes a burden to read.
+The key is **separating the index from the bodies**.
+
+| Role | Content | When to open |
 |---|---|---|
-| **색인 파일** | 규칙, 상시 제약, 위치 표(절 → 항목), 트리거 표, 지금 할 것 | **매 세션 시작 시 통독** |
-| **대기 파일** | 미결 항목 본문 | 색인에서 ID를 얻은 뒤 **그 항목만** |
-| **완료 색인** | 완료 기록 역색인 — 절별 · ID별 | 과거 결정을 찾을 때 |
-| **완료 기록** | 완료 항목 본문. **항목당 한 파일** | 색인에서 ID를 얻은 뒤 **그 파일 하나만** |
-| **제안 파일** | 채택 여부 결정 대기 | 제안이 걸린 절을 손댈 때 |
-| **문헌 파일** | 문헌 라이브러리 · 참고문헌 대조 | 인용을 확정하기 전 |
+| **Index file** | Rules, standing constraints, location table (section → items), trigger table, what to do now | **Read in full at the start of every session** |
+| **Pending file** | Bodies of open items | After getting the ID from the index, **only that item** |
+| **Record index** | Reverse index of completion records — by section and by ID | When looking up a past decision |
+| **Completion records** | Bodies of completed items. **One file per item** | After getting the ID from the index, **only that one file** |
+| **Proposals file** | Proposals waiting for a decision on adoption | When touching a section a proposal concerns |
+| **Literature file** | Literature library · checking the reference list | Before confirming a citation |
 
-**색인은 손으로 쓰지 않습니다.** 정리 도구가 본문에서 생성합니다.
+**Do not write the index by hand.** The tidying tool generates it from the bodies.
 
-## 찾는 절차는 두 단계입니다 — 통독하지 않습니다
+## Finding an item takes two steps — never read a file end to end
 
 ```bash
-# 미결 — 지금 무엇이 걸려 있나
-# 1) 색인 파일의 위치 표에서   ch3.md 3.2.5 -> D35 · H12
-# 2) 그 행만 읽습니다
-grep -n '^| D35 |' <대기 파일>
+# Open items — what is pending now
+# 1) In the location table of the index file:   ch3.md 3.2.5 -> D35 · H12
+# 2) Read only that row
+grep -n '^| D35 |' <pending file>
 
-# 완료 — 과거에 무엇을 왜 결정했나
-# 1) 완료 색인의 절별 역색인에서   ch3.md 3.2.1 -> E101 · E104
-# 2) 그 파일 하나만 읽습니다
-cat <완료기록>/E104.md
+# Completed — what was decided in the past, and why
+# 1) In the by-section reverse index of the record index:   ch3.md 3.2.1 -> E101 · E104
+# 2) Read only that one file
+cat <records folder>/E104.md
 ```
 
-## 항목 생애주기 — 상태가 바뀌면 있을 파일이 바뀝니다
+## Item life cycle — a change of status moves the item to another file
 
 ```
-대기 / 진행 / 보류  ->  반영 (E번호)  ->  완료 (날짜) / 종결 (날짜)  ->  완료 기록
-        └── 목록에 머무름 ──┘                          └── 목록에서 빠짐 ──┘
+waiting / in progress / on hold  ->  applied (E<number>)  ->  done (<date>) / closed (<date>)  ->  completion record
+└────────────── stays in the list ──────────────┘      └──────────────── leaves the list ─────────────────┘
 ```
 
-- `반영`은 파일에 넣었으나 **사용자 확정 전**입니다. 목록에 그대로 둡니다.
-- `완료(육안 확인 필요)`처럼 할 일이 남은 상태도 목록에 둡니다.
-  **상태 값에 `필요`·`대기`가 있으면 미결입니다.**
-- **사용자가 확정을 선언한 순간이 이관 시점입니다.** 그 자리에서 `완료 (날짜)`로 바꾸고 바로 넘깁니다.
-- **제안은 완료 기록으로 옮기지 않습니다.** 버린 제안은 제안 파일에서 상태만 `종결`로 적고,
-  정리 도구는 상태가 `완료`·`종결`인 제안을 목록에서 뺍니다.
+- `applied` means the text is in the file but **the user has not confirmed it yet**. It stays in the list.
+- A status that still leaves work to do, such as `done (visual check needed)`, also stays in the list.
+  **A status value that contains `needed` or `waiting` means the item is open.** Write the status word first — the tools read the head of the cell.
+- **The moment the user declares it confirmed is the moment to archive it.** Change it to `done (<date>)` on the spot and move it at once.
+- **Proposals do not move to completion records.** For a dropped proposal, only set its status to `closed` in the proposals file;
+  the tidying tool drops proposals whose status is `done` or `closed` from the list.
+- Projects made before 0.14 write these words in Korean; the tools read both (see "Format tokens").
 
-확정 선언의 판별은 `revision-protocol.md` 를 따릅니다 — **"확정"은 사용자만 선언합니다.**
+Whether the user has confirmed something is decided by `revision-protocol.md` "Approval and comparison".
 
-## 트리거 — 값을 고정합니다
+## Triggers — a fixed set of values
 
-각 항목에는 **언제 다시 꺼낼지**를 적습니다. 값이 자유 문자열이면 표가 만들어지지 않으므로
-**프로젝트마다 정해진 목록**에서만 고릅니다. 목록은 프로젝트 설정에 둡니다.
+Each item records **when to bring it up again**. Free-text values cannot be built into a table, so
+choose only from **the list fixed for the project**. The list lives in the project settings.
 
-- 어느 프로젝트에나 필요한 것: `해당 절 작업 시` · `사용자 판단` · `자료 확보 후` · `최종 제출 직전` · `지금`
-- 프로젝트마다 다른 것: 심사·투고 일정에 걸린 조건들
+- Needed in every project: `when working on the section` · `user decision` · `when data is available` · `before final submission` · `now`
+- Different per project: conditions tied to the review and submission schedule
 
-**트리거가 `지금`인 항목만 "지금 할 것" 절에 올라옵니다.**
+**Only items whose trigger is `now` appear in the "do now" section.** A project keeps the list in its settings as written —
+older projects list the Korean spellings of the five, and the tools treat the two spellings of each as the same trigger.
 
-## 포커스 — 어시스턴트가 관리합니다
+## Focus — kept by the assistant
 
-지금 붙잡고 있는 장에 걸린 항목의 **본문을 색인 파일에 실어 두는** 장치입니다.
-절을 옮길 때마다 대기 파일을 다시 열 필요가 없어집니다.
+Focus **copies the bodies of the items** attached to the chapter you are working on **into the index file** (its section "Chapter in progress").
+You then no longer need to reopen the pending file each time you move to another section.
 
-| 언제 | 무엇을 |
+| When | What |
 |---|---|
-| 사용자가 한 장을 지목할 때 | 그 장으로 켭니다 |
-| **내가 그 장의 원고를 고치려는데 포커스가 다른 장일 때** | 말없이 갈아탑니다 |
-| 사용자가 그 장을 마쳤다고 할 때 | 끄거나 새 장으로 갈아탑니다 |
-| **포커스 설정일이 오래됐고 지금 작업이 그 장과 무관할 때** | 갈아타거나 끕니다 |
+| The user names a chapter | Turn focus on for that chapter |
+| **You are about to edit that chapter's manuscript while focus is on another chapter** | Switch without comment |
+| The user says the chapter is finished | Turn it off or switch to the new chapter |
+| **The focus date is old and the current work has nothing to do with that chapter** | Switch or turn it off |
 
-**보고는 한 줄로 끝냅니다** — `Ch.3 포커스를 켰습니다 (걸린 항목 8건)`.
-명령줄을 답변에 늘어놓지 않고, 사용자에게 "켜 두십시오"라고 요청하지 않습니다.
-**세션을 마칠 때 자동으로 끄지 않습니다** — 다음 세션이 같은 장을 이어받는 편이 낫습니다.
-**블록 첫 줄의 설정일로 오래됐는지 판단합니다.**
+**Report it in one line** — `Focus on for Ch.3 (8 items attached)`.
+Do not paste command lines into the reply, and do not ask the user to "turn it on".
+**Do not turn it off automatically at the end of a session** — it is better for the next session to pick up the same chapter.
+**Judge whether it is old from the date on the first line of the block.**
 
-포커스 블록은 **사본**입니다. 항목을 고칠 때는 원본(대기 파일·제안 파일)을 고칩니다 —
-포커스 블록에 쓴 것은 다음 실행에서 지워집니다. 두 장에 걸린 항목은 **양쪽 포커스에 모두** 나옵니다.
+The focus block is a **copy**. To change an item, change the source (pending file, proposals file) —
+anything written in the focus block is erased on the next run. An item attached to two chapters appears **in the focus of both**.
 
-## 동시 편집 — 사용자가 다른 창에서 같은 파일을 고치고 있을 수 있습니다
+## Concurrent editing — the user may be editing the same file in another window
 
-추적 파일을 **손으로 고치기 직전에 다시 읽습니다.** 앞서 본 내용과 달라도 고치려던 자리가 그대로면 그 문자열만 치환해 진행하고,
-**그 자리가 바뀌었거나 없어졌을 때만 멈추고 사용자에게 알립니다.**
-정리 도구는 읽은 뒤 파일이 하나라도 바뀌었으면 **아무것도 저장하지 않고** 처음부터 다시 읽어 한 번 더 시도합니다.
+**Reread a tracker file right before editing it by hand.** If it differs from what you saw before but the spot you meant to change is unchanged, replace only that string and go on;
+**stop and tell the user only when that spot has changed or is gone.**
+If any file changed after the tidying tool read it, the tool **saves nothing**, rereads from the start and tries once more.
 
-**규칙 다섯 — 순서와 명령 형태가 곧 안전장치입니다.** 두 세션이 같은 시각에 다음 번호를 집어 한쪽 완료 기록이
-덮인 사례가 두 번 있습니다. 둘째 사례(2026-09-14)는 "빈 이름 확인" 과 "파일 쓰기" 를 따로 보내 그 사이 6분을 놓친
-것이었습니다. 규칙은 이미 있었고 지키지 않은 것이 문제였으므로, 아래 2 와 마지막 문단은 도구와 훅으로 강제합니다.
+**Five rules — the order and the form of the commands are the safeguard.** Two sessions that take the next number at the same moment can
+overwrite each other's completion record. Rule 2 below and the last paragraph are enforced with tools and a hook.
 
-1. **생성이 곧 확인입니다.** 새 파일은 `(set -C; cat 원고 > 대상)` 처럼 **덮어쓰지 않는 한 명령**으로 만듭니다.
-   이름을 먼저 확인하고 다른 호출로 쓰는 방식은 확인이 아닙니다. Write 도구는 이 세션이 모르는 기존 파일도 그대로 덮어씁니다.
-2. **번호는 도구가 정하고, 파일이 생긴 뒤에만 그 번호를 다른 문서에 적습니다.** 완료 기록은
-   `python tools/new_record.py <본문파일>` 로 만듭니다 — 본문 첫 줄 `# E? — 제목` 의 `E?` 에 도구가 배정한 번호가
-   들어가고, 그 번호가 이미 있으면 다음 번호로 넘어갑니다. **출력된 번호를 받아서** 참조를 적습니다. 반대 순서로
-   적어 둔 참조는 생성이 실패하면 전부 되짚어 고쳐야 합니다.
-   **새 미결 항목도 같습니다.** 행의 ID 자리를 `D?` 처럼 `글자?` 로 적은 한 줄짜리 파일을 `python tools/new_pending.py <행 파일>` 에
-   주면, 도구가 쓰기 잠금 안에서 파일을 다시 읽어 다음 번호를 넣고 그 글자의 표 맨 아래에 붙인 뒤 번호를 출력합니다. 범위는 대기
-   파일의 글자 표와 제안 표이고(`_config.allocation_scope`), 문헌 파일의 항목과 가지 번호(`D35-1`)는 손으로 넣습니다.
-3. **기존 파일은 문자열 치환(Edit)만 씁니다.** 통째로 다시 쓰는 Write 는 다른 세션의 변경을 지웁니다.
-4. **폴더 단위 삭제·이동 직전에 같은 명령 안에서 `find <폴더> -newer <조사 시점에 본 파일>` 을 봅니다.**
-   비어 있지 않으면 그 파일만 빼고 진행하고 사용자에게 알립니다.
-5. **다른 세션이 열려 있다는 것만으로는 멈추지 않습니다.** 다른 세션의 흔적(내 조사 이후의 수정 시각)이 보이면 그 파일을
-   다시 읽고 진행하며, 다른 세션이 끝났는지 사용자에게 묻지 않습니다. 멈추는 것은 고치려던 자리가 바뀌었을 때뿐입니다.
-   정리 도구는 세션 수와 관계없이 돌립니다 — 도구가 저장을 거부하면(종료 코드 4) 한 번 다시 돌리고, 또 거부되면 한 줄로
-   알리고 다음 일을 합니다.
+1. **Creating is the check.** Create a new file with **a single command that does not overwrite**, such as `(set -C; cat draft > target)`.
+   Checking the name first and writing in a separate call is not a check. The Write tool overwrites an existing file even if this session does not know about it.
+2. **The tool assigns the number; write that number into other documents only after the file exists.** Create a completion record with
+   `python tools/new_record.py <body file>` — the number the tool assigns goes into the `E?` of the body's first line `# E? — <title>`,
+   and if that number already exists the tool moves on to the next one. Write references **using the number the tool prints**. References written
+   the other way round must all be traced back and fixed if creation fails.
+   **New open items work the same way.** Give `python tools/new_pending.py <row file>` a one-line file whose ID cell is written as `<letter>?`, such as `D?`;
+   inside the write lock the tool rereads the file, fills in the next number, appends the row to the bottom of that letter's table and prints the number. The scope is the letter
+   tables of the pending file and the proposals table (`_config.allocation_scope`); items of the literature file and branch numbers (`D35-1`) are entered by hand.
+3. **Change existing files only by string replacement (Edit).** Rewriting a whole file with Write erases other sessions' changes.
+4. **Right before deleting or moving a folder, check `find <folder> -newer <file seen at survey time>` in the same command.**
+   If the output is not empty, leave out only those files, go on, and tell the user.
+5. **Do not stop merely because another session is open.** If you see traces of another session (modification times after your survey), reread
+   that file and go on; do not ask the user whether the other session has finished. Stop only when the spot you meant to change has changed.
+   Run the tidying tool regardless of the number of sessions — if the tool refuses to save (exit code 4), run it once more, and if it refuses again, report it in one line
+   and move on to the next task.
 
-**쓰기 잠금 — 쓰는 동안만 잡습니다.** 공용 파일을 읽고 다시 쓰는 도구(정리 · 색인 · 미결 번호 도구 · `replace_once`)는 그 한 번의
-실행 동안 컴퓨터별 상태 폴더의 잠금 하나(`_sync.WriteLock`)를 잡습니다. 운영체제 잠금이라 쥔 프로세스가 죽으면 저절로 풀리고,
-세션 단위로는 잡지 않습니다. 정리 도구의 순서는 「잠금 → 읽기 → 계산 → 읽은 뒤 바뀌었는지 전체 검사 → 저장」입니다. 훅은 공용
-파일의 Edit · Write 직전에 잠금이 풀리기를 잠깐 기다릴 뿐 막지 않습니다. 완료 기록 번호 도구는 잠금을 잡지 않습니다 — 「있으면
-실패」로 번호를 확보하기 때문입니다. **잠금을 쥔 채, 잠금을 잡는 다른 도구를 자식 프로세스로 부르지 않습니다**(서로 기다립니다).
-잠금이 막지 못하는 것 — Edit · Write 자체(훅은 Edit 보다 먼저 끝나 잠금을 쥘 수 없음) · 편집기 손편집 · 훅이 없는 앱 · 다른 컴퓨터 ·
-잠금을 모르는 옛 판의 도구. 이때는 저장 전 검사와 아래 「동기화」의 점검이 받칩니다.
+**Write lock — held only while writing.** Tools that read and rewrite shared files (tidying · index · open-item numbering tool · `replace_once`) hold one lock
+(`_sync.WriteLock`) in the per-computer state folder for the length of that one run. It is an operating-system lock, so it is released by itself if the process holding it dies,
+and it is never held for a whole session. The tidying tool's order is "lock → read → compute → check everything for changes since reading → save". The hook only waits briefly
+for the lock to be released before an Edit or Write of a shared file; it does not block. The completion-record numbering tool does not take the lock — it secures a number by
+"fail if it exists". **While holding the lock, do not call another tool that takes the lock as a child process** (they wait for each other).
+What the lock cannot stop — Edit and Write themselves (the hook ends before the Edit, so it cannot hold the lock) · hand edits in an editor · apps without hooks · other computers ·
+old versions of tools that do not know about the lock. For these, the check before saving and the checks in "Sync — several computers write the shared files" below back it up.
 
-**완료 기록은 사용자가 확정한 뒤에 한 번에 씁니다.** 반복 수정 중에는 완료 기록을 만들지도 고치지도 않고,
-추적 파일의 상태 변경도 같이 미룹니다. 수정 중의 처리 내역은 대화에 남깁니다. 확정 없이 세션을 마치면 그때
-`반영 (확정 대기)` 상태로 한 번 씁니다. 수정할 때마다 기록을 갱신하면 번호 충돌의 창이 계속 열립니다.
-**ID는 재사용하지 않습니다.** 미결 항목(대기 파일의 글자 표 · 제안 표)의 ID 도 도구가 정합니다(규칙 2) — 번호를 골라 손으로 넣지 않습니다.
+**Write the completion record once, after the user confirms.** During repeated revisions, neither create nor change completion records,
+and hold back status changes in the tracker files as well. Keep the running account of the revisions in the conversation. If the session ends without confirmation, write it once at that point
+with the status `applied (awaiting confirmation)`. Updating the record on every revision keeps the window for number collisions open.
+**Never reuse an ID.** The IDs of open items (the letter tables of the pending file · the proposals table) are also assigned by the tool (rule 2) — do not pick a number and enter it by hand.
 
-**하네스가 강제하는 층 — 훅.** 규칙은 모델의 기억에 의존하므로 한 층을 더 둡니다. 훅 본체 `guard_write.py` 는
-PreToolUse 에서 이미 있는 `records/E<번호>.md` 와 생성 파일 `tracker_records_index.md` 를 Write 도구로 덮어쓰려 하면 거부하고
-(새 파일 생성과 Edit 은 막지 않음), 새 미결 ID 행을 손으로 넣는 Edit · Write 를 거부하며(번호 도구가 프로젝트에 있을 때 · 범위는
-번호 도구와 같음 · 이미 아는 ID 를 되살리거나 옮기는 것은 통과), 아래 「동기화」의 가드 · 스냅샷을 Edit · Write · Bash · PowerShell 의 앞뒤에서 돌리며, 쓰기 뒤
-추적 파일의 표 행이 깨져 있으면 그 턴에 알립니다(「표 행 형식」).
-등록은 두 겹입니다 — 플러그인 설치본의 `hooks/hooks.json`(본체) 과 프로젝트 `.claude/settings.json`(보조, `new-manuscript` 가 만듦).
-기존 프로젝트에 넣거나 정본이 바뀐 뒤 맞출 때는 `new-manuscript/update_tools.py` 를 씁니다 — `--check` 로 판정(같음 · 옛 정본 판 ·
-로컬 수정 · 없음), `--apply` 로 교체, `--scan <폴더>` 로 자매 프로젝트 전체 확인. 관리 대상은 `managed_files.json` 입니다.
-훅 등록(`settings.json`)은 비교만 하므로 다르면 `settings.example.json` 의 `hooks` 블록을 손으로 합칩니다.
-훅을 돌리지 않는 앱에서는 규칙만 남습니다.
+**The layer the harness enforces — the hook.** The rules depend on the model's memory, so there is one more layer. The hook script `guard_write.py`,
+at PreToolUse, refuses a Write that would overwrite an existing `records/E<number>.md` or the generated file `tracker_records_index.md`
+(it does not block creating a new file or an Edit); refuses an Edit or Write that adds a new open-item ID row by hand (when the numbering tool is in the project · the scope is
+the same as the numbering tool's · reviving or moving an ID already known passes); runs the guard and snapshots of "Sync — several computers write the shared files" below before and after Edit · Write · Bash · PowerShell; and after a write
+reports in the same turn if a table row in a tracker file is broken ("Table row format — one item per line").
+It is registered in two places — `hooks/hooks.json` in the installed plugin (the main one) and the project's `.claude/settings.json` (a backup, made by `new-manuscript`).
+To add it to an existing project, or to catch up after the canonical copy changes, use `new-manuscript/update_tools.py` — how it judges, replaces and treats the hook registration is in
+`project-config.md` "New projects are made by the `new-manuscript` skill".
+In apps that do not run hooks, only the rules remain.
 
-## 동기화 — 공용 파일을 여러 컴퓨터가 씁니다
+## Sync — several computers write the shared files
 
-클라우드 동기화 폴더(구글드라이브 등)의 프로젝트를 여러 컴퓨터에서 쓰면, **따라잡지 못한 미러 위에 쓴 판이 나중에 올라가 다른
-컴퓨터의 작업을 조용히 덮습니다.** 「쓰기 직전 다시 읽기」는 읽는 사본 자체가 낡으면 막지 못하고, 낡은 사본 안의 어떤 파일로도
-낡았음을 증명할 수 없습니다. 그래서 코드로 세 겹을 둡니다 — 모델 토큰은 쓰지 않고, 모델이 하는 일은 ERROR 를 사용자에게 전하고
-확인을 받는 것뿐입니다(WARN 은 보고만 하고 진행). 본체는 `tools/_sync.py`, 명령은 `tools/check_sync.py`, 훅은 `guard_write.py pre|post` 입니다.
+When several computers use a project in a cloud sync folder (Google Drive and the like), **a version written on top of a mirror that has not caught up is uploaded later and silently overwrites
+the other computer's work.** "Reread right before writing" cannot prevent this when the copy being read is itself stale, and no file inside a stale copy can
+prove that it is stale. So there are three layers in code — they use no model tokens; the model's only job is to pass ERRORs on to the user and
+get confirmation (WARN is only reported, and work goes on). The engine is `tools/_sync.py`, the command is `tools/check_sync.py`, and the hook is `guard_write.py pre|post`.
 
-**원칙.** ① 조용한 덮어쓰기를 **눈에 보이는 충돌**로 바꾸는 구조(항목당 파일 · 배타적 생성)가 가장 강합니다 — 완료 기록이 그 구조입니다.
-② **가해 쪽은 추정, 피해 쪽은 정확** — 쓰기 전 검사는 추정(시간 · 빈칸 · 충돌 사본)이라 사용자 확인으로 닫고, 피해 쪽은 불변식
-(ID 는 사라지지 않는다 · 기록 번호는 연속이고 줄지 않는다 · 생성물은 원본과 맞다 · 내가 쓴 줄은 남아 있다)으로 정확히 잡습니다.
-③ 복구는 드라이브 웹 **없이도** — 쓰기 후 스냅샷. ④ 검사 본체는 **컴퓨터별 설치본**(플러그인 훅 · `update_tools`)에 두고 프로젝트 사본은
-보조 — 낡은 미러에는 새 가드도 아직 없기 때문입니다. ⑤ 핵심 검사는 설정이 없어도(기본값만으로) 돕니다.
+**Principles.** ① A structure that turns silent overwrites into **visible conflicts** (one file per item · exclusive creation) is the strongest — completion records use it.
+② **The causing side is estimated, the damaged side is exact** — the check before a write is an estimate (time · gaps · conflict copies), so it is closed by the user's confirmation; on the damaged side, invariants
+(IDs do not disappear · record numbers are continuous and never shrink · generated files match their sources · lines I wrote are still there) catch the damage exactly.
+③ Recovery works **without** the Drive web interface — snapshots after writes. ④ The checking engine lives in **each computer's installed copy** (plugin hook · `update_tools`), and the project copy
+is a backup — because a stale mirror does not have the new guard yet either. ⑤ The core checks run without settings (on defaults alone).
 
-**점검.** 등급은 ERROR(공용 파일 쓰기를 막음 — 사용자 확인으로만 품) · WARN(상태 한 줄로 보고하고 `--accept-warn` 으로 받아들인 뒤 진행 — 막지 않음) · INFO.
+**Checks.** The levels are ERROR (blocks writes to shared files — released only by the user's confirmation) · WARN (report it in one status line, accept it with `--accept-warn`, then go on — does not block) · INFO.
 
-| 검사 | 등급 | 시점 | 무엇을 |
+| Check | Level | When | What |
 |---|---|---|---|
-| S1 신선도 | WARN | 시작 · `update_tools` | 공용 파일의 최근 변경이 `stale_days`(기본 2) 넘게 지남 — 낡은 미러이거나 작업 공백 |
-| S2 기록 연속 | ERROR | 시작 · 쓰기 | 완료기록 번호에 빈칸(`known_gaps` 제외), 또는 최대 번호가 이 컴퓨터가 본 것보다 작음 |
-| S3 참조 무결 | ERROR / WARN | 시작 · 쓰기 | 생성물이 가리키는 원본이 없음(색인 → 기록 파일 · 목록 → 미결 ID)은 ERROR, 손편집 파일이 최대 번호보다 큰 기록을 가리키면 WARN. 목록은 생성 블록의 **ID 자리**만 셉니다 — 위치 표 · 트리거 표의 끝 셀, 지금 표의 첫 셀, 포커스의 항목 머리(`#### <ID> —`). 비고 사본 같은 본문에 든 다른 문서의 라벨(반영계획의 `D4`, 다른 프로젝트의 `A40`)은 세지 않으므로 비고를 고쳐 쓸 필요가 없습니다. 블록의 모양을 읽지 못하면 대조를 건너뛰고 WARN(정리 도구로 다시 만듦). 정의는 `_config.list_block_ids` 한 곳 |
-| S4 생성 스탬프 | INFO / WARN / ERROR | 시작 | 목록 · 색인의 스탬프가 원본과 다를 때 **방향**을 가림 — 원본이 생성 **뒤에** 바뀜(순방향)은 INFO 「할 일」로 재생성 안내(세션 중 평소 상태 · 동기화 경고 아님 · 상태 줄 OK). 원본이 이 컴퓨터가 본 옛 판으로 돌아갔고 수정 시각도 생성물보다 앞이면 ERROR(역행 · 덮어쓰기). 옛 판인데 수정 시각은 뒤(되돌렸을 수도) · 생성 뒤 편집이 없는데 내용이 다름(옛 판이 덮었거나 생성물만 먼저 옴) · 색인을 만들 때 있던 기록이 바뀜 · 기록이 줆은 WARN |
-| S5 충돌 사본 | WARN | 시작(전체) · 쓰기(대상 폴더) | `이름 2.md` · `이름 (1).md` · `conflicted copy`(원본이 같은 폴더에 있을 때만) · `__pycache__/` · `보관/` 제외 |
-| S6 손실 보고 | WARN | 시작 · `--damage` | **이 컴퓨터가 쓴 줄**이 공용 파일 전체에서 사라진 비율이 `survival_pct`(기본 70) 아래. 갈아쓰는 문서(`checkpoint` · `rewrite_ok`) · 생성물 제외 |
-| S7 ID 단조 | ERROR | 시작 · 쓰기 | 이 컴퓨터가 본 미결 · 이관 · 제안 · 문헌 ID 가 사라짐 — 사라진 ID 를 목록으로 |
-| S8 드라이브 | INFO/WARN | 시작 | 동기화 프로그램 프로세스 유무 |
-| S10 갱신 전 | 거부 / 보고 | `update_tools --apply` | S1 · S2 · S5 를 다시 봄. ERROR(S2)면 정본 적용을 거부(`--sync-override` 는 사용자 확인 뒤에만), WARN(S1 · S5)은 보이고 진행 — 갱신 전후의 드라이브 스냅샷과 해시 대조(옛 정본 판만 바꿈)가 안전망 |
+| S1 freshness | WARN | start · `update_tools` | The latest change to the shared files is older than `stale_days` (default 2) — a stale mirror or a gap in work |
+| S2 record continuity | ERROR | start · write | A gap in completion-record numbers (except `known_gaps`), or the highest number is lower than this computer has seen |
+| S3 reference integrity | ERROR / WARN | start · write | ERROR when a source a generated file points to is missing (record index → record file · index file → open-item ID); WARN when a hand-edited file points to a record above the highest number. In the index file only the **ID cells** of the generated blocks count — the last cell of the location table and the trigger table, the first cell of the do-now table, and the item heading in the focus (`#### <ID> —`). Labels of other documents inside body text such as copied notes (`D4` of a revision plan, `A40` of another project) do not count, so the notes need not be rewritten. If the shape of a block cannot be read, the comparison is skipped with a WARN (rebuild it with the tidying tool). Defined in one place, `_config.list_block_ids` |
+| S4 generation stamp | INFO / WARN / ERROR | start | When the stamp of the index file or the record index differs from its sources, tells the **direction** — a source changed **after** generation (forward) is an INFO `to do` that prompts regeneration (the normal state during a session · not a sync warning · status line OK). ERROR (backward · overwrite) when a source has gone back to an older version this computer has seen and its modification time is also earlier than the generated file's. WARN when it is an older version but its modification time is later (it may have been reverted) · the content differs although nothing was edited after generation (an older version overwrote it, or only the generated file arrived first) · a record that existed when the record index was made has changed · records have decreased |
+| S5 conflict copies | WARN | start (everything) · write (target folder) | `name 2.md` · `name (1).md` · `conflicted copy` (only when the original is in the same folder) · `__pycache__/` and the archive folder (`archive/`, or its old default name) excluded |
+| S6 loss report | WARN | start · `--damage` | The share of **lines this computer wrote** that still survive across the shared files is below `survival_pct` (default 70). Documents that get overwritten (`checkpoint` · `rewrite_ok`), generated files and anchor lines (block markers · generation stamps · `| ID |` header rows — structure the tools own, rewritten by the format migration) excluded |
+| S7 ID monotonicity | ERROR | start · write | An open-item, archived, proposal or literature ID this computer has seen has disappeared — lists the missing IDs |
+| S8 drive | INFO/WARN | start | Whether the sync program's process is running |
+| S9 format | ERROR / INFO | start · write (ERROR) · start (INFO) | ERROR when the tracker files mix English and pre-0.14 Korean anchors — Drive has not caught up, or a tool from an older plugin version wrote here (it blocks shared writes like the other ERRORs; the fix is `update_tools --apply`, which is idempotent). INFO when the project still uses the Korean anchors (not yet migrated). See "Format tokens" |
+| S10 before update | refuse / report | `update_tools --apply` | Rechecks S1 · S2 · S5. On ERROR (S2) it refuses to apply the canonical copy (`--sync-override` only after the user's confirmation); WARN (S1 · S5) is shown and the update goes on — Drive snapshots before and after the update and the hash comparison (only older canonical versions are replaced) are the safety net |
 
-**시점.** 세션 시작에 `<py> -X utf8 tools/check_sync.py` — 상태 한 줄(`동기화 OK · E118 · 최근 변경 … · 드라이브 스냅샷 마지막 <컴퓨터> …`)과
-경고. **ERROR 가 있으면 공용 파일을 쓰기 전에 사용자에게 보이고 확인을 받습니다.** 사용자가 확인하면 `--ack "<사용자 문구>"`
-로 닫습니다(문구가 기록에 남음 · `ack_hours` 뒤 소멸 · 사라진 ID · 줄은 정당한 삭제로 받아들임) — **사용자 확인 없이 `--ack` 를 돌리지
-않습니다.** **WARN 만 있으면 동기화된 것으로 봅니다** — 상태 한 줄에 적고 이후 답변에서 되풀이하지 않으며, `--accept-warn` 으로 기준
-(S6 쓴 줄 등록 · S4 · S7 의 본 기록과 ID)을 지금 상태에 맞춘 뒤 진행합니다. `--accept-warn` 은 문구가 필요 없고 열린 ERROR 가 있으면
-거부합니다 — ERROR 를 닫는 길은 `--ack` 뿐입니다. 쓰기마다 훅이 싼 검사(S2 S3 S5 S7)를 다시 하고, 세션 끝은 정리 도구 `--apply` 가 `--end`(경계 스냅샷 · 보존 정리)를 부릅니다.
-**확인은 경고 key(검사 + 대상 번호 · ID) 단위로 `ack_hours` 동안 유효합니다** — 같은 조건이 생성물 · 폴더에 그대로 남아 있어도 다시 막지
-않으므로, 확인 뒤에는 그 생성물을 다시 만드는 정리 도구가 돕니다. 조건이 달라지면(다른 번호 · ID — 새 key) 다시 막고, 시작 점검은 확인된
-ERROR 를 `[확인됨 …]` 으로 보이며 종료 코드 1 을 냅니다. 판정은 `Sync.ack_of` · `Sync.blocking` 한 곳이고 훅 · 정리 · 색인 · 새항목이 함께 씁니다.
-정리 도구는 목록에 대한 S3 를 스스로 건너뛰지 않습니다 — 원본이 옛 판에 덮였을 때 목록은 사라진 ID 의 유일한 증거이고, 정리 도구는 그 원본으로
-목록을 다시 만들고 대기 파일까지 쓰기 때문입니다.
+**When.** At the start of a session, run `<py> -X utf8 tools/check_sync.py` — one status line (`Sync OK · E12 · last change … · last drive snapshot <computer> … · this computer <computer>`) and
+the warnings. **If there is an ERROR, show it to the user and get confirmation before writing shared files.** Once the user confirms, close it with `--ack "<the user's words>"`
+(the words are kept in the record · expire after `ack_hours` · the missing IDs and lines are accepted as legitimate deletions) — **never run `--ack`
+without the user's confirmation.** **If there are only WARNs, treat the project as synced** — note them in the status line, do not repeat them in later replies, and with `--accept-warn` align the baseline
+(the S6 register of written lines · the records and IDs seen for S4 · S7) with the current state, then go on. `--accept-warn` needs no words and refuses
+while an ERROR is open — the only way to close an ERROR is `--ack`. On every write the hook reruns the cheap checks (S2 S3 S5 S7), and at the end of a session the tidying tool's `--apply` calls `--end` (boundary snapshot · retention cleanup).
+**A confirmation is valid per warning key (check + target number · ID) for `ack_hours`** — it does not block again while the same condition remains in the generated file or folder,
+so after confirmation the tidying tool, which rebuilds that generated file, can run. When the condition changes (another number or ID — a new key) it blocks again, and the start check shows a confirmed
+ERROR as `[confirmed …]` and exits with code 1. The decision lives in one place, `Sync.ack_of` · `Sync.blocking`, shared by the hook, tidying, index and new-item tools.
+The tidying tool does not skip S3 on the index file by itself — when a source has been overwritten by an older version, the index file is the only evidence of the missing IDs, and the tidying tool rebuilds
+the index file from that source and writes the pending file too.
 
-**스냅샷 · 복구.** 공용 파일 = 설정에서 유도 — 추적 파일 · `checkpoint` · 완료기록 · 원고 폴더의 `*.md` · `sync.shared_extra`.
-쓰기마다 **로컬**(`~/.claude/sync-state/<프로젝트>/snap/`)에, 세션 경계와 정리 · `update_tools` 전후에는 **드라이브**(`sync.snapshot_dir`,
-기본 `archive/tracker_backup/`)에 둡니다. 이름 `<UTC>_<컴퓨터>_<경로(/→__)>_<해시8><확장자>` 는 매번 달라 다른 컴퓨터가 덮을 수 없고, 같은 해시는
-다시 만들지 않으며, 바이트 그대로라 줄끝이 보존됩니다. **보존(세션 시작 · 끝)** — 파일마다 최근 `snapshot_min`(10)개는 늘 남기고,
-자기 컴퓨터 것은 `snapshot_days`(30, 로컬은 2배) 지났거나 `snapshot_max`(드라이브 20 · 로컬 `snapshot_max_local` 100)를 넘는 것을 오래된 순으로,
-다른 컴퓨터 것은 `snapshot_days_others`(90) 지난 것을 지웁니다. 바뀌지 않는 파일은 하나씩만 남으므로 전체 개수는 공용 파일 수 + 자주 바뀌는 파일당 상한 안에서
-평형이 됩니다. 되돌리기 `--restore <파일> [--at "YYYY-MM-DD HH:MM" | --hash <8자리>]`(되돌리기 전 현재 판도 남김) · 목록 `--snapshots <파일>`.
-병합(어느 판의 어느 행을 살릴지)은 판단이라 자동화하지 않습니다.
+**Snapshots and recovery.** Shared files are derived from the settings — tracker files · `checkpoint` · completion records · `*.md` in the manuscript folder · `sync.shared_extra`.
+Snapshots go **locally** (`~/.claude/sync-state/<project>/snap/`) on every write, and to **Drive** (`sync.snapshot_dir`,
+default `archive/tracker_backup/`) at session boundaries and before and after tidying and `update_tools`. The name `<UTC>_<computer>_<path(/→__)>_<hash8><ext>` differs every time, so another computer cannot overwrite it; the same hash
+is not made twice; and snapshots are byte for byte, so line endings are kept. **Retention (session start · end)** — for each file the latest `snapshot_min` (10) are always kept;
+this computer's own snapshots older than `snapshot_days` (30, twice that locally) or beyond `snapshot_max` (Drive 20 · local `snapshot_max_local` 100) are deleted oldest first,
+and other computers' snapshots older than `snapshot_days_others` (90) are deleted. A file that does not change keeps only one, so the total settles within the number of shared files plus the per-file cap for files that change often.
+Restore with `--restore <file> [--at "YYYY-MM-DD HH:MM" | --hash <8 chars>]` (the current version is kept before restoring) · list with `--snapshots <file>`.
+Merging (which rows of which version to keep) is a judgement, so it is not automated.
 
-**파일 이름 정규화 — 맥.** 맥(구글드라이브 미러 · HFS+)은 한글 이름을 NFD 로 저장해 `os.listdir` 결과가 설정 · 본문의 NFC 문자열과 다릅니다.
-파일을 여는 데는 지장이 없지만 **문자열 비교와 import 가 어긋납니다** — Python 의 import 는 폴더 목록을 그대로 대조하므로 `from _location import …` 가
-`ModuleNotFoundError` 로 멈춥니다. 그래서 ① `_config` 가 NFD 이름 모듈을 받아 주는 finder 를 등록합니다 — **한글 이름 모듈을 쓰는 도구는 `_config` 를 먼저
-import 합니다** ② 도구는 이름 · 경로 · 줄을 비교하거나 키로 쓸 때 `_config.nfc` 로 NFC 에 맞춥니다(스냅샷 이름 · 공용 파일 집합 · 쓴 줄 해시)
-③ 상태 폴더 이름 `<이름 슬러그>-<루트 경로 해시8>`(`_sync.project_id` 한 곳)도 루트 경로를 NFC 로 맞춘 뒤 해시합니다 — 훅은 표준 입력의 NFC 경로를,
-셸에서 돌린 도구는 파일 시스템의 NFD 경로를 받으므로 그러지 않으면 폴더가 둘로 갈려 `--ack` 가 훅에 닿지 않습니다. 옛 정의로 생긴 폴더는 처음 만날 때
-새 이름으로 옮기거나 새 폴더에 합칩니다(스냅샷 · 쓴 줄 · ID · 확인 기록은 합집합, 본 최대 번호는 큰 쪽).
+**File-name normalization — macOS.** macOS (Google Drive mirror · HFS+) stores Korean names in NFD, so `os.listdir` results differ from the NFC strings in settings and text.
+Opening files works, but **string comparison and import go wrong** — Python's import compares against the folder listing as it is, so `from _location import …`
+stops with `ModuleNotFoundError`. Therefore ① `_config` registers a finder that accepts modules with NFD names — **a tool that uses a module with a Korean name imports `_config`
+first** ② tools normalize to NFC with `_config.nfc` when they compare names, paths or lines or use them as keys (snapshot names · the set of shared files · hashes of written lines)
+③ the state folder name `<name slug>-<root path hash8>` (in one place, `_sync.project_id`) also hashes the root path after normalizing it to NFC — the hook receives the NFC path from standard input,
+and a tool run from a shell receives the file system's NFD path, so otherwise the folder splits in two and `--ack` does not reach the hook. A folder made under the old definition is, the first time it is met,
+moved to the new name or merged into the new folder (snapshots · written lines · IDs · confirmation records are combined; of the highest numbers seen, the larger is kept).
 
-**생성 스탬프.** 생성물 둘째 줄의 HTML 주석 — 결정적이라 두 번 돌려도 같습니다.
-목록 `<!-- 생성스탬프 <대기>=<해시16> <문헌>=<해시16> <제안>=<해시16> -->` · 색인 `<!-- 생성스탬프 records/ n=<개수> max=<최대> sha=<해시16> -->`.
-스탬프가 다르다는 것만으로는 「원본을 고친 뒤 아직 다시 안 만듦」과 「옛 판이 새 판을 덮음」을 가를 수 없으므로 S4 는 **방향**을 봅니다 —
-목록은 이 컴퓨터의 스냅샷 기록에서 스탬프 판과 지금 판의 순서를, 그것이 모자라면 원본 · 생성물의 수정 시각(동기화 서비스가 보존)을 씁니다.
-색인은 스탬프의 최대 번호까지 지문을 다시 계산해 새 기록만 늘었는지(순방향) · 있던 기록이 바뀌었는지 · 줄었는지를 가립니다.
-순방향은 재생성만 하면 되므로 동기화 경고가 아니라 「할 일」 한 줄이고 상태 줄은 OK 입니다 — 세션 끝의 정리 도구가 지웁니다.
-`new_record.py` 는 기록을 만든 뒤 색인을 함께 다시 만들어(`--no-index` 로 끔) 색인 쪽 순방향은 생기지 않습니다.
+**Generation stamp.** An HTML comment on the second line of a generated file — deterministic, so two runs give the same result.
+Index file `<!-- generated-stamp <pending>=<hash16> <literature>=<hash16> <proposals>=<hash16> -->` · record index `<!-- generated-stamp records/ n=<count> max=<max> sha=<hash16> -->` (older files use the Korean stamp word — read too).
+A differing stamp alone cannot tell "the source was edited and not yet regenerated" from "an older version overwrote a newer one", so S4 looks at the **direction** —
+for the index file it uses the order of the stamped version and the current version in this computer's snapshot history, or, if that is not enough, the modification times of the source and the generated file (kept by the sync service).
+For the record index it recomputes the fingerprint up to the stamp's highest number to tell whether only new records were added (forward) · existing records changed · records decreased.
+Forward only needs regeneration, so it is not a sync warning but a single `to do` line, and the status line is OK — the tidying tool at the end of the session clears it.
+`new_record.py` rebuilds the record index after creating a record (turn this off with `--no-index`), so forward on the record-index side does not arise.
 
-**쓴 줄의 기준은 「이 컴퓨터가 쓰기 직전에 본 판」입니다.** 쓰기 뒤의 차이(지운 줄은 등록에서 빼고 넣은 줄은 더함)는 `before_write` · 세션 경계 · 직전 쓰기가
-상태(`seen.json`)에 적어 둔 해시의 스냅샷과 견줍니다 — 시각상 마지막 스냅샷이 아닙니다. 다른 컴퓨터의 옛 판이 더 늦게 찍혀 있으면 지운 줄이 등록에 남아 S6 가
-오탐하기 때문입니다. 직전 판을 모르면 이 컴퓨터가 만든 스냅샷만 씁니다.
+**The baseline for written lines is "the version this computer saw right before writing".** The difference after a write (deleted lines leave the register, added lines join it) is taken against the snapshot whose hash `before_write` · a session boundary · the previous write
+recorded in the state (`seen.json`) — not against the latest snapshot by time. If an older version from another computer was snapshotted later, deleted lines would stay in the register and S6 would
+raise false alarms. If the previous version is unknown, only snapshots made by this computer are used.
 
-**모든 쓰기 경로를 덮습니다.** Edit · Write 는 훅(앞 — 덮어쓰기 거부 · 가드 · 직전 판 스냅샷, 뒤 — 스냅샷 · 지문 · 쓴 줄). Bash 는 뒤에서
-공용 파일의 지문(수정 시각 · 크기)을 비교해 바뀐 것만 처리하고, 앞에서는 미확인 ERROR 가 있을 때만 명령에 공용 경로가 보이면 막습니다.
-**Python 으로 공용 파일을 고칠 때는 `_sync.replace_once(path, old, new)`** — 대상이 정확히 1회일 때만 바꾸고(0 · 2회 이상이면 ValueError —
-이것이 낙관적 동시성 검사) 줄끝 · 스냅샷 · 기록까지 합니다. 정리 · 색인 · 새항목(완료기록 · 미결) · `update_tools` 는 시작 때 검사해 ERROR 면 거부합니다.
-훅 밖 — 편집기 손편집 · 훅 없는 앱의 편집은 다음 세션 시작의 스냅샷과 S6 · S7 이 피해를 잡습니다.
+**Every write path is covered.** Edit · Write go through the hook (before — overwrite refusal · guard · snapshot of the previous version; after — snapshot · fingerprint · written lines). For Bash, afterwards
+the fingerprints of shared files (modification time · size) are compared and only changed files are processed; beforehand, the command is blocked only when an unconfirmed ERROR exists and a shared path appears in the command.
+**To change a shared file from Python, use `_sync.replace_once(path, old, new)`** — it replaces only when the target occurs exactly once (0 or 2+ occurrences raise ValueError —
+this is the optimistic concurrency check) and also handles line endings, snapshots and records. Tidying · index · new item (completion record · open item) · `update_tools` check at start and refuse on ERROR.
+Outside the hook — for hand edits in an editor and edits in apps without hooks, the snapshot at the next session start and S6 · S7 catch the damage.
 
-**훅 배치.** 프로젝트 판정은 Edit · Write 는 대상 파일 경로에서, Bash 는 cwd 에서 **위로 올라가며** 설정 파일을 찾습니다 — 없으면 즉시 끝나
-다른 폴더에 영향이 없습니다. 설치본 훅과 프로젝트 훅이 둘 다 있으면 같은 도구 호출을 한 번만 처리합니다. 내부 예외는 통과시키고 stderr 에
-알립니다(fail-open) — 막는 것은 미확인 ERROR 뿐입니다.
+**Hook placement.** To find the project, the hook searches for the settings file **walking upward** — from the target file's path for Edit · Write, from the cwd for Bash — and ends at once if there is none,
+so other folders are unaffected. When both the installed hook and the project hook exist, the same tool call is processed only once. Internal exceptions are let through and reported
+on stderr (fail-open) — only an unconfirmed ERROR blocks.
 
-**설정.** `tracker.checkpoint`(인수인계 파일 — 갈아쓰므로 S6 제외) · `sync.shared_extra` · `snapshot_dir` · `conflict_patterns` · `exclude` ·
-`stale_days` · `snapshot_days` · `snapshot_min` · `ack_hours` · `known_gaps` · `rewrite_ok` · `survival_pct`. 기본값은 `_config.py` 한 곳.
-컴퓨터 이름은 hostname 이고 `~/.claude/sync-state/computer_id` 첫 줄로 바꿀 수 있습니다. 상태 폴더는 동기화 폴더 **밖**이며
-`SYNC_STATE_HOME` 으로 옮길 수 있습니다(시험 · 미리보기용).
+**Settings.** `tracker.checkpoint` (the handoff file — it is overwritten, so S6 skips it) · `sync.shared_extra` · `snapshot_dir` · `conflict_patterns` · `exclude` ·
+`stale_days` · `snapshot_days` · `snapshot_min` · `ack_hours` · `known_gaps` · `rewrite_ok` · `survival_pct`. Defaults live in one place, `_config.py`.
+The computer name is the hostname and can be changed with the first line of `~/.claude/sync-state/computer_id`. The state folder is **outside** the sync folder and
+can be moved with `SYNC_STATE_HOME` (for tests and previews).
 
-**사람이 지킬 것.** 컴퓨터를 바꿀 때는 **양쪽 끝**에서 동기화 프로그램이 최신 상태인 것을 보고 닫고 · 엽니다. 세션 시작에 점검을 돌리고
-ERROR 를 사용자에게 보입니다. WARN 은 상태 한 줄로만 보고하고 `--accept-warn` 으로 받아들인 뒤 진행합니다. 훅 없는 앱에서는 공용 추적 파일을 쓰지 않습니다.
+**What people must do.** When switching computers, close and open only after seeing that the sync program is up to date **at both ends**. Run the check at the start of a session and
+show ERRORs to the user. Do not write shared tracker files from an app without hooks.
 
-**마지막 수단 — 동기화 서비스의 버전 기록.** 스냅샷이 없는 판(안전장치를 두기 전의 것)은 서비스 웹의 파일 버전 기록에서 받습니다 —
-파일을 열지 않고 「버전 관리」에서 덮이기 **직전** 시각의 판을 내려받아, 줄끝을 확인한 뒤 바이트 그대로 제자리에 두고
-`check_sync.py --after-write <파일>` 로 등록합니다. 어느 판이 맞는지는 ID 집합 · 날짜 표지로 대조합니다.
+**Last resort — the sync service's version history.** A version with no snapshot (from before the sync guard was in place) is fetched from the file version history on the service's web site —
+without opening the file, download from "Manage versions" the version from **just before** it was overwritten, check its line endings, put it back in place byte for byte, and
+register it with `check_sync.py --after-write <file>`. Decide which version is right by comparing the sets of IDs and the date markers.
 
-**남는 구멍.** 가해 쪽에서 「낡음」은 두 번째 채널 없이는 추정이고 하루 안의 짧은 낡음은 S1 이 놓칩니다. 손편집 · 훅 없는 앱은 훅 밖입니다.
-항목당 파일 구조(미결 항목)는 피해 범위를 항목 하나로 줄일 뿐, 두 컴퓨터가 **같은 항목**을 고치면 그 항목은 여전히 덮입니다.
+**Remaining gaps.** On the causing side, "staleness" is an estimate without a second channel, and S1 misses short staleness within a day. Hand edits and apps without hooks are outside the hook.
+The one-file-per-item structure (open items) only narrows the damage to one item; if two computers change **the same item**, that item is still overwritten.
 
-## 대상 · 위치 문법 — 위치 표와 역색인은 이 문법으로 만들어집니다
+## Target and location syntax — the location table and the reverse index are built from it
 
-완료 기록의 `대상` 과 미결 · 제안의 `위치` 는 같은 문법(`tools/_location.py`)으로 (파일, 절) 로 갈라져 완료 색인의 절별 역색인,
-색인 파일의 위치 표, 포커스가 됩니다. 세 곳이 같은 정의를 쓰므로 한 곳에서 찾히는 것은 다른 곳에서도 찾힙니다.
+The `**Target**` of a completion record and the `Location` of an open item or proposal are split into (file, section) pairs by the same syntax (`tools/_location.py`) and become the by-section reverse index of the record index,
+the location table of the index file, and the focus. All three use the same definition, so what is found in one is found in the others.
 
-- **파일은 루트 기준 전체 경로를 백틱에** 적습니다 — `` `manuscript/results.md` `` · `` `manuscript_src/ch3.md` ``. 원고 폴더 안의 장 · 참고문헌
-  파일은 이름만 적어도 됩니다(`ch3.md`). 폴더는 끝에 `/`. 앞에 적은 경로의 폴더가 뒤에 오는 이름의 기준이 됩니다
-  (`` `manuscript/intro.md` · `results.md` ``). 한 칸에 적힌 경로는 모두 위치입니다 — 「함께 볼 곳」 뒤의 경로도 같습니다.
-- **절은 그 경로 바로 뒤**에 둡니다 — `①`–`⑳`(뒤 `a`–`z`) · `¶2` · `§3.2.1` · `Figure 3` · `Table 1` · `「절 이름」`. 여러 절은 `·` 로,
-  범위는 `⑪–⑮` 처럼 `–` 로. 절 표기 뒤에 `·` `,` `and` 로 이어지는 맨 번호는 앞 표기를 물려받습니다(`Figure 5 · 6`).
-  도판 번호는 평면(`Figure 3`)과 장-번호(`Figure 3-2`) 둘 다 됩니다. 코드 파일 뒤의 식별자는 그 파일의 절입니다
-  (`` `build_tpl.py` `abstract_src` ``).
-- **파일 없이 범위만 적을 때**는 `전체` 처럼 한 낱말로 적습니다.
-- 프로젝트만의 절 표기는 설정 `tracker.section_markers`(정규식 목록)로 더합니다. 완료 색인에서 뺄 파일은
-  `tracker.record_index_exclude`(글롭, 폴더는 끝 `/`)와 `manuscript.output_pattern`(빌드 산출물)에 적습니다 —
-  이 제외는 완료 색인에만 걸리고 위치 표에는 걸리지 않습니다(미결의 위치는 실제 수정 지점입니다).
-- 확인하지 못한 이름(지운 파일 · 프로젝트 밖)은 쓴 그대로 한 행이 되고 경고하지 않습니다. 경고는 **빈 칸이거나, 절 표기만 있고
-  붙일 파일이 없을 때**만 냅니다 — 미결의 `위치` 는 정리 도구가 실행마다, 완료 기록의 `대상` 은 `new_record.py` 가 만들 때.
-  옛 기록은 `index_records.py --검사` 로만 봅니다(확정된 기록은 고치지 않으므로 실행마다 경고하면 영구 소음이 됩니다).
+- **Write a file as its full path from the root, in backticks** — `` `manuscript/results.md` `` · `` `manuscript_src/ch3.md` ``. Chapter and reference
+  files inside the manuscript folder may be given by name alone (`ch3.md`). A folder ends with `/`. The folder of a path written earlier is the base for names that follow
+  (`` `manuscript/intro.md` · `results.md` ``). Every path written in a cell is a location — paths after a "see also" label count too.
+- **Put sections right after the path** — `①`–`⑳` (followed by `a`–`z`) · `¶2` · `§3.2.1` · `Figure 3` · `Table 1` · `「section name」`. Separate several sections with `·`;
+  write a range with `–`, as in `⑪–⑮`. A bare number joined after a section mark by `·`, `,` or `and` inherits the preceding mark (`Figure 5 · 6`).
+  Figure numbers may be flat (`Figure 3`) or chapter-numbered (`Figure 3-2`). An identifier after a code file is a section of that file
+  (`` `build_tpl.py` `abstract_src` `` · `` `Chapter.fixed_size` ``). Write identifiers in backticks — a plain word without them counts only
+  as a list item (after the file or `·` · `,`, before `·` · `,` or the end), so a remark after a code file is not taken for a section.
+- **When you give only a scope without a file**, write one word, such as `all`.
+- Add a project's own section notation with the setting `tracker.section_markers` (a list of regular expressions). Files to leave out of the record index go in
+  `tracker.record_index_exclude` (globs; a folder ends with `/`) and `manuscript.output_pattern` (build output) —
+  this exclusion applies only to the record index, not to the location table (an open item's location is the actual place to change).
+- A name that cannot be resolved (a deleted file · outside the project) becomes a row as written, without a warning. A warning is raised only **when the cell is empty, or has a section mark
+  with no file to attach it to** — for an open item's location, by the tidying tool on every run; for a completion record's target, by `new_record.py` when it creates the record.
+  Old records are checked only with `index_records.py --check-targets` (confirmed records are not changed, so warning on every run would be permanent noise).
 
 ```text
-저널 원고   `manuscript/results.md` ③ · ④b · `도판소스/INDEX.md` Figure 3
-            → results.md ③ / results.md ④b / 도판소스/INDEX.md Figure 3      (원고 폴더 안은 원고 폴더 기준 이름으로 표시)
-학위논문    `manuscript_src/ch3.md` §3.2.1 · `build_tpl.py` `abstract_src` · Figure 3-2 캡션
-            → ch3.md §3.2.1 / build_tpl.py abstract_src / build_tpl.py Figure 3-2
+journal manuscript   `manuscript/results.md` ③ · ④b · `figures/INDEX.md` Figure 3
+                     → results.md ③ / results.md ④b / figures/INDEX.md Figure 3      (inside the manuscript folder, names are shown relative to it)
+dissertation         `manuscript_src/ch3.md` §3.2.1 · `build_tpl.py` `abstract_src` · Figure 3-2 caption
+                     → ch3.md §3.2.1 / build_tpl.py abstract_src / build_tpl.py Figure 3-2
 ```
 
-## 표 행 형식 — 한 항목은 한 줄입니다
+## Table row format — one item per line
 
-추적 파일(대기 · 제안 · 문헌 · 이관 표)의 항목은 `| ID | … |` **한 줄**입니다. 셀 안에 `|` 를 적을 때는 `\|` 로 씁니다.
-행 바로 아래에 `|` 로 시작하지 않는 줄이 붙으면 GFM 은 그 줄을 셀 하나짜리 행으로 그리고, 도구는 ID 가 없어 그 줄을 보지 못합니다.
-행을 고치는 치환이 `\n` 을 넣어 **행이 두 줄로 쪼개진** 흔적이며, 그 상태로 행이 이관되면 꼬리만 대기 파일에 남습니다.
+An item in a tracker file (pending · proposals · literature · archive table) is **one line**, `| ID | … |`. To write `|` inside a cell, write `\|`.
+If a line that does not start with `|` sits directly under a row, GFM draws it as a one-cell row, and the tools, finding no ID, do not see it.
+Such a line is the trace of a replacement that inserted `\n` and **split a row into two lines**; if the row is archived in that state, only the tail stays in the pending file.
 
-도구가 세 겹으로 지킵니다. 문법의 정의는 `_config.py` 한 곳(`table_problems`)이고 정리 도구 · 동기화 · 훅이 그것을 씁니다.
+The tools guard this in three layers. The syntax is defined in one place in `_config.py` (`table_problems`), and the tidying tool, sync and the hook use it.
 
-- **쓰는 쪽** — `_sync.replace_once` 는 `.md` 를 고칠 때 표 결함(고아 줄 · 셀 수 · 끝 `|`)이 **늘어나면** 쓰지 않고 오류를 냅니다.
-  이미 있던 결함은 stderr 에 경고만 합니다. 알고 하는 치환은 `check_tables=False`.
-- **읽는 쪽** — 정리 도구 진단이 결함을 파일 · 줄 번호와 함께 경고합니다. 바로 아래 고아 줄이 붙은 완료 행은 **이관하지 않고** 경고하고,
-  이관 표 안에 행이 아닌 줄이 있으면 이관을 건너뜁니다. 이관 표의 머리 아래 구분선은 지키며, 없으면 복원합니다.
-  첫 셀이 ID 로 보이는데 미결 행으로 읽지 못한 `|` 줄(꾸민 ID `| **A1** |` · 분류 절 밖이나 `| ID |` 머리 앞의 행)도 경고합니다 —
-  그런 행은 목록에도 동기화 대조(S3 · S7)에도 실리지 않습니다. ID 꼴의 정의는 `_config.row_like_id`.
-- **훅** — Edit · Write · Bash · PowerShell 뒤에 추적 파일에 결함이 남아 있으면 그 턴에 알립니다(막지 않음).
+- **Writing side** — when `_sync.replace_once` changes a `.md` file and the table defects (orphan lines · cell count · trailing `|`) **increase**, it does not write and raises an error.
+  Defects already present only produce a warning on stderr. For a deliberate replacement, pass `check_tables=False`.
+- **Reading side** — the tidying tool's diagnostics warn about defects with file and line number. A completed row with an orphan line directly below it is **not archived**; the tool warns,
+  and if the archive table contains a line that is not a row, archiving is skipped. The separator line under the archive table's header is preserved, and restored if missing.
+  A `|` line whose first cell looks like an ID but that cannot be read as an open-item row (a decorated ID `| **A1** |` · a row outside a category section or before the `| ID |` header) also gets a warning —
+  such rows appear neither in the index file nor in the sync comparison (S3 · S7). The shape of an ID is defined in `_config.row_like_id`.
+- **Hook** — after Edit · Write · Bash · PowerShell, if a tracker file still has defects, it reports them in the same turn (without blocking).
 
-**경고가 났을 때.** 고아 줄은 위 행의 끝 `|` 앞에 이어 붙이거나(원래 한 행이었음), 그 내용이 이미 완료 기록 · 이관 표에 있으면 지웁니다 —
-어느 쪽인지는 이관 표의 같은 ID 행과 완료 기록을 보고 정합니다. 셀 수 불일치는 셀 안의 `|` 를 `\|` 로 바꿉니다.
-ID 를 읽을 수 없는 `|` 줄(문헌의 상세 표 등)은 검사하지 않습니다.
+**When a warning appears.** Join an orphan line back before the trailing `|` of the row above (it was one row), or delete it if its content is already in a completion record or the archive table —
+decide which by looking at the row with the same ID in the archive table and at the completion record. For a cell-count mismatch, change the `|` inside the cell to `\|`.
+`|` lines whose ID cannot be read (detail tables in the literature file and the like) are not checked.
 
-**원인을 만들지 않으려면** 파일을 고치는 코드에 역슬래시가 들어갈 때 명령 문자열로 넘기지 않습니다(`environment.md` 「파일 취급」).
+**To avoid causing this**, do not pass code that changes a file as a command string when it contains backslashes (`environment.md` "Handling files — details").
 
-## 미결 표의 분류 글자 — 프로젝트가 정합니다
+## Format tokens — English written, the old Korean spellings read
 
-대기 파일은 `## X. 제목` 절 하나가 표 하나이고, 글자 `X` 는 설정 `tracker.movable_prefixes` 에 있어야 하며 행 ID 는 그 글자로
-시작합니다(`A12`). 도구가 보는 것은 이 형식뿐입니다 — **글자의 수와 뜻은 프로젝트가 정합니다.** 초기화 기본은 넷(A 확정 대기 ·
-B 후속 장 확정 시 · C 서식 · D 문체)이지만, 「언제」는 트리거 열이, 「어디」는 위치 열이 이미 맡으므로 글자가 할 일이 없는
-프로젝트는 A 하나만 둬도 됩니다.
+The strings the tools find in or write into project files — block markers, generation stamps, column names, record fields, status words,
+the `now` trigger, the focus line, placeholders and the grammar-baseline keys — have one table, in `tools/_config.py`, with an English spelling
+and the spelling of projects made before 0.14 (Korean). **The tools write English and read both, forever.**
 
-**글자를 줄일 때.** 먼저 정리 도구 `--apply` 로 닫힌 행을 이관한 뒤, 열린 행을 **ID 그대로** 남는 절로 옮기고 없앨 절의 제목 · 빈 표를
-지웁니다. 설정의 글자 목록과 `<!-- 이관목록:X -->` 블록은 **남깁니다** — 옛 ID 를 동기화 검사(S7)가 계속 알아보고 이관 흔적 줄이
-계속 만들어집니다(블록은 파일 어디에 있어도 찾힙니다). 새 항목은 남는 글자의 번호를 받고, 없앤 글자는 다시 내지 않습니다.
+| Kind | Written |
+|---|---|
+| Block markers | `standing-F` · `location-table` · `trigger-table` · `now` · `focus` · `archive-body` · `archived-list:X` · `H-locations` |
+| Generation stamp | `<!-- generated-stamp … -->` |
+| Columns | `Item` · `Location` · `Trigger` · `Status` · `Note` · `Proposal` · `Basis` |
+| Record fields | `**Completed**` · `**Target**` · `**Status**` |
+| Status words | `applied (awaiting confirmation)` · `confirmed` · `closed` · `done` · `waiting` · `needed` … |
+| Trigger | `now` and the four shared defaults |
+| Focus line | `**Working chapter** chN` |
 
-**미결이 0건일 때.** 정리 도구는 읽은 미결이 0건이면 표 구조부터 봅니다. 대기 파일에 분류 절이 있고, 분류 절과 제안 파일에
-`| ID |` 머리가 있으며, 행처럼 보이는데 읽지 못한 줄도 그 표의 결함도 없으면 **정말 0건**(마지막 행을 지웠거나 모두 이관됨)으로 보고
-목록의 위치 표 · 트리거 표를 머리만, 지금 절을 안내문으로, 켜 둔 포커스를 0건으로 다시 만듭니다 — 목록이 사라진 ID 를 계속 가리켜
-S3 ERROR 가 남지 않습니다. 하나라도 어긋나면 **읽기 실패**로 보고 까닭을 경고한 뒤 목록의 생성 블록과 생성 스탬프를 그대로 둡니다 —
-형식 문제로 남은 항목을 지우지 않고, 스탬프를 찍지 않아 S4 가 목록이 낡았다고 계속 알립니다. 까닭을 고치고 다시 돌립니다.
+Projects made before 0.14 spell all of these in Korean. The older spellings are listed, each with its meaning in English, in the legacy section
+of `tools/_config.py` (`LEGACY_SPELLINGS` — together with the old default file names `LEGACY_DEFAULTS` and old tool names `LEGACY_TOOL_NAMES`).
 
-**비고에는 지금 상태와 남은 것만 둡니다.** 진행 중 경위는 표 아래 `### <ID> 상세` 에, 결정으로 닫힌 조각은 완료 기록으로 보냅니다.
-비고는 포커스 블록에 그대로 복사되므로, 경위가 쌓이면 매 세션 읽는 색인이 크기 한도를 넘깁니다.
+- **The format of a project is what its anchors say** — the markers, stamps and `| ID |` header rows of the tracker files (`_config.project_format`). There is no settings key.
+  The writing tools (tidying `--apply` · index · new items) refuse a project whose anchors are still Korean or mixed (exit 5); diagnosis keeps working.
+- **Migrating an older project** — `update_tools.py <project>` previews it; with `--apply` it updates the tool copies, rewrites the anchors (`migrate_format.py`: marker lines,
+  stamp lines and the known column names of `| ID |` header rows — unknown column names stay) and rebuilds the generated files. It is idempotent, takes the write lock,
+  and keeps Drive snapshots before and after. **Update the plugin on every computer first** — an older tool that meets English anchors rebuilds the record index with empty
+  fields and adds a Korean stamp (S9 then reports the mix).
+- **What the migration leaves as written** — completion records, archive rows, status and trigger values, headings and prose, the grammar baseline and `project.json`.
+  These are history or people's words; the tools read both spellings of them.
+- **Until a project is migrated, write values in the spelling its files already use** (status words, triggers, record fields) — its tool copies are still the older ones.
+  After migrating, write English. The trigger list in the settings stays as the project wrote it; the two spellings of a default trigger count as the same trigger.
 
-## 세션을 마칠 때
+## Category letters of the open-item tables — set by the project
 
-지금 고칠 수 없는 것(일정 미확정, 후속 장 미확정, 페이지 번호 등)은 억지로 고치지 말고 기록합니다.
+In the pending file each `## X. <title>` section is one table; the letter `X` must be in the setting `tracker.movable_prefixes`, and row IDs start with that letter
+(`A12`). This format is all the tools look at — **the number and meaning of the letters are up to the project.** The initial default is four (A waiting on an outside condition ·
+B to fix when a later chapter is settled · C formatting · D style), but "when" is already covered by the trigger column and "where" by the location column, so a project
+where the letters have nothing to do may keep A alone.
 
-- 새로 발견한 미결 항목 → `tools/new_pending.py` 로 **대기 파일**의 해당 분류 표 맨 아래에 등록(번호는 도구가 정함 — 「동시 편집」 규칙 2).
-  `위치`는 파일과 절을 함께 적고(위치 표가 이 값으로 만들어집니다 — 위 「대상 · 위치 문법」), `트리거`는 정해진 값 중 하나를 씁니다.
-  **색인 파일에는 본문을 쓰지 않습니다** — 자동 생성 구간은 손으로 적어도 지워집니다.
-- 처리한 항목 → 완료 기록 파일을 새로 만들고 색인을 재생성합니다. **원 항목은 이관 표로 옮깁니다.**
-  옮길 때 원 ID를 그대로 씁니다. 완료 항목을 미결 표에 남겨 두지 않습니다.
-- **파일을 새로 쓰지 않습니다.** 기존 항목과 ID를 보존하고 추가·갱신만 합니다.
+**Reducing the letters.** First archive the closed rows with the tidying tool's `--apply`; then move the open rows, **with their IDs unchanged**, to a remaining section and delete the title and the empty table of the section being removed.
+**Keep** the letter list in the settings and the `<!-- archived-list:X -->` block — so the sync check (S7) keeps recognising old IDs and archive-trace lines
+keep being made (the block is found anywhere in the file). New items get numbers under the remaining letters; a removed letter is never issued again.
 
-마지막에 정리 도구를 돌립니다. 사람이 판단할 것(ID 중복·결번, 색인 불일치, 알 수 없는 상태 값,
-색인 파일 크기 초과)은 고치지 않고 **경고만** 냅니다. 두 번 돌려도 결과가 같아야 합니다.
+**When there are zero open items.** If the tidying tool reads zero open items, it first checks the table structure. If the pending file has category sections, the category sections and the proposals file
+have a `| ID |` header, and there is neither a line that looks like a row but cannot be read nor a defect in those tables, the tool treats it as **truly zero** (the last row was deleted or everything was archived) and
+rebuilds the index file's location table and trigger table with headers only, the do-now section with its notice text, and an active focus with zero items — so the index file does not keep pointing at missing IDs
+and leave an S3 ERROR. If anything is off, it treats it as a **read failure**, warns with the reason, and leaves the index file's generated blocks and generation stamp as they are —
+it does not delete remaining items because of a format problem, and by not stamping it lets S4 keep reporting that the index file is stale. Fix the reason and run it again.
 
-## 작업 규칙의 원본은 하나로 관리합니다
+**Keep only the current state and what remains in the notes cell.** Put the running history under the table in `### <ID> details`, and send pieces closed by a decision to completion records.
+Notes are copied verbatim into the focus block, so as history piles up, the index read every session exceeds its size limit.
 
-프로젝트 규칙의 본문은 한 곳에 둡니다. 기존 프로젝트의 정본이 `CLAUDE.md`이면 유지하고,
-Codex용 `AGENTS.md`가 필요할 때는 정본과 절차 문서를 읽도록 안내하는 얇은 진입 지침을 둡니다.
-같은 원고 규약을 양쪽에 복사하지 않습니다. 기존 `AGENTS.md`의 사용자 지침은 보존합니다.
+## Ending a session
 
-**사용자가 파일명을 지정하면 그 파일을 뜻합니다.** `AGENTS.md` 수정 요청을 `CLAUDE.md` 수정으로
-바꾸어 해석하지 않습니다. 공통 정본의 변경이 필요하면 실제 대상과 범위를 먼저 구분합니다.
-읽을 때는 현재 호스트의 지침 우선순위와 프로젝트가 명시한 정본·경계를 따릅니다.
+Do not force a fix for what cannot be fixed now (an unsettled schedule, an unsettled later chapter, page numbers and the like); record it.
 
-**규칙만 적습니다. 내력은 완료 기록으로, 미결은 대기 파일로 보냅니다.**
+- Newly found open items → register them at the bottom of the matching category table in the **pending file** with `tools/new_pending.py` (the tool assigns the number — rule 2 of "Concurrent editing — the user may be editing the same file in another window").
+  Write the file and the section together in `Location` (the location table is built from this value — "Target and location syntax — the location table and the reverse index are built from it" above), and use one of the fixed values for `Trigger`.
+  **Do not write bodies into the index file** — anything written by hand in the auto-generated parts is erased.
+- Items you finished → create a new completion record file and regenerate the record index. **Move the original item to the archive table.**
+  Keep the original ID when moving it. Do not leave completed items in the open-item tables.
+- **Do not rewrite files from scratch.** Keep existing items and IDs; only add and update.
 
-| 성격 | 판별 | 행선지 |
+Finally, run the tidying tool. It does not fix what needs a person's judgement (duplicate or missing IDs, index mismatches, unknown status values,
+an index file over its size limit); it **only warns**. Running it twice must give the same result.
+
+## One source for the working rules
+
+Keep the body of the project rules in one place. If an existing project's canonical copy is `CLAUDE.md`, keep it,
+and when Codex needs an `AGENTS.md`, make it a thin entry guide that tells the reader to read the canonical copy and the procedure document.
+Do not copy the same manuscript rules into both. Preserve the user's instructions in an existing `AGENTS.md`.
+
+**When the user names a file, they mean that file.** Do not reinterpret a request to change `AGENTS.md` as a change to
+`CLAUDE.md`. If the shared canonical copy needs a change, first separate the actual target and scope.
+
+**Write only rules. Send history to completion records and open items to the pending file.**
+
+| Kind | Test | Destination |
 |---|---|---|
-| **규칙** | 지금 내 행동을 바꾸는가 | 프로젝트가 지정한 공통 규칙 문서 |
-| **내력** | 왜 그렇게 됐는지, 지나간 경로·폐기된 방식·일회성 점검 결과인가 | 완료 기록 |
-| **미결** | 아직 끝나지 않은 일인가 | 대기 파일 |
+| **Rule** | Does it change what I do now? | The shared rules document the project names |
+| **History** | Is it why something came to be — a past path, a discarded method, the result of a one-off check? | Completion record |
+| **Open item** | Is it work not yet finished? | Pending file |
 
-- **폐기된 방식은 "쓰지 않습니다"라고 적어 남기지 말고 지웁니다.** 지운 자리는 완료 기록이 받습니다.
-- **일반 규칙이 이미 막고 있으면 특수 사례를 되풀이하지 않습니다.**
-- **같은 내력을 두 절에 나눠 적지 않습니다.**
-- **점검해서 알아낸 그때의 상태는 규칙이 아닙니다.** 곧 낡습니다. 완료 기록에 날짜와 함께 적습니다.
+- **Delete a discarded method instead of keeping it as "do not use".** The completion record takes what was deleted.
+- **If a general rule already prevents it, do not repeat the special case.**
+- **Do not split the same history across two sections.**
+- **A state found by a check at one point in time is not a rule.** It soon goes stale. Write it in a completion record with the date.

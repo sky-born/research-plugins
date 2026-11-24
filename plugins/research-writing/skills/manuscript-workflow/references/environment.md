@@ -1,114 +1,107 @@
-# 실행 환경과 소통 규칙
+# Environment and communication rules
 
-## 셸이 폴더에 닿는지는 실행 환경마다 다릅니다 — 이것부터 확인합니다
+<!-- toc -->
+**Contents**
 
-**갈리는 축은 컴퓨터가 아니라 실행 환경입니다.** 같은 컴퓨터라도 Claude Code·Codex의
-도구, 연결된 폴더, 쓰기 권한이 다릅니다. 제품 이름만으로 접근 가능 여부를 단정하지 않습니다.
+- Whether the shell reaches the folder depends on the environment — check this first
+- Keep environment facts apart from invariant facts
+- Communication rules
+- Write scope — inside the open project folder
+- Handling files — details
+- Finding source files
+<!-- /toc -->
 
-| 실행 환경 | 셸 | 폴더 접근 |
+## Whether the shell reaches the folder depends on the environment — check this first
+
+**What varies is the execution environment, not the computer.** Even on the same computer, the tools of Claude Code and Codex, the connected folders and the write permissions differ. Do not assume from the product name whether access is possible.
+
+| Environment | Shell | Folder access |
 |---|---|---|
-| Claude Code (데스크탑·터미널) | 현재 제공된 Bash·PowerShell 등 | 연결된 작업 폴더의 실제 경로와 권한을 확인합니다 |
-| Codex (앱·CLI) | 현재 제공된 실행·파일 도구 | 작업 루트와 허용된 쓰기 범위를 확인합니다 |
+| Claude Code (desktop · terminal) | The Bash, PowerShell or other tools currently provided | Check the real path and permissions of the connected working folder |
+| Codex (app · CLI) | The execution and file tools currently provided | Check the working root and the permitted write scope |
 
-**판별** — 세션의 도구 설명과 연결된 작업 루트를 읽고, 기준 폴더의 마커 파일을 읽기 전용으로
-확인합니다. 경로는 프로젝트 지침·설정에서 상대 위치로 해석합니다. `/sessions/...`·`~/mnt/...`·
-Claude 캐시 경로를 다른 환경에 그대로 적용하지 않습니다.
+**How to tell** — read the session's tool descriptions and the connected working root, then check the marker file in the base folder read-only. Resolve paths as relative locations from the project instructions and settings. Do not apply `/sessions/...`, `~/mnt/...` or Claude cache paths to another environment as they are.
 
-**실행 제한과 패키지는 현재 환경에서 확인합니다.** 시간 제한·네트워크·설치된 패키지·파일 변경
-기능은 도구 설명이나 읽기 전용 확인 결과를 따릅니다. 파일 저장이 스테이징 방식이면 저장 전 최신
-수정 시각과 내용을 대조하고, 다른 환경에서는 실제 제공되는 편집 도구로 같은 보호 절차를 수행합니다.
-권한 거절을 우회하려고 파일을 이동하거나 다른 실행 환경으로 넘기지 않습니다.
-API·연결 도구의 권한과 셸·파일시스템 샌드박스도 각각 적용됩니다. 한 도구에서 접근 가능하다는
-사실을 다른 도구의 쓰기 권한으로 해석하지 않습니다.
+**Check execution limits and packages in the current environment.** Follow the tool descriptions or the results of a read-only check for time limits, network, installed packages and file-change features. If saving a file works by staging, compare the latest modification time and content before saving. In other environments, apply the same protection with the editing tools actually provided.
+Do not move files or hand the work to another execution environment to get around a permission denial.
+Permissions of APIs and connected tools, and shell and file-system sandboxes, each apply separately. Do not read the fact that one tool can reach a file as write permission for another tool.
 
-**명령 예시의 `python`은 실제 확인한 Python 3 실행기로 바꿉니다.** `python`·`python3`·`py -3`
-또는 호스트가 알려 준 실행기 중 현재 사용할 수 있는 것을 확인합니다. 한글 출력이 필요한 환경은
-`-X utf8`을 사용합니다. Bash 줄 이음이나 PowerShell 환경변수 문법은 현재 셸에 맞춰 해석합니다.
-스킬 도구는 **실제로 읽은 `SKILL.md`의 부모 폴더**를 기준으로 찾고, 캐시의 버전을 추측하지 않습니다.
+**Replace `python` in command examples with the Python 3 interpreter you have actually confirmed.** Check which of `python`, `python3`, `py -3` or an interpreter named by the host is available now. Use `-X utf8` in environments that need Korean output. Read Bash line continuation and PowerShell environment variable syntax to match the current shell.
+Find skill tools from **the parent folder of the `SKILL.md` you actually read**, and do not guess a version in the cache.
 
-**도구가 만드는 파일에는 실행기 이름을 박지 않습니다.** 생성물에 `python` 이나 `python3` 를 그대로
-적으면 만든 컴퓨터에서는 맞고 읽는 컴퓨터에서는 틀립니다. 명령 자리에는 자리표시자 **`<py>`** 를 쓰고,
-같은 줄이나 바로 옆에 무엇으로 바꾸는지 적습니다 — 윈도 `python` · 맥 `python3`.
-**생성 시점에 OS 를 보고 골라 넣는 것은 해법이 아닙니다.** 그러면 같은 파일이 컴퓨터를 옮길 때마다
-내용이 뒤집혀, 줄끝을 OS 기본값에 맡겼을 때와 같은 문제가 됩니다. 도구의 사용법 문자열도 같습니다.
+**Do not hard-code an interpreter name in files a tool generates.** If a generated file writes `python` or `python3` as is, it is right on the computer that made it and wrong on the computer that reads it. In the command position, use the placeholder **`<py>`**, and say on the same line or right next to it what to replace it with — Windows `python` · macOS `python3`.
+**Choosing one by looking at the OS at generation time is not a solution.** The same file would then flip its content every time it moves between computers, the same problem as leaving line endings to the OS default. The same applies to a tool's usage strings.
 
 
-## 환경 사실과 불변 사실을 갈라 씁니다
+## Keep environment facts apart from invariant facts
 
-**같은 문서를 여러 컴퓨터에서 읽고 고칩니다.** 지금 앉은 컴퓨터의 사실을 본문에 그대로 적으면
-다른 컴퓨터에서 거짓이 되고, 거기서 고치면 이번에는 반대 방향으로 거짓이 됩니다.
-문서의 서술을 두 종류로 갈라 씁니다.
+**The same document is read and edited on several computers.** If you write the facts of the computer you are sitting at into the body as they are, they become false on another computer, and editing them there makes them false in the other direction. Split the statements in a document into two kinds.
 
-| 종류 | 무엇 | 어디에 |
+| Kind | What | Where |
 |---|---|---|
-| **불변 사실** | 어느 컴퓨터에서 읽어도 참인 것 — 명령 이름, 절차와 그 순서, 개념, 규칙, 무엇을 왜 하는지 | 본문에 그대로 씁니다 |
-| **환경 사실** | 컴퓨터·계정·실행 환경이 바뀌면 달라지는 것 — 경로, 드라이브 문자, `$HOME` 값, 실행기 이름(`python`/`python3`), 셸이 폴더에 닿는지, 자격증명 유무, 프로세스에 주입된 환경변수 | 본문에 값을 적지 않습니다. 아래 셋 중 하나로 처리합니다 |
+| **Invariant fact** | True when read on any computer — command names, procedures and their order, concepts, rules, what is done and why | Write it in the body as it is |
+| **Environment fact** | Changes when the computer, account or execution environment changes — paths, drive letters, the `$HOME` value, the interpreter name (`python`/`python3`), whether the shell reaches the folder, whether credentials exist, environment variables injected into the process | Do not write the value in the body. Handle it in one of the three ways below |
 
-**환경 사실은 이 순서로 처리합니다. 위쪽이 좋습니다.**
+**Handle environment facts in this order. The higher ones are better.**
 
-1. **탐색으로 바꿉니다** — 값을 적지 말고 **찾는 방법**을 적습니다.
-   새 컴퓨터가 생겨도 문서를 고치지 않아도 되므로 가장 좋습니다.
-2. **설정 파일에 후보 목록을 둡니다** — 도구가 읽는 값이면 후보를 배열로 두고
-   실재하는 첫 후보를 쓰게 합니다. 새 컴퓨터는 줄 하나를 **추가**합니다.
-3. **표에 컴퓨터별로 한 줄** — 위 둘이 안 될 때만. 표는 문서마다 **한 곳**입니다.
+1. **Turn it into discovery** — do not write the value, write **how to find it**.
+   This is best because a new computer needs no change to the document.
+2. **Put a list of candidates in a settings file** — if a tool reads the value, keep the candidates as an array and have it use the first one that exists. A new computer **adds** one line.
+3. **One line per computer in a table** — only when the two above do not work. There is **one** table per document.
 
-**기존 줄을 지우지 않습니다.** 다른 컴퓨터용이며, 지금 컴퓨터에서 맞지 않는다는 것이
-그 줄이 틀렸다는 뜻이 아닙니다. 같은 이유로, 지금 컴퓨터에 맞추어 본문을 고쳐 쓰지 않습니다.
+**Do not delete existing lines.** They are for other computers, and that a line does not fit the current computer does not mean it is wrong. For the same reason, do not rewrite the body to fit the current computer.
 
-**측정한 것에는 어디서 쟀는지 붙입니다.** "확인했습니다"가 아니라
-"연구실 컴퓨터에서 확인했습니다(2026-08-28)"입니다.
-재 보지 않은 컴퓨터는 **미확인으로 남깁니다** — 추정으로 칸을 채우지 않습니다.
+**Attach where it was measured to anything measured.** Not "confirmed" but
+"checked on <computer> (<date>)".
+Leave a computer you have not measured **unconfirmed** — do not fill in the cell with a guess.
 
-**한 컴퓨터에서 명령이 실패했을 때**, 본문의 명령을 그 컴퓨터에 맞게 바꾸는 것은 마지막 수단입니다.
-먼저 1번(탐색)으로 옮길 수 있는지 봅니다.
+**When a command fails on one computer**, changing the command in the body to fit that computer is the last resort.
+First see whether it can be moved to number 1 (discovery).
 
-## 소통 규칙
+## Communication rules
 
-- 한국어, 존댓말로 답변합니다. 원고 본문과 초록은 영어로 작성합니다.
-- 추측과 확인된 사실을 구분합니다. 확실하지 않은 것을 확실하다고 쓰지 않습니다.
-- 용어를 임의로 만들지 않습니다. 학계·문헌에서 통용되는 표현을 우선합니다.
-- 간결하게. 불필요한 설명과 장황함을 줄입니다.
-- 작업 후 변경 사항과 검증 결과를 요약합니다.
-- 화학식·조성을 축약해서 입력해도 정식 표기로 인식합니다.
+- Reply in the language and register the user or the project guidance sets. Write the manuscript in the language the project sets.
+- Separate guesses from confirmed facts. Do not write what is uncertain as if it were certain.
+- Do not invent terms. Prefer expressions in common use in the field and the literature.
+- Be concise. Cut unnecessary explanation and wordiness.
+- After the work, summarize the changes and the verification results.
+- Accept abbreviated chemical formulas and compositions as the formal notation.
 
 ---
 
-## 쓰기 범위 — 지금 열려 있는 프로젝트 폴더 안입니다
+## Write scope — inside the open project folder
 
-- **쓰기는 지금 작업 중인 프로젝트 폴더 안으로 한정합니다.** 그 밖은 기본 읽기 전용입니다.
-- **밖에 쓰려면 사용자 지시 또는 적용되는 프로젝트 지침에 대상과 범위가 있어야 합니다.**
-  실제 도구의 쓰기 권한도 별도로 확인합니다. 권한을 얻기 위해 규칙 파일을 먼저 고쳐 쓰지 않습니다.
-- **형제 프로젝트 폴더는 남의 프로젝트입니다.** 같은 상위 폴더에 있다는 것이 권한을 뜻하지 않습니다.
-  자료를 읽어 참고할 수는 있으나 파일을 만들거나 고치지 않습니다.
-- **도구 저장소(플러그인·스킬의 소스)는 예외입니다.** 공통 규칙이나 도구 자체를 고칠 때만 엽니다.
-  원고 내용은 넣지 않습니다.
-- **임시 파일은 스크래치패드로 보냅니다.** 프로젝트 폴더를 임시 산출물로 어지럽히지 않습니다.
+- **Limit writing to inside the project folder you are working in.** Everything outside is read-only by default.
+- **To write outside, a user instruction or the applicable project instructions must give the target and scope.**
+  Also check the real write permission of the tool. Do not edit the rule files first to gain a permission.
+- **A sibling project folder belongs to someone else's project.** Being under the same parent folder does not mean permission.
+  You may read its material for reference, but do not create or edit files there.
+- **The tool repository (the source of plugins and skills) is an exception.** Open it only to change the shared rules or the tools themselves.
+  Do not put manuscript content in it.
+- **Send temporary files to the scratchpad.** Do not clutter the project folder with temporary output.
 
 ---
 
-## 파일 취급 — 세부 원칙
+## Handling files — details
 
-- 사용자가 제공하거나 명시한 파일은 기본적으로 읽기 전용입니다.
-  읽기·텍스트 추출·내부 검토용 렌더링·비파괴 분석만 허용됩니다.
-- **"검토해 줘", "확인해 줘", "봐 줘"는 읽기 전용 작업 지시입니다.**
-  파일을 열 수 있다는 것이 수정 권한을 뜻하지 않습니다.
-- 원본의 변경이력(tracked changes)·주석·취소선을 수락·거부·삭제하지 않습니다.
-  의도적으로 남긴 것일 수 있으므로 정리는 **명시적 지시가 있을 때만** 합니다.
-- 재귀적 삭제, 와일드카드 삭제, git clean, 파괴적 reset 을 사용하지 않습니다.
-  어시스턴트가 만든 임시 파일만, 사용자가 명시적으로 요청할 때 삭제합니다.
-- **파일을 고치는 코드에 역슬래시가 들어가면 명령 문자열로 넘기지 않습니다** — Write 로 스크립트 파일을 만들어 그 파일을 실행합니다.
-  Claude Code 의 Bash 도구는 명령 문자열의 `\\` 를 `\` 로 한 번 줄입니다. 따옴표로 막은 heredoc(`<<'PY'`) · `-c` · `printf` 안에서도
-  같아서 `'\\n'` 이 실제 줄바꿈이 되어 추적 표의 행을 두 줄로 쪼갭니다(연구실 컴퓨터 2026-10-08 재현 — 다른 컴퓨터 · Codex 는
-  미확인). 역슬래시가 없는 짧은 명령은 그대로 써도 됩니다. 쪼개진 행의 처리는 `tracker-workflow.md` 「표 행 형식」.
+- Files the user provides or names are read-only by default.
+  Only reading, text extraction, rendering for internal review and non-destructive analysis are allowed.
+- Do not accept, reject or delete tracked changes, comments or strikethroughs in the original.
+  They may have been left on purpose, so clean them up **only on an explicit instruction.**
+- Do not use recursive deletion, wildcard deletion, git clean or a destructive reset.
+  Delete only temporary files the assistant made, and only when the user asks explicitly.
+- **If code that modifies a file contains a backslash, do not pass it as a command string** — create a script file with Write and run that file.
+  The Bash tool of Claude Code reduces `\\` in a command string to `\` once. This holds inside a quoted heredoc (`<<'PY'`), `-c` and `printf` too,
+  so `'\\n'` becomes a real line break and splits a row of a tracker table into two lines. A short command with no backslash may be used as it is. For handling a split row, see `tracker-workflow.md` "Table row format — one item per line".
 
-## 원본 파일 탐색 규칙
+## Finding source files
 
-원고 폴더에는 버전이 여러 개인 파일이 많습니다.
+A manuscript folder often holds files with several versions.
 
-- 원고 파일과 응답서 파일을 각각 별도로 탐색합니다.
-- `~$` 로 시작하는 Word 소유자 파일은 무시합니다.
-- 파일명 버전이 가장 높은 것을 선택하고 (`_v6` > `_v4`), 저장 시각은 동점 처리용으로만 씁니다.
-- 선택이 모호하면 추측하지 말고 **후보를 보고한 뒤 중단합니다.**
-- 인용은 항상 원본 파일 기준으로 합니다. 캐시·추출본·PDF·페이지 이미지를 출처로 적지 않습니다.
-- 대화 중 사용자가 제시한 텍스트가 저장된 파일보다 최신이면
-  그 텍스트를 기준으로 삼고 **불일치 사실을 보고합니다.**
+- Search for the manuscript file and the response file separately.
+- Ignore Word owner files that start with `~$`.
+- Choose the one with the highest version in the file name (`_v6` > `_v4`), and use the save time only to break ties.
+- If the choice is ambiguous, do not guess — **report the candidates and stop.**
+- Always cite from the original file. Do not name a cache, an extract, a PDF or a page image as the source.
+- If text the user gave in the conversation is newer than the saved file,
+  use that text as the base and **report the discrepancy.**

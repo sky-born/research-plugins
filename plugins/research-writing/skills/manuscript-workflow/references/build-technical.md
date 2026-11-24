@@ -1,87 +1,79 @@
-# docx 빌드 — 기술 규칙
+# docx builds — technical rules
 
-서식 원본(학교 배포본 · 저널 템플릿)을 열어 본문을 갈아 끼우는 빌드 스크립트가 지킬 규칙입니다. 서식 원본의 위치와 찾는 규칙,
-바꾸는 파트의 목록은 그 프로젝트의 빌드 스크립트와 절차 문서에 있습니다(`project-config.md`). 여기 있는 것은 어느 프로젝트에나 같습니다.
+These are the rules a build script must follow when it opens a template (a school-issued file or a journal template) and swaps in the body text. Where the template is, how to find it, and which parts the build changes are set by the project's build script and procedure document (`project-config.md`). What is here applies to every project.
 
-## 산출물은 Word 가 물음 없이 열어야 합니다
+## Word must open the output without prompting
 
-아래는 빌드가 넣지 않는 것입니다. 하나라도 있으면 Word 가 파일을 열 때마다 대화상자를 띄웁니다.
+The build does not insert any of the following. If even one is present, Word shows a dialog every time it opens the file.
 
-| 넣지 않는 것 | 어디에 | Word 가 묻는 것 |
+| Never insert | Where | What Word asks |
 |---|---|---|
-| `<w:updateFields w:val="true"/>` | `word/settings.xml` | 「다른 파일을 참조할 수 있는 필드가 있습니다 … 업데이트하시겠습니까」 |
-| `<w:mailMerge>` | `word/settings.xml` | 데이터 원본 연결 · SQL 실행 |
-| 외부 참조 — `r:link`, `TargetMode="External"` 관계, INCLUDEPICTURE · INCLUDETEXT · LINK · DDEAUTO 필드 | `word/document.xml` · `word/_rels/document.xml.rels` | 연결된 파일 갱신 |
+| `<w:updateFields w:val="true"/>` | `word/settings.xml` | `This document contains fields that may refer to other files. …` |
+| `<w:mailMerge>` | `word/settings.xml` | Data source connection · SQL execution |
+| External references — `r:link`, relationships with `TargetMode="External"`, INCLUDEPICTURE · INCLUDETEXT · LINK · DDEAUTO fields | `word/document.xml` · `word/_rels/document.xml.rels` | Update linked files |
 
-그림은 `r:embed` 로 내장하고, 필드는 문서 안을 가리키는 PAGEREF · SEQ · REF 만 씁니다.
+Embed pictures with `r:embed`. Use only fields that point inside the document: PAGEREF · SEQ · REF.
 
-## 필드 결과는 빌드가 채웁니다
+## The build fills in field results
 
-- SEQ(그림 · 표 번호)와 REF(본문 참조)는 빌드가 번호를 계산할 수 있으므로 **결과 캐시를 채워 넣습니다.** 빈 캐시를 두면 열었을 때 빈칸으로 보입니다.
-- 쪽번호(PAGEREF)는 조판 결과라 빌드가 글자만으로는 계산할 수 없습니다. 빌드는 캐시를 `0` 으로 써 두고, 채우는 길은 둘입니다.
-  어느 길을 쓰는지와 끄는 스위치는 프로젝트 절차 문서에 둡니다.
-  - **Word 에 계산만 맡기고 빌드가 적습니다**(Windows Word 를 자동 조작할 수 있을 때) — 산출물과 같은 내용을 임시 폴더에 써서
-    Word 를 화면 없이 **읽기 전용**으로 열고, 문서 전체 필드를 값이 더 바뀌지 않을 때까지 갱신한 뒤 **저장하지 않고** 닫습니다.
-    받아 온 결과 글자를 빌드가 PAGEREF 캐시에 적습니다. 산출물은 여전히 빌드가 쓴 파일이라 아래 「서식 원본은 바이트 그대로」와
-    자가 검사가 그대로 통합니다. Word 에 저장시키지 않는 이유가 이것입니다 — 저장하면 Word 가 `settings.xml` · `styles.xml` · 바닥글 등
-    서식 파트를 다시 쓰고 그림 파트의 이름을 바꿉니다.
-  - **사람이 Word 에서 갱신합니다**(자동 조작이 안 되는 컴퓨터) — 제출 직전에 `Ctrl+A` → `F9` 한 번. 재빌드하면 다시 `0` 입니다.
-- 필드를 하나씩 갱신하지 않습니다 — 쪽 나눔이 끝나기 전 값(전부 `1`)이 나옵니다. 문서 전체를 한 번에 갱신합니다(COM `Document.Fields.Update()`).
-- pywin32 로 `Documents.Open` 을 부를 때 인자는 위치로 넘깁니다 — `(경로, False, True, False)` 가 ConfirmConversions · ReadOnly · AddToRecentFiles 입니다.
-  이름 인자(`ReadOnly=True`)는 적용되지 않을 수 있습니다. 읽기 전용인지는 연 뒤 `doc.ReadOnly` 로 확인합니다.
-- 열 때 자동 갱신(`updateFields`)으로 대신하지 않습니다 — 그 시점에는 페이지네이션이 끝나지 않아 쪽번호가 전부 `1` 이 되고, 위의 물음이 생깁니다.
+- The build can compute the numbers for SEQ (figure and table numbers) and REF (references in the text), so it **fills in the result cache.** An empty cache shows as a blank when the file is opened.
+- Page numbers (PAGEREF) are a typesetting result, and the build cannot compute them from the text alone. The build writes `0` into the cache, and there are two ways to fill it in.
+  The project's procedure document says which way is used and how to switch it off.
+  - **Word only computes, and the build writes the values** (when Windows Word can be automated) — the build writes the same content as the output into a temporary folder, opens it in Word without a window and **read-only**, updates all fields in the document until the values stop changing, and closes it **without saving**.
+    The build writes the result text it received into the PAGEREF caches. The output is still the file the build wrote, so "The template stays byte-identical; changed parts are only appended" below and the self-check apply unchanged. This is why Word must not save: saving makes Word rewrite format parts such as `settings.xml`, `styles.xml` and the footers, and rename picture parts.
+  - **A person updates in Word** (on a computer where automation is not available) — press `Ctrl+A` then `F9` once, right before submission. A rebuild resets the caches to `0`.
+- Do not update fields one at a time. That returns values from before pagination is finished (all `1`). Update the whole document at once (COM `Document.Fields.Update()`).
+- When calling `Documents.Open` through pywin32, pass the arguments by position — `(path, False, True, False)` are ConfirmConversions, ReadOnly and AddToRecentFiles.
+  Named arguments (`ReadOnly=True`) may not take effect. After opening, check `doc.ReadOnly` to confirm the document is read-only.
+- Do not use update-on-open (`updateFields`) instead. At that point pagination is not finished, so every page number becomes `1`, and the prompt above appears.
 
-## 목차는 쪽번호 자리를 비워 두고, 넘침은 빌드가 잽니다
+## The table of contents leaves page numbers blank, and the build measures overflow
 
-목차 항목을 문단 하나(제목 → 오른쪽 정렬 leader 탭 → PAGEREF)로 짜는 빌드에 해당합니다. 이 꼴에서는 제목이 줄 끝까지 차는 항목의
-쪽번호가 제목 뒤에 붙어 오른쪽 여백으로 나가고 점이 사라집니다. 캐시가 `0` 한 글자일 때는 보이지 않다가 쪽번호가 두세 자리로 채워진 뒤에 드러납니다.
+This applies to builds that make each table-of-contents entry a single paragraph (title → right-aligned leader tab → PAGEREF). In this form, for an entry whose title fills the whole line, the page number sticks to the end of the title, runs into the right margin, and the dots disappear. It stays invisible while the cache is the single character `0` and shows only after the page numbers are filled in with two or three digits.
 
-- 목차 문단에 **오른쪽 들여쓰기**를 주어 쪽번호 자리를 비웁니다. 제목은 그 안쪽에서 줄이 바뀌고 바깥 띠에는 점과 쪽번호만 옵니다(탭 위치는 본문 오른쪽 끝 그대로).
-  띠의 폭은 가장 긴 쪽번호 앞에도 점이 둘 이상 남는 값으로 잡고, 빌드 스크립트의 상수 한 곳에 둡니다.
-- Word 로 쪽번호를 채우는 빌드는 **그 Word 계산에서 넘침도 잽니다.** 목차 항목마다 둘을 봅니다 — 쪽번호의 오른쪽 끝이 본문 오른쪽 끝을 넘는가,
-  같은 줄에서 제목 끝과 쪽번호 사이에 점 두 칸 자리가 없는가. 하나라도 걸리면 `!` 줄에 개수와 항목을 적고 종료 코드 1 을 냅니다(쪽번호는 채운 채로, 파일은 남깁니다).
-- 가로 위치는 **길이 0 인 범위**로 잽니다(`doc.Range(pos, pos).Information(…)`). 이 값은 들여쓴 문단에서 왼쪽 들여쓰기만큼 작게 나오므로,
-  본문 오른쪽 끝과 견줄 때는 그 문단의 `LeftIndent` 를 더합니다. 같은 문단 안 두 위치의 차에는 보정이 필요 없습니다
-  (연구실 컴퓨터 Word 16.0, 2026-11-20 — 들여쓰기 0 · 17 · 34 pt 문단을 PDF 글자 좌표와 대조). 다른 Word 에서는 PDF 글자 좌표와 한 번 대조해 확인합니다.
-- Word 를 자동 조작할 수 없어 사람이 쪽번호를 채우는 빌드는 넘침을 잴 수 없습니다. 「넘침 미측정」으로 보고하고(0건으로 적지 않음), 쪽번호를 채운 뒤 목차를 눈으로 봅니다.
+- Give the table-of-contents paragraphs a **right indent** to reserve space for the page number. The title wraps inside that indent, and only the dots and the page number sit in the outer band (the tab stop stays at the right edge of the body text).
+  Set the band width so that at least two dots remain even before the longest page number, and keep it in one constant in the build script.
+- A build that fills in page numbers with Word **also measures overflow in that Word calculation.** For each table-of-contents entry, check two things: whether the right edge of the page number goes past the right edge of the body text, and whether, on the same line, there is no room for two dots between the end of the title and the page number. If either one is hit, the build writes the count and the entries on a `!` line and exits with code 1 (the page numbers stay filled in and the file is kept).
+- Measure horizontal positions with a **zero-length range** (`doc.Range(pos, pos).Information(…)`). In an indented paragraph this value comes out smaller by the left indent, so add the paragraph's `LeftIndent` when comparing it with the right edge of the body text. The difference between two positions in the same paragraph needs no correction
+  (checked with Word 16.0 against PDF glyph coordinates for paragraphs indented 0, 17 and 34 pt). With another Word, check once against PDF glyph coordinates.
+- A build in which a person fills in the page numbers (because Word cannot be automated) cannot measure overflow. Report it as "overflow not measured" (do not write 0 cases), and inspect the table of contents by eye after the page numbers are filled in.
 
-## 서식 원본은 바이트 그대로, 바꾸는 파트는 덧붙이기만
+## The template stays byte-identical; changed parts are only appended
 
-- 서식 원본의 파트는 바이트 그대로 복사합니다. 본문(`word/document.xml`)과 본문이 필요로 하는 것(그림 관계 · 콘텐츠 타입 · 빠진 스타일)만 바꾸고,
-  바꾸는 파트는 기존 내용에 **덧붙이기만** 합니다. `word/settings.xml` 은 손대지 않습니다.
-- 바꾸는 파트의 목록을 빌드 스크립트 안에 상수로 두고, 머리말과 프로젝트 절차 문서에 같은 목록을 적습니다. 목록 밖의 파트를 바꿔야 하면 먼저 이 규칙을 고칩니다.
+- Copy the template's parts byte for byte. Change only the body (`word/document.xml`) and what the body needs (picture relationships, content types, missing styles), and **only append** to the existing content of a changed part. Do not touch `word/settings.xml`.
+- Keep the list of changed parts as a constant in the build script, and write the same list in its header and in the project's procedure document. If a part outside the list must change, change this rule first.
 
-## 빌드 뒤 자가 검사
+## Self-check after the build
 
-빌드 스크립트는 산출물을 쓴 뒤 **다시 열어** 다음을 재고, 어긋나면 `!` 줄을 내고 종료 코드 1 을 냅니다. 파일은 남깁니다.
+After writing the output, the build script **opens it again**, measures the following, and on any mismatch writes a `!` line and exits with code 1. The file is kept.
 
-1. 서식 원본과 다른 파트가 선언한 목록뿐인가 — 파트 단위 바이트 비교. 추가된 파트는 `word/media/` 뿐인가
-2. 첫 절의 표에 있는 것이 0건인가
-3. SEQ · REF 의 빈 결과 캐시가 0건인가
-4. 쪽번호를 채웠으면 PAGEREF 캐시에 `0` · 빈칸이 남지 않았는가
+1. Are the parts that differ from the template only the declared list? — a byte comparison per part. Is `word/media/` the only part added?
+2. Are there 0 items in the table of the first section?
+3. Are there 0 empty result caches in SEQ and REF?
+4. If page numbers were filled in, is no `0` or blank left in the PAGEREF caches?
 
-정상이면 한 줄로 요약합니다.
+When all is well, it summarizes in one line.
 
 ```
-self-check  서식 파트 동일 (document.xml 외 바뀐 파트 3/3 선언됨) · 외부 참조 0 · 묻는 설정 0 · 빈 필드 캐시 0 (SEQ 51 · REF 174 · PAGEREF 120) · 쪽번호 채움 120/120
+self-check  template parts identical (changed parts besides document.xml 3/3 declared) · external references 0 · prompting settings 0 · empty field caches 0 (SEQ 51 · REF 174 · PAGEREF 120) · page numbers filled 120/120
 ```
 
-어시스턴트는 이 줄을 빌드 보고에 옮기고, `!` 가 났으면 산출물을 쓰지 않고 원인을 찾습니다. 손으로 확인할 때의 명령은 다음입니다.
+The assistant copies this line into the build report. If a `!` appeared, it does not write the output and looks for the cause. The commands for checking by hand are as follows.
 
 ```bash
-unzip -oq <산출물>.docx -d chk
+unzip -oq <output>.docx -d chk
 grep -c 'updateFields\|mailMerge' chk/word/settings.xml                 # 0
 grep -c 'r:link' chk/word/document.xml                                  # 0
-grep -o 'TargetMode="External"' chk/word/_rels/document.xml.rels        # 아무것도 안 나와야 정상
+grep -o 'TargetMode="External"' chk/word/_rels/document.xml.rels        # normal when nothing is printed
 ```
 
-## 캡션은 Caption 스타일, `keepNext`는 쓰지 않습니다
+## Captions use the Caption style, without `keepNext`
 
-Word는 `keepNext`·`keepLines`·`pageBreakBefore`·`suppressLineNumbers` 가 걸린 문단의 왼쪽 여백에
-**검은 사각형**을 그립니다. 인쇄에는 나오지 않는 서식 표식이지만 화면에서 거슬립니다.
-그림 문단과 표 캡션에 `keepNext`가 걸려 있으면 그림마다 이 사각형이 보입니다.
+Word draws a **black square** in the left margin of a paragraph that has `keepNext`, `keepLines`, `pageBreakBefore` or `suppressLineNumbers` set.
+It is a formatting mark that does not print, but it is distracting on screen.
+If `keepNext` is set on figure paragraphs and table captions, every figure shows this square.
 
-- 캡션 문단은 `<w:pStyle w:val="Caption"/>`(빌드 시 `styles.xml`에 추가)을 씁니다.
-- 그림·캡션 문단에 `keepNext`를 넣지 않습니다.
-- 대신 그림과 캡션이 페이지 경계에서 갈라지는지는 **최종 레이아웃 패스에서 눈으로** 확인합니다.
-  갈라지면 해당 지점만 손보고, 전역으로 `keepNext`를 되살리지 않습니다.
+- Caption paragraphs use `<w:pStyle w:val="Caption"/>` (added to `styles.xml` at build time).
+- Do not put `keepNext` in figure or caption paragraphs.
+- Instead, check **by eye in the final layout pass** whether a figure and its caption are split at a page boundary.
+  If they are, fix only that spot, and do not bring `keepNext` back globally.

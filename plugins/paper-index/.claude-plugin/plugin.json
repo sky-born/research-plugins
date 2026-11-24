@@ -1,7 +1,7 @@
 {
   "name": "paper-index",
-  "version": "0.11.0",
-  "description": "PDF 문헌 라이브러리를 전문까지 인덱싱하고 검색합니다. Scopus 검색은 초록까지 받아(COMPLETE view) 보유 문헌과 자동 대조하고, 미보유 오픈액세스 논문은 임시 폴더에 받아 전문 텍스트까지 만듭니다(--fetch-oa). 파일명이 바뀌어도 내용으로 다시 맞춥니다. API 키는 환경변수에서만 읽습니다.",
+  "version": "0.12.0",
+  "description": "Indexes a PDF literature library down to the full text and searches it. Scopus searches fetch abstracts too (COMPLETE view) and are matched against the papers you hold; open-access papers you lack are downloaded to a staging folder and turned into full text (--fetch-oa). Files are matched again by content when their names change. The API key is read only from an environment variable.",
   "author": {
     "name": "sky-born"
   },

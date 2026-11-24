@@ -1,27 +1,71 @@
 # -*- coding: utf-8 -*-
-"""주제 태깅 — 프리셋(수작업 규칙) 기본, 없으면 코퍼스에서 자동 생성.
+"""Topic tagging — a preset (hand-made rules) by default, otherwise generated from the corpus.
 
-프리셋 형식 (presets/*.json):
+Preset format (presets/*.json):
 
     {
       "name": "solder-thesis",
       "description": "...",
       "tags": {
-        "태그 이름": ["정규식1", "정규식2", ...],
+        "tag name": ["regex1", "regex2", ...],
+        ...
+      },
+      "renamed": {                      (optional)
+        "old tag name": "tag name",
         ...
       }
     }
 
-정규식은 대소문자를 무시하고 전문 + 제목에 적용되며, 적중 횟수 합이 임계값을 넘으면
-그 태그를 붙입니다. 태그 순서가 인덱스의 주제별 목차 순서가 됩니다.
+The regexes ignore case and run on the full text + title; when the total number of matches passes
+the threshold, the tag is assigned. The tag order becomes the order of the by-topic section of the index.
+
+`renamed` keeps a renamed tag working in an existing index: the next `index` / `reindex` rewrites the old name
+in every row to the new one (legacy.migrate_rows), and `search --tag` accepts either name (tag_aliases).
 """
 import collections, json, os, re
 
-UNTAGGED = "기타(미분류)"
+from . import legacy
+
+UNTAGGED = "untagged"
 
 
 def compile_preset(preset):
     return {k: [re.compile(p, re.I) for p in v] for k, v in preset["tags"].items()}
+
+
+def tag_aliases(preset):
+    """Old tag name -> current name: the preset's `renamed` plus the tool's own old spellings (legacy.LEGACY_TAGS).
+
+    Returns (aliases, warnings). A chain (a -> b -> c) resolves to its last name. A pair is dropped with a warning
+    when its new name is not a string, when its old name is still a tag of the preset, or when it loops; a new name
+    that is not a tag of the preset is kept, with a warning.
+    """
+    preset = preset or {}
+    raw = preset.get("renamed") or {}
+    out, warns = dict(legacy.LEGACY_TAGS), []
+    if not isinstance(raw, dict):
+        return out, [f"Preset `renamed` is not an object ({type(raw).__name__}) — ignored."]
+    tags = set(preset.get("tags") or {})
+    pairs = {}
+    for old, new in raw.items():
+        if not isinstance(new, str) or not new:
+            warns.append(f"Preset `renamed`: {old!r} -> {new!r} is not a tag name — ignored.")
+        elif old in tags:
+            warns.append(f"Preset `renamed`: {old!r} is still a tag of the preset — ignored.")
+        else:
+            pairs[old] = new
+    for old, new in pairs.items():
+        seen = {old}
+        while new in pairs and new not in seen:
+            seen.add(new)
+            new = pairs[new]
+        if new in seen:
+            warns.append(f"Preset `renamed`: {old!r} leads back to itself — ignored.")
+            continue
+        if tags and new not in tags:
+            warns.append(f"Preset `renamed`: {old!r} -> {new!r}, which is not a tag of the preset.")
+        out[old] = new
+    return out, warns
 
 
 def tag_one(text, compiled, min_score=4, fallback=2, max_tags=5):
@@ -39,7 +83,7 @@ def tag_one(text, compiled, min_score=4, fallback=2, max_tags=5):
     return keep or [UNTAGGED]
 
 
-# ---------------------------------------------------------------- 자동 생성
+# ---------------------------------------------------------------- automatic generation
 
 STOP = set("""the and of in for a to is was were are be been being on by with as at from that this these those
 it its their our we they he she you i not no all any some can could may might will would shall should must
@@ -63,10 +107,10 @@ BOILERPLATE = re.compile(
 
 
 def auto_tags(texts, top=20, min_df=4, phrase=True, max_df_ratio=0.35):
-    """코퍼스에서 빈도 높은 전문용어를 뽑아 태그 후보를 만듭니다.
+    """Pick frequent technical terms from the corpus as tag candidates.
 
-    문서빈도(df)를 씁니다. 한 문서에 많이 나오는 단어보다 여러 문서에 걸쳐
-    나오는 용어가 분류축으로 쓸 만하기 때문입니다.
+    Document frequency (df) is used: a term that appears across many documents is a better axis
+    for classification than a word that appears many times in one document.
     """
     df = collections.Counter()
     for t in texts:
@@ -83,7 +127,7 @@ def auto_tags(texts, top=20, min_df=4, phrase=True, max_df_ratio=0.35):
     n = max(1, len(texts))
     cand = [(w, c) for w, c in df.items()
             if min_df <= c <= n * max_df_ratio and not BOILERPLATE.search(w)]
-    # 두 단어 구를 우선하고, 그 다음 긴 단어
+    # two-word phrases first, then longer words
     cand.sort(key=lambda x: (-(x[1] * (1.6 if " " in x[0] else 1.0)), -len(x[0])))
     picked, seen = [], set()
     for w, c in cand:
@@ -105,7 +149,7 @@ def auto_preset(texts, name="auto", top=20, min_df=4):
         tags[label] = [re.escape(w).replace(r"\ ", r"[\s\-]?")]
     return {
         "name": name,
-        "description": "코퍼스 문서빈도에서 자동 생성한 태그 초안. 손으로 다듬어 쓰십시오.",
+        "description": "Draft tags generated from document frequency in the corpus. Refine them by hand before use.",
         "auto_generated": True,
         "tags": tags,
     }

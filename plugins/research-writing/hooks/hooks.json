@@ -1,5 +1,5 @@
 {
-  "description": "원고 프로젝트(.manuscript/project.json 이 있는 폴더)의 공용 파일 보호 — 완료기록 덮어쓰기 거부 · 새 미결 ID 손 등록 거부 · 동기화 점검 가드 · 쓰기 후 스냅샷 · 추적 표의 깨진 행 알림. 다른 폴더에서는 즉시 끝납니다. 본체는 skills/new-manuscript/hooks/guard_write.py, 규약은 manuscript-workflow/references/tracker-workflow.md 「동기화」.",
+  "description": "Protects the shared files of a manuscript project (a folder with .manuscript/project.json) — refuses overwriting completion records · refuses hand-registered new open-item IDs · sync check guard · post-write snapshots · notice of broken tracker table rows. Exits at once in other folders. Implementation: skills/new-manuscript/hooks/guard_write.py; rules: manuscript-workflow/references/tracker-workflow.md \"Sync — several computers write the shared files\".",
   "hooks": {
     "PreToolUse": [
       {
@@ -9,7 +9,7 @@
             "type": "command",
             "command": "case \"$(uname -s)\" in MINGW*|MSYS*|CYGWIN*) PY=python;; *) PY=python3;; esac; \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/skills/new-manuscript/hooks/guard_write.py\" pre",
             "timeout": 15,
-            "statusMessage": "공용 파일 쓰기 검사"
+            "statusMessage": "Checking writes to shared files"
           }
         ]
       }
@@ -22,7 +22,7 @@
             "type": "command",
             "command": "case \"$(uname -s)\" in MINGW*|MSYS*|CYGWIN*) PY=python;; *) PY=python3;; esac; \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/skills/new-manuscript/hooks/guard_write.py\" post",
             "timeout": 20,
-            "statusMessage": "공용 파일 스냅샷"
+            "statusMessage": "Snapshotting shared files"
           }
         ]
       }

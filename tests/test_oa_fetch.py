@@ -4,6 +4,7 @@ Each case runs papertool.py in a subprocess (fresh `lib` modules) whose network 
 text extractor (`oafetch.to_text`) and sleeps are fakes that record every call.
 """
 import hashlib
+import importlib
 import importlib.util
 import json
 from pathlib import Path
@@ -19,6 +20,16 @@ SKILL = ROOT / "plugins" / "paper-index" / "skills" / "paper-search"
 _spec = importlib.util.spec_from_file_location("paper_index_oafetch", SKILL / "lib" / "oafetch.py")
 oafetch = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(oafetch)
+
+
+def lib_module(name):
+    """A module of the skill's `lib` package, loaded under a name of its own so it meets no other `lib`."""
+    if "paper_index_lib" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("paper_index_lib", SKILL / "lib" / "__init__.py",
+                                                      submodule_search_locations=[str(SKILL / "lib")])
+        sys.modules["paper_index_lib"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules["paper_index_lib"])
+    return importlib.import_module("paper_index_lib." + name)
 
 # argv: <skill dir> <spec json> <papertool args...>
 # spec: oa = DOIs OpenAlex knows as OA with a direct PDF · pdftotext = whether extraction works
@@ -177,7 +188,7 @@ class OaFetchTests(unittest.TestCase):
                     out, calls = self.run_tool(*run)
                     self.assertEqual([], self.did(calls, "download"), out)
                     self.assertNotIn(A.lower(), self.did(calls, "openalex"))
-                    self.assertIn("이미 받아 둔 2편", out)
+                    self.assertIn("Already staged: 2 papers", out)
                     again = self.saved(run[run.index("--name") + 1])
                     for d in (A.lower(), B.lower()):
                         self.assertEqual(first[d]["oa_file"], again[d]["oa_file"])
@@ -187,7 +198,7 @@ class OaFetchTests(unittest.TestCase):
                     self.assertEqual(texts, self.listing(self.txt))             # texts not rewritten
 
     def test_staging_from_an_old_version_is_found_through_result_json(self):
-        # 0.9.1 left no manifest. A has a text; B was fetched where pdftotext was missing (oa_text "").
+        # Version 0.9.1 writes no manifest. A has a text; B was fetched where pdftotext was missing (oa_text "").
         self.stage("Old-name for A.pdf", A)
         self.stage("Old-name for B.pdf", B, text=False)
         self.results.mkdir()
@@ -210,7 +221,7 @@ class OaFetchTests(unittest.TestCase):
         book = self.manifest()["files"]                                       # adopted into the manifest
         self.assertEqual("Old-name for B.pdf", book[B.lower()]["file"])
         self.assertNotIn("md5", book[A.lower()])
-        self.assertIn("전문 텍스트를 새로 만들었습니다", out)
+        self.assertIn("got a newly made full text", out)
 
     def test_a_file_two_old_results_claim_for_different_dois_is_not_used(self):
         self.stage("Shared.pdf", A, text=False)
@@ -235,7 +246,7 @@ class OaFetchTests(unittest.TestCase):
         self.assertEqual("_text/" + oafetch.text_name(A), got["oa_text"])
         self.assertEqual(oafetch.TEXT_ONLY_NOTE, got["oa_note"])
         self.assertEqual([], self.pdfs())
-        self.assertIn("OA 전문 텍스트:", (self.results / "t.md").read_text(encoding="utf-8"))
+        self.assertIn("OA full text:", (self.results / "t.md").read_text(encoding="utf-8"))
 
     def test_identical_download_does_not_make_a_copy(self):
         name = oafetch.filename_for(ENTRIES[0])
@@ -246,7 +257,7 @@ class OaFetchTests(unittest.TestCase):
         self.assertEqual([name], self.pdfs())
         self.assertEqual(name, self.saved("t")[A.lower()]["oa_file"])
         self.assertEqual(name, self.manifest()["files"][A.lower()]["file"])
-        self.assertIn("사본을 만들지 않았습니다", out)
+        self.assertIn("so no copy was made", out)
 
     def test_same_name_with_other_content_is_kept_apart(self):
         name = oafetch.filename_for(ENTRIES[0])
@@ -272,7 +283,7 @@ class OaFetchTests(unittest.TestCase):
         self.assertEqual([A.lower()], self.did(calls, "download"))
         self.assertTrue((self.txt / "_obsolete" / oafetch.text_name(B)).is_file())
         self.assertFalse((self.txt / oafetch.text_name(B)).exists())
-        self.assertIn("_text/_obsolete/ 로 옮겼습니다", out)
+        self.assertIn("papers now in the library to _text/_obsolete/", out)
 
     def test_unreadable_or_unknown_manifest_is_left_alone(self):
         for body in ("{ broken", json.dumps({"format": oafetch.MANIFEST_FORMAT, "version": 2, "files": {}})):
@@ -283,7 +294,7 @@ class OaFetchTests(unittest.TestCase):
                 (self.stg / oafetch.MANIFEST).write_text(body, encoding="utf-8")
                 src = self.write_input("papertool", ENTRIES)
                 out, calls = self.run_tool("oa-fetch", src, "--name", "t")
-                self.assertIn("수신 목록을 쓰지 않습니다", out)
+                self.assertIn("Not using the fetch manifest", out)
                 self.assertEqual([B.lower()], self.did(calls, "download"))     # A still found by its text
                 self.assertEqual(body, (self.stg / oafetch.MANIFEST).read_text(encoding="utf-8"))
 
@@ -317,7 +328,7 @@ class StagingManifestTests(unittest.TestCase):
         self.write({"10.1/x": {"file": "x.pdf"}, "10.1/odd": "not a record"})
         logs = []
         st = oafetch.Staging(str(self.stg), str(self.stg / "_text"), log=logs.append)
-        self.assertTrue(any("file 이 없는 줄 1개" in m for m in logs))
+        self.assertTrue(any("Skipping 1 manifest lines without a file" in m for m in logs))
         st.record("10.1/y", {"file": "y.pdf", "text": ""})
         self.write({"10.1/x": {"file": "x.pdf"}, "10.1/z": {"file": "z.pdf"}, "10.1/odd": "not a record"})
         st.save()
@@ -334,16 +345,14 @@ class StagingManifestTests(unittest.TestCase):
 
 
 class StagingFolderTests(unittest.TestCase):
-    """기본 임시 폴더는 `_oa_inbox` — 설정에 없고 옛 기본 `_수신` 만 있으면 그 폴더를 그대로 씁니다."""
+    """The default staging folder is `_oa_inbox` — with no setting and only the old default `_수신` present, that folder is used as is."""
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="oa-staging-")
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name)
         (self.base / "library").mkdir()
         (self.base / "index").mkdir()
-        spec = importlib.util.spec_from_file_location("paper_index_config", SKILL / "lib" / "config.py")
-        self.config = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.config)
+        self.config = lib_module("config")
 
     def staging(self, extra=None):
         path = self.base / "paperindex.config.json"

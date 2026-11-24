@@ -1,33 +1,33 @@
 # -*- coding: utf-8 -*-
-r"""guard_write.py — Claude Code 훅 본체(PreToolUse · PostToolUse). 원고 프로젝트의 공용 파일을 지킵니다.
+r"""guard_write.py — Claude Code hook (PreToolUse · PostToolUse). Protects the shared files of a manuscript project.
 
-    guard_write.py pre     Edit · Write · Bash · PowerShell 직전 — ① 이미 있는 완료기록 `E*.md` 와 생성 색인을 Write 로 덮어쓰면 거부
-                                                    ② 동기화 점검(_sync.py)에 확인되지 않은 ERROR 가 있으면 공용 파일 쓰기를 거부
-                                                    ③ Edit · Write 직전 판을 로컬 스냅샷으로 남김(뒤의 차이 계산용)
-                                                    ⑤ 새 미결 ID 행을 손으로 넣는 Edit · Write 를 거부 — 번호는 도구 폴더의 `new_pending.py` 가 정함
-                                                       (그 도구가 프로젝트에 있을 때만 · 범위는 `_config.allocation_scope`)
-                                                    ⑥ 공용 파일 Edit · Write 직전, 도구가 쓰기 잠금을 쥐고 있으면 풀릴 때까지 잠깐 기다림
-                                                       (막지 않음 — 훅은 Edit 보다 먼저 끝나므로 잠금을 쥐지는 못합니다)
-    guard_write.py post    같은 도구 직후 — 공용 파일이면 스냅샷 · 지문 · 「이 컴퓨터가 쓴 줄」 기록(셸 도구는 지문이 바뀐 파일만)
-                                        ④ 추적 파일의 표 행이 깨져 있으면(쪼개진 행 등) 그 턴에 모델 · 사용자에게 알림(막지 않음)
-    (인자가 없으면 pre — 옛 등록과 호환)
+    guard_write.py pre     right before Edit · Write · Bash · PowerShell — ① refuses a Write that overwrites an existing completion record `E*.md` or the generated index
+                                                    ② refuses writes to shared files while the sync check (_sync.py) has unconfirmed ERRORs
+                                                    ③ keeps the version before an Edit · Write as a local snapshot (for the later difference)
+                                                    ⑤ refuses an Edit · Write that adds a new open-item ID row by hand — `new_pending.py` in the tools folder assigns numbers
+                                                       (only when that tool is in the project · scope `_config.allocation_scope`)
+                                                    ⑥ right before an Edit · Write of a shared file, waits briefly while a tool holds the write lock
+                                                       (does not block — the hook finishes before the Edit, so it cannot hold the lock itself)
+    guard_write.py post    right after the same tools — for a shared file: snapshot · fingerprint · record of "lines this computer wrote" (shell tools: only files whose fingerprint changed)
+                                        ④ if table rows of a tracker file are broken (split rows etc.), tells the model and the user in that turn (does not block)
+    (without an argument: pre — compatible with old registrations)
 
-어디서 도는가 — 둘 다 같은 파일입니다.
-  · 플러그인 설치본 `hooks/hooks.json` 이 `${CLAUDE_PLUGIN_ROOT}/skills/new-manuscript/hooks/guard_write.py` 로 등록(본체) —
-    낡은 미러의 프로젝트 사본과 무관하게 설치본의 최신 코드가 돕니다.
-  · 프로젝트 `.claude/settings.json` 이 `.claude/hooks/guard_write.py`(관리 사본)로 등록(보조) — 플러그인 훅이 없는 환경용.
-  둘 다 있으면 같은 도구 호출을 한 번만 처리합니다(상태 폴더의 `hook_seen/<tool_use_id>` 표시).
-프로젝트 판정 — Edit · Write 는 **대상 파일 경로에서**, Bash · PowerShell 은 cwd 에서 위로 올라가며 `.manuscript/project.json`(또는 `.writing/`)을
-찾습니다. 없으면 즉시 0 으로 끝나 다른 프로젝트에 영향이 없습니다. 점검 모듈은 이 파일 옆 `../tools/_sync.py`(플러그인 배치) →
-프로젝트 도구 폴더(설정의 `tools_dir`)의 `_sync.py` 순으로 찾습니다.
-설정 없이 옛 기본 이름(한글)을 쓰는 프로젝트에서는 설정 파일 말고는 Edit · Write 를 막고, 설정에 적을 값을 사유로 보입니다.
+Where it runs — both are the same file.
+  · the plugin's installed `hooks/hooks.json` registers `${CLAUDE_PLUGIN_ROOT}/skills/new-manuscript/hooks/guard_write.py` (primary) —
+    the installed copy's latest code runs whatever state the project copy on a stale mirror is in.
+  · the project's `.claude/settings.json` registers `.claude/hooks/guard_write.py` (managed copy) (secondary) — for environments without the plugin hook.
+  With both present, a tool call is handled once (marker `hook_seen/<tool_use_id>` in the state folder).
+Project detection — for Edit · Write it walks up **from the target file's path**, for Bash · PowerShell from cwd, looking for `.manuscript/project.json` (or `.writing/`).
+Without one it exits 0 at once and has no effect on other projects. The check module is looked up in `../tools/_sync.py` next to this file (plugin layout) →
+`_sync.py` in the project's tools folder (`tools_dir` in the settings).
+In a project that uses the old default (Korean) names without settings, it blocks every Edit · Write except to the settings file and gives the values to add to the settings as the reason.
 
-입출력 — 표준 입력의 JSON(tool_name, tool_input, cwd, tool_use_id)을 읽고, 막을 때만 표준 출력에
+I/O — reads JSON from standard input (tool_name, tool_input, cwd, tool_use_id) and writes to standard output only when it blocks:
   {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "..."}}
-를, 쓰기 뒤 표 결함을 알릴 때만 {"systemMessage": …, "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": …}} 를
-씁니다. 종료 코드는 항상 0 이고, 스크립트 자체의 오류는 stderr 에 적고 1 로 끝냅니다(비차단 — fail-open).
-**2 로 끝나지 않습니다** — 2 는 훅 규약에서 차단이라, 스크립트 결함이 모든 쓰기를 막는 일을 피합니다.
-표준 입력은 바이트로 읽어 UTF-8 로 해독합니다 — 윈도 파이썬이 cp949 로 읽으면 한글 경로가 깨져 검사가 빗나갑니다(2026-09-14 실측).
+or, when it reports table defects after a write, {"systemMessage": …, "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": …}}.
+The exit code is always 0; an error in the script itself goes to stderr and exits 1 (non-blocking — fail-open).
+**It never exits 2** — in the hook protocol 2 means block, so a defect in the script must not block every write.
+Standard input is read as bytes and decoded as UTF-8 — when Python on Windows reads it as cp949, Korean paths are garbled and the checks miss.
 """
 import hashlib
 import importlib.util
@@ -64,13 +64,13 @@ def _raw_config(root):
             try:
                 return json.load(io.open(p, encoding='utf-8'))
             except (OSError, ValueError) as e:
-                sys.stderr.write('guard_write: %s 를 읽지 못했습니다: %s\n' % (rel, e))
+                sys.stderr.write('guard_write: could not read %s: %s\n' % (rel, e))
             break
     return {}
 
 
 def decide_overwrite(cfg, root, data):
-    """완료 기록 · 생성 색인의 Write 덮어쓰기 — 막아야 하면 사유, 아니면 None."""
+    """A Write that overwrites a completion record or the generated index — the reason if it must be blocked, otherwise None."""
     if data.get('tool_name') != 'Write':
         return None
     fp = (data.get('tool_input') or {}).get('file_path') or ''
@@ -87,15 +87,15 @@ def decide_overwrite(cfg, root, data):
     rel = rel.replace(os.sep, '/')
     rec_pat = re.escape(rec_dir.replace(os.sep, '/').strip('/')) + '/' + re.escape(prefix) + r'\d+\.md'
     if re.fullmatch(rec_pat, rel) and os.path.exists(target):
-        return ('완료 기록 %s 은 이미 있습니다. 기록은 덮어쓰지 않습니다 — 고칠 곳만 Edit 으로 바꾸고, '
-                '새 항목은 %s 로 다음 번호에 만듭니다 (동시 편집 규칙 — tracker-workflow.md).' % (rel, cfg.tool('new_record.py')))
+        return ('Completion record %s already exists. Records are never overwritten — change only what needs fixing with Edit, '
+                'and create new items under the next number with %s (`tracker-workflow.md` "Concurrent editing — the user may be editing the same file in another window").' % (rel, cfg.tool('new_record.py')))
     if rel == index.replace(os.sep, '/') and os.path.exists(target):
-        return ('%s 은 도구가 생성하는 파일입니다. 손으로 쓰지 말고 %s 로 다시 만듭니다.' % (rel, cfg.tool('index_records.py')))
+        return ('%s is generated by a tool. Do not write it by hand; regenerate it with %s.' % (rel, cfg.tool('index_records.py')))
     return None
 
 
 def decide_legacy(root, data, message):
-    """설정 없이 옛 기본 이름을 쓰는 프로젝트 — 설정 파일이 아닌 Edit · Write 를 막는 사유, 아니면 None."""
+    """A project that uses the old default names without settings — the reason to block an Edit · Write that is not to the settings file, otherwise None."""
     if data.get('tool_name') not in ('Edit', 'Write', 'MultiEdit'):
         return None
     fp = (data.get('tool_input') or {}).get('file_path') or ''
@@ -106,9 +106,9 @@ def decide_legacy(root, data, message):
 
 
 def decide_new_ids(cfg, root, sync, tool, ti, rel):
-    """새 미결 ID 를 손으로 넣는 Edit · Write — 막아야 하면 사유, 아니면 None. 번호는 도구가 잠금 안에서 정합니다(두 세션이 같은 번호를
-    집지 않게). 판정은 `Sync.hand_added_ids`(범위 · 새 ID 의 정의는 그 한 곳). 프로젝트에 번호 도구가 아직 없으면(사본을 갱신하지 않은
-    프로젝트) 막지 않습니다 — 막으면 넣을 길이 없습니다. 옛 `_sync.py` 도 통과시킵니다."""
+    """An Edit · Write that adds a new open-item ID by hand — the reason if it must be blocked, otherwise None. A tool assigns numbers inside the lock (so that two
+    sessions do not pick the same number). The decision is `Sync.hand_added_ids` (the scope and the definition of a new ID live there only). A project that does not
+    have the numbering tool yet (its copies were not updated) is not blocked — otherwise there would be no way to add items. An old `_sync.py` also passes."""
     find = getattr(sync, 'hand_added_ids', None)
     if find is None or not os.path.isfile(os.path.join(root, cfg.tools_dir, 'new_pending.py')):
         return None
@@ -122,15 +122,20 @@ def decide_new_ids(cfg, root, sync, tool, ti, rel):
     if not new:
         return None
     letter = re.match(r'[A-Z]+', new[0]).group(0)
-    return ('새 미결 항목 %s 을(를) 손으로 넣으려 했습니다. 번호는 도구가 정합니다 — 두 세션이 같은 번호를 집지 않게 하기 위해서입니다. '
-            '행의 ID 자리를 `%s?` 로 바꿔 한 줄짜리 파일로 적고 `<py> -X utf8 %s <그 파일>` 을 돌린 뒤, 출력된 번호를 받아 쓰십시오 '
-            '(tracker-workflow.md 「동시 편집」).' % (' · '.join(new), letter, cfg.tool('new_pending.py')))
+    return ('Tried to add the new open item %s by hand. A tool assigns the numbers, so that two sessions do not pick the same number. '
+            'Write the row to a one-line file with `%s?` as its ID, run `<py> -X utf8 %s <that file>`, then use the number it prints '
+            '(`tracker-workflow.md` "Concurrent editing — the user may be editing the same file in another window").' % (' · '.join(new), letter, cfg.tool('new_pending.py')))
 
 
 def _load_sync(root):
-    """(_config, _sync) 모듈 — 플러그인 배치(`../tools`)를 먼저, 없으면 프로젝트 사본(설정의 `tools_dir`, 없으면 `tools` · `도구`)."""
+    """(_config, _sync) modules — the plugin layout (`../tools`) first, otherwise the project copy (`tools_dir` in the settings, else `tools`,
+    else any folder directly under the root that holds both modules — so an old project's tools folder is found without naming it)."""
     dirs = [os.path.join(os.path.dirname(HERE), 'tools')]
-    dirs += [os.path.join(root, d) for d in (_raw_config(root).get('tools_dir'), 'tools', '도구') if d]
+    dirs += [os.path.join(root, d) for d in (_raw_config(root).get('tools_dir'), 'tools') if d]
+    try:
+        dirs += sorted(os.path.join(root, d) for d in os.listdir(root) if not d.startswith('.'))
+    except OSError:
+        pass
     for tools in dirs:
         if os.path.isfile(os.path.join(tools, '_sync.py')) and os.path.isfile(os.path.join(tools, '_config.py')):
             if tools not in sys.path:
@@ -153,17 +158,17 @@ def deny(reason):
 
 
 def notice_tables(sync, rels):
-    """쓰기 뒤 — 추적 파일에 표 결함(쪼개진 행 등)이 남아 있으면 그 턴에 알립니다(막지 않음). 모델에게는 additionalContext,
-    사용자에게는 systemMessage. 옛 `_sync.py`(table_report 없음)나 검사 결함은 조용히 건너뜁니다 — fail-open."""
+    """After a write — if table defects (split rows etc.) remain in a tracker file, reports them in that turn (does not block). additionalContext for the model,
+    systemMessage for the user. An old `_sync.py` (no table_report) or a fault in the check is skipped silently — fail-open."""
     try:
         probs = sync.table_report(rels)
     except Exception as e:
-        sys.stderr.write('guard_write: 표 검사 중 오류, 건너뜁니다: %r\n' % (e,))
+        sys.stderr.write('guard_write: error in the table check, skipped: %r\n' % (e,))
         return
     if not probs:
         return
-    msg = ('추적 파일의 표 행이 깨져 있습니다 — 한 항목은 한 줄이고 셀 안의 | 는 \\| 입니다(tracker-workflow.md 「표 행 형식」). '
-           '이번 쓰기가 원인이면 바로 고치십시오: ' + ' / '.join('%s %s' % (r, d) for r, d in probs[:6]))
+    msg = ('Table rows in a tracker file are broken — one item per line, and | inside a cell is \\| (`tracker-workflow.md` "Table row format — one item per line"). '
+           'If this write caused it, fix it now: ' + ' / '.join('%s %s' % (r, d) for r, d in probs[:6]))
     sys.stdout.write(json.dumps({"systemMessage": msg,
                                  "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": msg}},
                                 ensure_ascii=True))
@@ -189,7 +194,7 @@ def run(mode, data):
     legacy = getattr(cfg_mod, 'LegacyNames', None)
     try:
         cfg = cfg_mod.load(root)
-    except BaseException as e:                   # LegacyNames 는 SystemExit — 도구에서는 멈추고, 훅에서는 사유로 씁니다
+    except BaseException as e:                   # LegacyNames is a SystemExit — tools stop on it; the hook uses it as the reason
         if legacy is None or not isinstance(e, legacy):
             raise
         reason = decide_legacy(root, data, str(e)) if mode == 'pre' else None
@@ -210,7 +215,7 @@ def run(mode, data):
     if tool in ('Edit', 'Write', 'MultiEdit'):
         fp = ti.get('file_path') or ''
         target = os.path.abspath(fp if os.path.isabs(fp) else os.path.join(root, fp))
-        nfc = getattr(cfg_mod, 'nfc', None) or (lambda s: s)     # 경로 비교는 NFC — 입력(NFC)과 파일 시스템(맥 NFD)의 형이 달라도 같은 파일
+        nfc = getattr(cfg_mod, 'nfc', None) or (lambda s: s)     # paths are compared in NFC — the same file even when the input (NFC) and the file system (macOS NFD) differ
         try:
             rel = os.path.relpath(nfc(target), nfc(root)).replace(os.sep, '/')
         except ValueError:
@@ -222,16 +227,16 @@ def run(mode, data):
             if reason:
                 deny(reason)
                 return 0
-            wait = getattr(sync, 'wait_write_lock', None)        # 옛 `_sync.py` 에는 없습니다
-            if wait and not wait():                              # 정리 도구 등이 쓰는 중이면 풀릴 때까지 잠깐 — 못 기다려도 막지 않습니다
-                sys.stderr.write('guard_write: 쓰기 잠금이 풀리지 않아 기다리지 않고 통과시킵니다\n')
+            wait = getattr(sync, 'wait_write_lock', None)        # missing in an old `_sync.py`
+            if wait and not wait():                              # while the tidy tool or similar is writing, wait briefly for the release — never block if it takes too long
+                sys.stderr.write('guard_write: the write lock was not released; letting the write through without waiting\n')
             sync.before_write(rel)
         else:
             sync.after_write(rel)
             notice_tables(sync, [rel])
         return 0
 
-    # Bash · PowerShell — 명령을 해석하지 않고, 앞에서는 공용 파일 이름이 명령에 보일 때만 가드, 뒤에서는 지문이 바뀐 파일만
+    # Bash · PowerShell — the command is not parsed: before, guard only when a shared file name appears in the command; after, only files whose fingerprint changed
     if mode == 'pre':
         open_ = sync.unacked()
         if not open_:
@@ -248,18 +253,18 @@ def run(mode, data):
 def main(argv):
     mode = (argv[1] if len(argv) > 1 else 'pre').lower()
     if mode not in ('pre', 'post'):
-        sys.stderr.write('guard_write: 모드는 pre 또는 post 입니다: %r\n' % mode)
+        sys.stderr.write('guard_write: mode must be pre or post: %r\n' % mode)
         return 1
     try:
         raw = sys.stdin.buffer.read() if hasattr(sys.stdin, 'buffer') else sys.stdin.read().encode('utf-8')
         data = json.loads(raw.decode('utf-8-sig')) if raw.strip() else {}
     except (ValueError, UnicodeDecodeError) as e:
-        sys.stderr.write('guard_write: 입력 JSON 을 읽지 못했습니다: %s\n' % e)
+        sys.stderr.write('guard_write: could not read the input JSON: %s\n' % e)
         return 1
     try:
         return run(mode, data)
-    except Exception as e:  # 결함이 쓰기 전체를 막지 않게 — 비차단 경고
-        sys.stderr.write('guard_write(%s): 검사 중 오류, 통과시킵니다: %r\n' % (mode, e))
+    except Exception as e:  # a defect must not block all writes — non-blocking warning
+        sys.stderr.write('guard_write(%s): error during the check, letting it through: %r\n' % (mode, e))
         return 1
 
 

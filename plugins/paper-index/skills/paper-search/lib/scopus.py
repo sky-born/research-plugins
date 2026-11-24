@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Scopus Search API 클라이언트 — 표준 라이브러리만 씁니다.
+"""Scopus Search API client — standard library only.
 
-**API 키는 코드·설정·출력 어디에도 저장하지 않습니다.**
-환경변수 `ELS_API_KEY` 에서만 읽고, `X-ELS-APIKey` 헤더로만 보냅니다.
-URL 쿼리스트링이나 명령줄 인자에 키를 넣지 않습니다 — 그러면 셸 기록·프록시 로그·
-에러 메시지에 남습니다. 기관 토큰이 있으면 `ELS_INST_TOKEN` 을 함께 씁니다.
+The key is read only from the environment variable `ELS_API_KEY` (an institutional token, if any, from
+`ELS_INST_TOKEN`) and sent only in the `X-ELS-APIKey` header. It never goes into the URL query string,
+a command-line argument, the config or any output, and error text is scrubbed of it (`_scrub`).
+Rules for handling the key: `SKILL.md` "G-0. Handling the API key — no exceptions".
 
-인증 방식 참고: https://dev.elsevier.com/tecdoc_api_authentication.html
+Authentication reference: https://dev.elsevier.com/tecdoc_api_authentication.html
 """
 import json, os, re, socket, urllib.error, urllib.parse, urllib.request
 
@@ -16,16 +16,16 @@ BASE = "https://api.elsevier.com/content/search/scopus"
 ENV_KEY = "ELS_API_KEY"
 ENV_TOKEN = "ELS_INST_TOKEN"
 
-# 한 페이지 크기의 원본입니다. 설정 `scopus.count` · `scopus.page_size` 의 기본값이고,
-# 키가 더 큰 페이지를 거부하면 이 크기로 다시 받습니다.
-# Elsevier 문서의 view 별 상한은 VIEW_MAX 이지만 실제 상한은 키의 서비스 등급이 정합니다 —
-# 등급에 따라 STANDARD 도 25 를 넘기면 HTTP 400 (TOO_MANY) 이 납니다.
+# The one source of the page size. It is the default of the config `scopus.count` · `scopus.page_size`,
+# and the size used again when the key refuses a larger page.
+# Elsevier's documented per-view limits are VIEW_MAX, but the real limit is set by the key's service level —
+# depending on the level, even STANDARD gives HTTP 400 (TOO_MANY) above 25.
 PAGE_SIZE = 25
 VIEW_MAX = {"STANDARD": 200, "COMPLETE": 25}     # https://dev.elsevier.com/api_key_settings.html
-PAGE_CAP = 5000       # 페이지네이션 상한 — start + count 가 이 값을 넘을 수 없습니다
+PAGE_CAP = 5000       # pagination limit — start + count cannot exceed this
 TOO_MANY = "Exceeds the maximum number allowed"  # 400 INVALID_INPUT "... for the service level"
 
-# 설정 파일의 `scopus` 절 — 아는 키와 기본값. 모르는 키는 settings() 가 경고합니다.
+# The `scopus` section of the config file — known keys and defaults. settings() warns about unknown keys.
 SETTINGS = {"count": PAGE_SIZE, "page_size": PAGE_SIZE, "view": None, "sort": None}
 
 
@@ -42,7 +42,7 @@ class NoNetwork(ScopusError):
 
 
 def _scrub(text, key):
-    """혹시라도 키가 섞인 문자열이 밖으로 나가지 않게 지웁니다."""
+    """Remove the key from a string, in case it would otherwise leave the tool."""
     if key and text:
         text = text.replace(key, "***")
     return text
@@ -52,19 +52,19 @@ def get_key():
     k = (os.environ.get(ENV_KEY) or "").strip()
     if not k:
         raise NoKey(
-            f"환경변수 {ENV_KEY} 가 없습니다.\n"
-            "  Windows: 시작 메뉴 → '계정의 환경 변수 편집' → 사용자 변수 → 새로 만들기\n"
-            f"           변수 이름 {ENV_KEY} / 변수 값 = 발급받은 Scopus API 키\n"
-            "           (기관 토큰이 있으면 " + ENV_TOKEN + " 도 같은 방식으로 추가)\n"
-            "  설정한 뒤 터미널·앱을 완전히 껐다 켜야 반영됩니다."
+            f"Environment variable {ENV_KEY} is not set.\n"
+            "  Windows: Start menu → 'Edit environment variables for your account' → User variables → New\n"
+            f"           Variable name {ENV_KEY} / Variable value = your Scopus API key\n"
+            "           (if you have an institutional token, add " + ENV_TOKEN + " the same way)\n"
+            "  Close and reopen the terminal and the app completely for the setting to take effect."
         )
     return k
 
 
 def _get(url, key, timeout):
-    """한 번의 GET. 성공하면 (본문, 할당량 메타), 실패하면 코드가 붙은 예외."""
+    """One GET. On success (body, quota meta); on failure an exception carrying the code."""
     headers = {
-        "X-ELS-APIKey": key,          # 키는 헤더로만
+        "X-ELS-APIKey": key,          # the key goes in the header only
         "Accept": "application/json",
         "User-Agent": "paper-index-tool/1.0",
     }
@@ -85,66 +85,66 @@ def _get(url, key, timeout):
     except urllib.error.HTTPError as e:
         detail = _scrub(e.read().decode("utf-8", "ignore")[:400], key)
         if e.code == 401:
-            err = ScopusError("401 인증 실패 — API 키가 잘못됐거나 이 API에 권한이 없습니다.\n" + detail)
+            err = ScopusError("401 authentication failed — the API key is wrong or has no access to this API.\n" + detail)
         elif e.code == 403:
-            err = ScopusError("403 권한 없음 — 기관 구독 범위 밖이거나 기관 토큰이 필요합니다.\n" + detail)
+            err = ScopusError("403 forbidden — outside the institution's subscription, or an institutional token is needed.\n" + detail)
         elif e.code == 429:
-            err = ScopusError("429 할당량 초과 — " + str(e.headers.get("X-RateLimit-Reset")) + " 이후 재시도.\n" + detail)
+            err = ScopusError("429 quota exceeded — retry after " + str(e.headers.get("X-RateLimit-Reset")) + ".\n" + detail)
         else:
             err = ScopusError(f"HTTP {e.code}\n{detail}")
         err.code = e.code
         raise err
     except (urllib.error.URLError, socket.timeout, socket.gaierror) as e:
         raise NoNetwork(
-            "api.elsevier.com 에 연결할 수 없습니다.\n"
-            "  에이전트 셸(샌드박스)은 외부 접속이 제한돼 있어 여기서는 Scopus를 호출할 수 없습니다.\n"
-            f"  원인: {e}"
+            "Cannot connect to api.elsevier.com.\n"
+            "  An agent shell (sandbox) has restricted outbound access, so Scopus cannot be called from here.\n"
+            f"  Cause: {e}"
         )
 
 
 def settings(cfg):
-    """설정의 `scopus` 절을 기본값(SETTINGS)과 합칩니다. (값, 경고 목록) 을 돌려줍니다.
+    """Merge the config's `scopus` section with the defaults (SETTINGS). Returns (values, list of warnings).
 
-    모르는 키나 쓸 수 없는 값은 버리고 경고합니다 — 오타가 조용히 기본값이 되지 않게.
-    `_` 로 시작하는 키는 주석으로 보고 넘어갑니다.
+    Unknown keys and unusable values are dropped with a warning — so a typo does not silently become the default.
+    Keys starting with `_` count as comments and are skipped.
     """
     raw = cfg.get("scopus") or {}
     out, warn = dict(SETTINGS), []
     if not isinstance(raw, dict):
-        return out, [f"설정 `scopus` 가 객체가 아닙니다({type(raw).__name__}) — 무시하고 기본값을 씁니다."]
+        return out, [f"Config `scopus` is not an object ({type(raw).__name__}) — ignored; using the defaults."]
     hi = max(VIEW_MAX.values())
     for k, v in raw.items():
         if k.startswith("_"):
             continue
         if k not in SETTINGS:
-            warn.append(f"설정 `scopus.{k}` 는 모르는 키입니다 — 무시합니다. 아는 키: {', '.join(SETTINGS)}")
+            warn.append(f"Config `scopus.{k}` is an unknown key — ignored. Known keys: {', '.join(SETTINGS)}")
         elif k in ("count", "page_size") and (isinstance(v, bool) or not isinstance(v, int)
                                               or not 1 <= v <= hi):
-            warn.append(f"설정 `scopus.{k}` = {v!r} 는 1–{hi} 의 정수가 아닙니다 — 기본값 {SETTINGS[k]} 를 씁니다.")
+            warn.append(f"Config `scopus.{k}` = {v!r} is not an integer in 1–{hi} — using the default {SETTINGS[k]}.")
         elif k in ("view", "sort") and v is not None and not isinstance(v, str):
-            warn.append(f"설정 `scopus.{k}` = {v!r} 는 문자열이 아닙니다 — 무시합니다.")
+            warn.append(f"Config `scopus.{k}` = {v!r} is not a string — ignored.")
         else:
             out[k] = v
     return out, warn
 
 
 def page_limit(view, page_size=PAGE_SIZE):
-    """한 번에 요청할 건수 — 설정한 페이지 크기와 그 view 의 문서상 상한 중 작은 쪽.
+    """Results per request — the smaller of the configured page size and that view's documented limit.
 
-    view 가 None 이면 COMPLETE 를 먼저 시도하므로 COMPLETE 상한을 따릅니다."""
+    With view None, COMPLETE is tried first, so the COMPLETE limit applies."""
     return min(page_size, VIEW_MAX.get(view or "COMPLETE", PAGE_SIZE))
 
 
 def search(query, count=PAGE_SIZE, start=0, view=None, sort=None, timeout=30):
-    """Scopus 검색. 성공하면 (엔트리 목록, 메타) 를 돌려줍니다.
+    """Scopus search. On success returns (list of entries, meta).
 
-    view 를 지정하지 않으면 COMPLETE(초록·전체 저자·저자 키워드 포함)를 먼저 시도하고,
-    키에 권한이 없으면(401/403) STANDARD 로 물러납니다. 서지만으로는 내용 기반 선별이
-    안 되기 때문에 초록을 기본으로 받습니다. 실제로 받은 view 는 메타의 `view` 에 남습니다.
+    Without a view, COMPLETE (abstract, all authors, author keywords) is tried first; if the key has no access
+    (401/403), it falls back to STANDARD. Bibliographic data alone cannot support selection by content,
+    so abstracts are fetched by default. The view actually received is kept in the meta `view`.
 
-    count 가 키의 서비스 등급 상한을 넘어 HTTP 400(TOO_MANY)이 나면 같은 페이지를 PAGE_SIZE 건으로
-    다시 받습니다. 그때 메타의 `count_asked` 에 처음 요청한 건수가 남습니다 — 부르는 쪽이 경고하고
-    다음 페이지부터 크기를 줄입니다.
+    If count exceeds the key's service-level limit and HTTP 400 (TOO_MANY) comes back, the same page is fetched
+    again with PAGE_SIZE results. The meta `count_asked` then keeps the count first requested — the caller warns
+    and uses the smaller size from the next page on.
     """
     key = get_key()
     tries = [view] if view else ["COMPLETE", None]
@@ -163,10 +163,10 @@ def search(query, count=PAGE_SIZE, start=0, view=None, sort=None, timeout=30):
             code = getattr(e, "code", 0)
             if v == "COMPLETE" and view is None and i + 1 < len(tries) and code in (401, 403):
                 i += 1
-                continue      # 초록은 포기하고 서지만 받습니다
+                continue      # give up the abstracts and take bibliographic data only
             if code == 400 and count > PAGE_SIZE and TOO_MANY in str(e):
                 count = PAGE_SIZE
-                continue      # 키의 서비스 등급이 받는 크기로 같은 페이지를 다시 받습니다
+                continue      # fetch the same page again at a size the key's service level accepts
             raise
         data = json.loads(body)
         res = data.get("search-results", {})
@@ -181,7 +181,7 @@ def search(query, count=PAGE_SIZE, start=0, view=None, sort=None, timeout=30):
 
 
 def normalize(e):
-    """Scopus 엔트리를 인덱스와 대조하기 쉬운 형태로 정리합니다."""
+    """Reshape a Scopus entry so it is easy to match against the index."""
     def g(*keys):
         for k in keys:
             v = e.get(k)
@@ -190,7 +190,7 @@ def normalize(e):
         return ""
     date = g("prism:coverDate", "prism:coverDisplayDate")
     year = (re.findall(r"(19|20)\d{2}", str(date)) and re.search(r"((19|20)\d{2})", str(date)).group(1)) or ""
-    # 아래 셋은 COMPLETE view 에서만 옵니다. STANDARD 응답이면 빈 값으로 남습니다.
+    # The next three come only with the COMPLETE view. In a STANDARD response they stay empty.
     authors = "; ".join(a.get("authname", "") for a in (e.get("author") or [])
                         if isinstance(a, dict) and a.get("authname"))
     keywords = re.sub(r"\s*\|\s*", "; ", g("authkeywords")).strip()
@@ -215,16 +215,16 @@ def normalize(e):
     }
 
 
-# ------------------------------------------------------- 보유 문헌과 대조
+# ------------------------------------------------------- matching against owned papers
 
 def _norm(s):
-    return re.sub(r"[^a-z0-9]", "", norm_text(s or "").lower())   # 색인 제목의 합자(Eﬀect)를 풀고 비교
+    return re.sub(r"[^a-z0-9]", "", norm_text(s or "").lower())   # unfold ligatures in index titles (Eﬀect) before comparing
 
 
 def match_against_index(entries, rows, threshold=0.86):
-    """Scopus 결과가 이미 라이브러리에 있는지 표시합니다.
+    """Mark whether each Scopus result is already in the library.
 
-    DOI가 같으면 확정, 아니면 제목 유사도로 판정합니다.
+    The same DOI settles it; otherwise title similarity decides.
     """
     import difflib
     by_doi = {}
@@ -238,7 +238,7 @@ def match_against_index(entries, rows, threshold=0.86):
         hit, how = None, ""
         d = (e.get("doi") or "").lower().rstrip(".")
         if d and d in by_doi:
-            hit, how = by_doi[d], "DOI 일치"
+            hit, how = by_doi[d], "DOI match"
         else:
             t = _norm(e.get("title"))
             best, score = None, 0.0
@@ -248,7 +248,7 @@ def match_against_index(entries, rows, threshold=0.86):
                     if s > score:
                         best, score = r, s
             if best and score >= threshold:
-                hit, how = best, f"제목 유사 {score:.2f}"
+                hit, how = best, f"title similarity {score:.2f}"
         e = dict(e)
         e["owned"] = bool(hit)
         e["owned_id"] = hit["id"] if hit else ""
@@ -259,7 +259,7 @@ def match_against_index(entries, rows, threshold=0.86):
 
 
 def doi_link(doi):
-    """DOI 를 클릭 링크로. 캠퍼스 IP 에서는 이 링크가 바로 전문으로 갑니다."""
+    """Turn a DOI into a clickable link. From a campus IP this link leads straight to the full text."""
     doi = (doi or "").strip()
     if not doi:
         return ""
@@ -267,7 +267,7 @@ def doi_link(doi):
 
 
 def oa_mark(e):
-    """OA ✔ = 임시 폴더에 받아 둠 · OA = 오픈액세스로 확인됨 · — = 아니거나 미확인"""
+    """OA ✔ = fetched into the staging folder · OA = confirmed open access · — = not, or not checked"""
     if e.get("oa_file"):
         return "OA ✔"
     if str(e.get("openaccess", "")).strip().lower() in ("1", "true") or e.get("oa_url"):
@@ -275,26 +275,26 @@ def oa_mark(e):
     return "—"
 
 
-def to_markdown(entries, meta=None, title="Scopus 검색 결과"):
+def to_markdown(entries, meta=None, title="Scopus search results"):
     L = [f"# {title}", ""]
     if meta:
-        L.append(f"질의 `{meta.get('query','')}` · 전체 {meta.get('total','?')}건 중 "
-                 f"{meta.get('start',0)+1}–{meta.get('start',0)+len(entries)}번 표시"
+        L.append(f"Query `{meta.get('query','')}` · showing {meta.get('start',0)+1}–{meta.get('start',0)+len(entries)}"
+                 f" of {meta.get('total','?')}"
                  + (f" · view {meta['view']}" if meta.get("view") else ""))
         if meta.get("quota_remaining"):
-            L.append(f"남은 호출 할당량 {meta['quota_remaining']} / {meta.get('quota_limit','?')}")
+            L.append(f"Remaining call quota {meta['quota_remaining']} / {meta.get('quota_limit','?')}")
         L.append("")
     owned = [e for e in entries if e.get("owned")]
     new = [e for e in entries if not e.get("owned")]
     if any("owned" in e for e in entries):
-        L.append(f"**보유 {len(owned)}건 · 미보유 {len(new)}건**")
+        L.append(f"**Owned {len(owned)} · missing {len(new)}**")
         L.append("")
     n_oa = sum(1 for e in entries if not e.get("owned") and oa_mark(e) != "—")
     n_got = sum(1 for e in entries if e.get("oa_file"))
     if n_oa or n_got:
-        L.append(f"미보유 중 OA {n_oa}건 · 임시 폴더에 받아 둔 것 {n_got}건 (`OA ✔`)")
+        L.append(f"Of the missing, OA {n_oa} · fetched into the staging folder {n_got} (`OA ✔`)")
         L.append("")
-    L += ["| # | 보유 | OA | 저자 | 연도 | 제목 | 저널 | 피인용 | DOI |",
+    L += ["| # | Owned | OA | Author | Year | Title | Journal | Cited by | DOI |",
           "|---|---|---|---|---|---|---|---|---|"]
     for i, e in enumerate(entries, 1):
         mark = f"✅ {e.get('owned_id','')}" if e.get("owned") else "—"
@@ -304,25 +304,25 @@ def to_markdown(entries, meta=None, title="Scopus 검색 결과"):
             (e.get("journal", "") or "")[:34].replace("|", "/"),
             e.get("cited_by", ""), doi_link(e.get("doi", ""))))
 
-    # 초록이 있으면(COMPLETE view) 항목별로 덧붙입니다 — 서지만 보고 고르지 않도록.
+    # With abstracts (COMPLETE view), add them per entry — so selection does not rest on bibliographic data alone.
     if any(e.get("abstract") for e in entries):
-        L += ["", "## 항목별 초록", ""]
+        L += ["", "## Per-entry abstracts", ""]
         for i, e in enumerate(entries, 1):
-            mark = f"보유 ✅ {e.get('owned_id','')}" if e.get("owned") else "미보유"
+            mark = f"owned ✅ {e.get('owned_id','')}" if e.get("owned") else "missing"
             L.append(f"### {i}. {e.get('title','')} ({e.get('year','')})")
             who = e.get("authors") or e.get("author", "")
             src = " · ".join(x for x in (who, e.get("journal", ""), doi_link(e.get("doi", ""))) if x)
             L.append(f"{src} · [{mark}]")
             if e.get("oa_file"):
-                L.append(f"OA 수신: `{e['oa_file']}` · 전문 텍스트: `{e.get('oa_text') or '(추출 실패)'}`")
+                L.append(f"OA fetched: `{e['oa_file']}` · full text: `{e.get('oa_text') or '(extraction failed)'}`")
             elif e.get("oa_text"):
-                L.append(f"OA 전문 텍스트: `{e['oa_text']}`" + (f" · {e['oa_note']}" if e.get("oa_note") else ""))
+                L.append(f"OA full text: `{e['oa_text']}`" + (f" · {e['oa_note']}" if e.get("oa_note") else ""))
             elif e.get("oa_note"):
                 L.append(f"OA: {e['oa_note']}")
             L.append("")
-            L.append((e.get("abstract") or "").strip() or "(초록 없음)")
+            L.append((e.get("abstract") or "").strip() or "(no abstract)")
             if e.get("keywords"):
                 L.append("")
-                L.append("저자 키워드: " + e["keywords"])
+                L.append("Author keywords: " + e["keywords"])
             L.append("")
     return "\n".join(L) + "\n"
