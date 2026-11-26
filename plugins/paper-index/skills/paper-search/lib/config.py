@@ -2,6 +2,7 @@
 """Loading the config — library path, index path and preset, managed in one place."""
 import json, os, sys
 
+from . import textio
 from .legacy import LEGACY_OA_STAGING   # default of 0.10 and earlier — used when the config has no oa_staging and only this folder exists
 
 DEFAULT = {
@@ -61,14 +62,13 @@ def load(path=None, start=None):
             if (os.path.isdir(c) if want_dir else os.path.exists(c)):
                 return c
         # No candidate exists — the agent shell's mount path changes every session,
-        # so look for a folder of the same name under the mount points.
-        import glob
+        # so look for a folder of the same name under the mount points (the name may be stored in either normalization).
         for c in out:
             bname = os.path.basename(c.rstrip("/\\").replace("\\", "/"))
             if not bname:
                 continue
             for pat in (f"/sessions/*/mnt/{bname}", f"/mnt/{bname}", f"/workspace/{bname}"):
-                hit = sorted(glob.glob(pat))
+                hit = textio.glob(pat)
                 if hit:
                     return hit[0]
         return out[0] if out else ""

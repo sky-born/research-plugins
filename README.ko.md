@@ -187,10 +187,13 @@ research-plugins/
 │   └── marketplace.json             Codex 용 등록 파일 (생성물)
 ├── bootstrap/
 │   └── bootstrap.py                 두 앱의 등록 · 설치 · 갱신 · 상태 (install · update · status)
+├── shared/
+│   └── textio.py                    플러그인에 복사해 쓰는 한 벌의 정의 (이름은 NFC · 한글 범위)
 ├── scripts/
 │   ├── release.py                   검사 · 세션 시험 · 버전 올림 · 배포 (check · try · bump · publish)
 │   ├── cli_common.py                위 두 스크립트가 함께 쓰는 도우미
 │   ├── sync_codex_manifests.py      plugin.json 에서 나오는 생성물 만들기 · 어긋남 검사
+│   ├── sync_shared.py               shared/ 모듈을 플러그인에 복사 · 어긋남 검사
 │   ├── validate_shared_plugins.py   두 앱의 공통 배포 구성 검증
 │   ├── tool_hashes.py               관리 파일 해시 목록 생성
 │   ├── check_public.py              올릴 내용에서 개인 정보를 찾음
@@ -306,7 +309,7 @@ python scripts/release.py publish -m "paper-index v0.10.0: short summary"
 
 1. 기준선의 원격을 `git fetch` 하고 기준선 `origin/main` 확인, 파일 이름이 모두 ASCII 인지 확인 — 아니면 **중단**
 2. 파일 · 경로 · 올릴 커밋 · 다음 커밋의 작성자 정보에서 개인 정보를 찾음 (`check_public.py`) — 걸리면 **중단**. 개인 금지어는 저장소 밖 목록에서 읽습니다(`--deny-list` · `RESEARCH_PLUGINS_DENYLIST` · 클론의 `git config research-plugins.denylist <file>`). 목록이 없으면 일반 패턴만 보고 경고합니다
-3. 두 앱의 공통 배포 구성과 생성물이 원본과 같은지 검증 (`validate_shared_plugins.py`), 관리 파일 해시 목록이 최신인지 확인 (`tool_hashes.py --check`). 100줄이 넘는 스킬 참조 문서는 머리 목차가 머리글과 맞아야 함. 한국어는 데이터로만 — Markdown 본문(`README.<언어>.md` 번역본 제외) · 파이썬 주석 · 이름 · 설명문에서 코드 표기 밖이면 **중단**하고, 플러그인 · 스크립트 코드의 한국어 문자열은 옛 표기 표(`LEGACY*`)나 `가-힣` 문자 범위에만 둘 수 있음
+3. 두 앱의 공통 배포 구성과 생성물이 원본과 같은지 검증 (`validate_shared_plugins.py`), 관리 파일 해시 목록이 최신인지 확인 (`tool_hashes.py --check`). 100줄이 넘는 스킬 참조 문서는 머리 목차가 머리글과 맞아야 함. 한국어는 데이터로만 — Markdown 본문(`README.<언어>.md` 번역본 제외) · 파이썬 주석 · 이름 · 설명문에서 코드 표기 밖이면 **중단**하고, 플러그인 · 스크립트 코드의 한국어 문자열은 옛 표기 표(`LEGACY*`)나 `가-힣` 문자 범위에만 둘 수 있음. `shared/` 모듈의 사본이 원본과 같아야 하고(`sync_shared.py --check`), 텍스트 경계 규칙을 지켜야 함 — 인코딩 명시, 이름과 한글 범위는 설치 단위의 텍스트 모듈을 거침([`CLAUDE.md`](CLAUDE.md) §5)
 4. `claude plugin validate` 로 마켓플레이스 · 플러그인 매니페스트 검증 — 쓴 실행 파일과 판을 출력합니다
 5. 기준선과 비교해 **바뀐 플러그인**을 판정하고, 그 플러그인마다 `version` 이 올라갔는지 확인 — 아니면 **중단**
 6. 올린 버전마다 `CHANGELOG.md` 에 항목이 있고 플러그인 아닌 절이 없는지 확인 — 아니면 **중단**

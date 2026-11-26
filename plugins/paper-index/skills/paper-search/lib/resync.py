@@ -9,15 +9,16 @@ Matching runs in two steps.
   2) Content comparison — for the rest, compare the start of the cached text. The decision rests on content, not the file name.
 """
 import os, re
-from . import extract
+from . import extract, textio
 
 
 def norm_key(rel, n=34):
+    rel = textio.nfc(rel)
     d = os.path.dirname(rel)
     b = os.path.splitext(os.path.basename(rel))[0]
     b = re.sub(r"_\d+$", "", b)
     b = re.sub(r"_supplement.*$", "#SUP", b)
-    b = re.sub(r"[^0-9a-z가-힣#]", "", b.lower())[:n]
+    b = re.sub(r"[^0-9a-z%s#]" % textio.HANGUL, "", b.lower())[:n]
     return d + "|" + b
 
 
@@ -46,19 +47,20 @@ def resync(rows, cfg, ft_dir, verbose=True):
         free = [x for x in cur if x not in used]
         newtext = {}
         for rel in free:
-            p = os.path.join(ft_dir, extract.txtname(rel))
+            p = extract.cache(ft_dir, rel)
             if not os.path.exists(p):
                 import subprocess
+                p = os.path.join(ft_dir, extract.txtname(rel))
                 try:
                     subprocess.run([cfg["pdftotext"], "-q",
-                                    os.path.join(cfg["library"], rel), p], timeout=60)
+                                    extract.source(cfg["library"], rel), p], timeout=60)
                 except Exception:
                     pass
             newtext[rel] = (open(p, encoding="utf-8", errors="ignore").read()[:1200]
                             if os.path.exists(p) else "")
         still = []
         for r in leftover:
-            p = os.path.join(ft_dir, r["txt"])
+            p = textio.resolve(ft_dir, r["txt"])
             old = open(p, encoding="utf-8", errors="ignore").read()[:1200] if os.path.exists(p) else ""
             hit = None
             if old.strip():

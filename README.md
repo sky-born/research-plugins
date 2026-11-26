@@ -187,10 +187,13 @@ research-plugins/
 │   └── marketplace.json             Registration file for Codex (generated)
 ├── bootstrap/
 │   └── bootstrap.py                 Register, install, update, status for both apps (install · update · status)
+├── shared/
+│   └── textio.py                    One definition copied into the plugins (names in NFC · Hangul class)
 ├── scripts/
 │   ├── release.py                   Check, try out, version bump, release (check · try · bump · publish)
 │   ├── cli_common.py                Helpers shared by the two scripts above
 │   ├── sync_codex_manifests.py      Writes everything derived from plugin.json; reports drift
+│   ├── sync_shared.py               Copies the shared/ modules into the plugins; reports drift
 │   ├── validate_shared_plugins.py   Validates the layout both apps share
 │   ├── tool_hashes.py               Builds the hash list of managed files
 │   ├── check_public.py              Looks for personal information in what would be published
@@ -306,7 +309,7 @@ What `check` does, in order:
 
 1. Runs `git fetch` on the baseline's remote and confirms the baseline `origin/main`, and that every file name is ASCII — otherwise it **stops**
 2. Looks for personal information in the files, their paths, the commits to push and the identity of the next commit (`check_public.py`) — anything found **stops** it. Personal terms come from a deny list kept outside the repository (`--deny-list`, `RESEARCH_PLUGINS_DENYLIST`, or `git config research-plugins.denylist <file>` in the clone); without one only the generic patterns run, with a warning
-3. Validates the layout both apps share and that derived files match their source (`validate_shared_plugins.py`), and that the hash list of managed files is current (`tool_hashes.py --check`). A skill reference file over 100 lines must open with a table of contents that matches its headings, and Korean is allowed only as data — in Markdown prose (the `README.<lang>.md` translations aside), Python comments, names and docstrings it **stops** unless it sits in a code span, and in plugin and script code a Korean string must sit in a `LEGACY*` table of older spellings or be a `가-힣` character range
+3. Validates the layout both apps share and that derived files match their source (`validate_shared_plugins.py`), and that the hash list of managed files is current (`tool_hashes.py --check`). A skill reference file over 100 lines must open with a table of contents that matches its headings, and Korean is allowed only as data — in Markdown prose (the `README.<lang>.md` translations aside), Python comments, names and docstrings it **stops** unless it sits in a code span, and in plugin and script code a Korean string must sit in a `LEGACY*` table of older spellings or be a `가-힣` character range. The copies of the `shared/` modules must match it (`sync_shared.py --check`), and the text boundary must hold — explicit encodings, names and the Hangul class through each unit's text module ([`CLAUDE.md`](CLAUDE.md) §5)
 4. Validates the marketplace and plugin manifests with `claude plugin validate` — it prints which executable and version it used
 5. Compares with the baseline to find the **plugins that changed**, and confirms each one's `version` was raised — otherwise it **stops**
 6. Confirms `CHANGELOG.md` has an entry for each raised version and no section other than the plugins — otherwise it **stops**

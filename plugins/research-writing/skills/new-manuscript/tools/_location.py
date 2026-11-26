@@ -28,15 +28,15 @@ Every path in the cell is a location — including paths after words such as "se
 """
 import collections, fnmatch, os, re, unicodedata
 
-from _config import FIG_TAB_WORDS, FIG_TAB_NUM_ANY, LEGACY_RECORDS_FILE
+from _config import FIG_TAB_WORDS, FIG_TAB_NUM_ANY, LEGACY_RECORDS_FILE, HANGUL, nfc
 
 EXT = (r'(?:md|py|json|csv|pptx|png|docx|html|txt|xlsx|jpg|jpeg|ps1|pdf|tif|tiff|bat|sh|js|emd|svg|xml'
        r'|yaml|yml|toml|ini|cfg|zip|plugin)')
 CODE_EXT = ('.py', '.ps1', '.bat', '.sh', '.js')
 # path segment — a glob `{a,b}` is one piece; otherwise no commas (so they do not mix with list separators)
-SEG = r'(?:[A-Za-z0-9가-힣_.\-*~]|\{[^}]*\})+'
+SEG = r'(?:[A-Za-z0-9' + HANGUL + r'_.\-*~]|\{[^}]*\})+'
 BARE = (r'(?:\.\./)*(?:' + SEG + r'/)+(?:' + SEG + r')?'        # path with a folder · the folder itself
-        r'|(?:\.\./)*' + SEG + r'\.' + EXT + r'(?![A-Za-z0-9가-힣_])')  # file name with an extension
+        r'|(?:\.\./)*' + SEG + r'\.' + EXT + r'(?![A-Za-z0-9' + HANGUL + r'_])')  # file name with an extension
 LIST_CONN = ('·', ',', '/', 'and')     # chain of continued numbers and identifiers
 RANGE_CONN = ('–', '~')                # range (the bare number after it inherits the label)
 HYPHEN = '-'                           # a range only when both sides are complete markers
@@ -116,7 +116,7 @@ class Grammar(object):
         if re.search(r'[①-⑳¶§「」]', t) or (' ' in t and '/' not in t):
             return False
         if '/' in t:
-            return re.search(r'[A-Za-z가-힣]', t) is not None
+            return re.search(r'[A-Za-z' + HANGUL + r']', t) is not None
         return re.search(r'\.' + EXT + r'$', t) is not None
 
     @staticmethod
@@ -224,7 +224,7 @@ class Grammar(object):
     # ------------------------------------------------------------ main
     def parse(self, text):
         p = Parsed()
-        text = text or ''
+        text = nfc(text or '')                           # keys are NFC — a cell pasted from a macOS file name may arrive in NFD
         st = {'cur': None, 'ctx': '', 'prev': None,      # prev: 'file' 'ident' 'conn' 'sec' 'other'
               'last_kind': None, 'last_sec': None, 'pending_range': None, 'range_hyphen': False,
               'pending_list': False}

@@ -584,34 +584,50 @@ class UpdateToolsTests(Fixtures):
         tool = p / "tools" / "index_records.py"
         tool.write_text(tool.read_text(encoding="utf-8") + "\n# local edit\n", encoding="utf-8")
         (p / "tools" / "_config.py").write_bytes(self.old_content("plugins/research-writing/skills/new-manuscript/tools/_config.py"))
-        (p / "tools" / "_location.py").unlink()
+        (p / "tools" / "_location.py").unlink()            # a required module — the other tools import it
+        (p / "tools" / "grammar_baseline.py").unlink()     # an optional tool
         eol = p / "tools" / "check_numbers.py"
         eol.write_bytes(eol.read_bytes().replace(b"\n", b"\r\n"))
         r = run(PY + [str(UPDATE), str(p)], cwd=self.scratch, codes=(1,))
         self.assertIn("tools/index_records.py", r.stdout); self.assertIn("locally modified", r.stdout)
         self.assertIn("older canonical version", r.stdout)
         self.assertRegex(r.stdout, r"tools/_location\.py\s+missing")
+        self.assertRegex(r.stdout, r"required\s+tools/_location\.py")
+        self.assertRegex(r.stdout, r"tools/grammar_baseline\.py\s+missing")
+        self.assertNotRegex(r.stdout, r"required\s+tools/grammar_baseline\.py")
         self.assertIn("same · line endings differ", r.stdout)
-        # --apply alone: old versions and line endings are replaced; locally modified and missing files stay
+        # --apply alone: old versions and line endings are replaced and a missing required module is added;
+        # locally modified files and other missing files stay
         r = run(PY + [str(UPDATE), str(p), "--apply"], cwd=self.scratch, codes=(1,))
         self.assertIn("kept", r.stdout)
         self.assertEqual((p / "tools" / "_config.py").read_bytes(), (TOOLS / "_config.py").read_bytes())
         self.assertNotIn(b"\r\n", eol.read_bytes())
-        self.assertFalse((p / "tools" / "_location.py").exists())
+        self.assertEqual((p / "tools" / "_location.py").read_bytes(), (TOOLS / "_location.py").read_bytes())
+        self.assertFalse((p / "tools" / "grammar_baseline.py").exists())
         self.assertIn("# local edit", tool.read_text(encoding="utf-8"))
         # --force · --add
-        r = run(PY + [str(UPDATE), str(p), "--apply", "--force", "tools/index_records.py", "--add", "tools/_location.py"],
+        r = run(PY + [str(UPDATE), str(p), "--apply", "--force", "tools/index_records.py", "--add", "tools/grammar_baseline.py"],
                 cwd=self.scratch)
         self.assertIn("all same", r.stdout)
         backups = list((p / ".manuscript" / "tools_backup").rglob("index_records.py"))
         self.assertEqual(len(backups), 1)
         self.assertIn("# local edit", backups[0].read_text(encoding="utf-8"))
         self.assertEqual(tool.read_bytes(), (TOOLS / "index_records.py").read_bytes())
-        self.assertTrue((p / "tools" / "_location.py").is_file())
+        self.assertTrue((p / "tools" / "grammar_baseline.py").is_file())
         # the settings file is not written
         self.assertNotIn("record_index_exclude_written", (p / ".manuscript" / "project.json").read_text(encoding="utf-8"))
         r = run(PY + [str(UPDATE), "--scan", str(self.scratch), "--depth", "1"], cwd=self.scratch, codes=(0, 1))
         self.assertIn("update-sample", r.stdout)
+
+    def test_apply_adds_the_text_module_an_older_project_lacks(self):
+        # a project made before tools/_textio.py existed: its _config.py does not import it and the file is not there
+        p = self.journal("textio-sample")
+        (p / "tools" / "_textio.py").unlink()
+        (p / "tools" / "_config.py").write_bytes(self.old_content("plugins/research-writing/skills/new-manuscript/tools/_config.py"))
+        r = run(PY + [str(UPDATE), str(p), "--apply"], cwd=self.scratch)
+        self.assertIn("all same", r.stdout)
+        self.assertEqual((p / "tools" / "_textio.py").read_bytes(), (TOOLS / "_textio.py").read_bytes())
+        run(PY + [str(p / "tools" / "index_records.py")], cwd=p)        # the updated tools import it
 
     def test_hook_registration_ignores_status_messages(self):
         # statusMessage is display text: a project that still shows older wording is not a different registration

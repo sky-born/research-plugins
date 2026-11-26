@@ -45,7 +45,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
 from lib import (config, extract, meta, tagging, render, resync as resync_mod,  # noqa: E402
-                 searching, decode, wordsplit, scopus as scopus_mod, oafetch, legacy)
+                 searching, decode, wordsplit, scopus as scopus_mod, oafetch, legacy, textio)
 from lib.textnorm import norm_text  # noqa: E402
 
 
@@ -108,7 +108,7 @@ def _texts(paths, rows, limit=350):
     """Full text for the vocabulary and the tag draft — a copy with characters normalized (ligatures etc.)."""
     out = []
     for r in rows[:limit]:
-        p = os.path.join(paths["fulltext"], r["txt"])
+        p = textio.resolve(paths["fulltext"], r["txt"])
         if os.path.exists(p):
             out.append(norm_text(open(p, encoding="utf-8", errors="ignore").read()))
     return out
@@ -181,7 +181,7 @@ def cmd_reindex(args):
     for rel in cur:
         if rel in known:
             continue
-        tp = os.path.join(P["fulltext"], extract.txtname(rel))
+        tp = extract.cache(P["fulltext"], rel)
         if not os.path.exists(tp):
             extract.extract_missing(cfg, P["fulltext"], limit=None, verbose=False)
         body = extract.read_cache(P["fulltext"], rel)
@@ -239,7 +239,7 @@ def cmd_repair(args):
     fixed = failed = 0
     targets = []
     for r in rows:
-        p = os.path.join(P["fulltext"], r["txt"])
+        p = textio.resolve(P["fulltext"], r["txt"])
         if not os.path.exists(p):
             continue
         t = open(p, encoding="utf-8", errors="ignore").read()
@@ -247,7 +247,7 @@ def cmd_repair(args):
             targets.append((r, p, t))
     print(f"To restore: {len(targets)} papers")
     for r, p, t in targets:
-        new = decode.decode_pdf(os.path.join(cfg["library"], r["rel"]), cfg["pdftotext"])
+        new = decode.decode_pdf(extract.source(cfg["library"], r["rel"]), cfg["pdftotext"])
         if decode.density(new) > max(decode.density(t) * 3, 0.05):
             open(p, "w", encoding="utf-8").write(new)
             r["note"] = NOTE_BROKEN
@@ -334,7 +334,7 @@ def cmd_search(args):
 
 
 def _slug(s, n=48):
-    s = re.sub(r"[^0-9A-Za-z가-힣]+", "-", s).strip("-").lower()
+    s = re.sub(r"[^0-9A-Za-z%s]+" % textio.HANGUL, "-", textio.nfc(s)).strip("-").lower()
     return (s[:n] or "query")
 
 
@@ -360,7 +360,7 @@ def _archive_launchers(P, verbose=True):
     Only those whose result JSON already exists move to the archive folder (`_archive_dir`; nothing is deleted);
     those without a result stay.
     """
-    import glob, shutil
+    import shutil
     d = P["index_dir"]
     arc = _archive_dir(P)
     prefix = legacy.LEGACY_LAUNCHER_PREFIX
@@ -378,8 +378,8 @@ def _archive_launchers(P, verbose=True):
             if verbose:
                 print(f"  (move failed: {os.path.basename(src)} — {e})")
 
-    for bat in sorted(glob.glob(os.path.join(d, prefix + "*.bat"))):
-        tag = os.path.splitext(os.path.basename(bat))[0].replace(prefix, "", 1)
+    for bat in textio.glob(os.path.join(d, prefix + "*.bat")):
+        tag = os.path.splitext(textio.nfc(os.path.basename(bat)))[0].replace(prefix, "", 1)
         if not os.path.exists(os.path.join(_scopus_dir(P), tag + ".json")):
             continue                      # no result yet: leave it
         for f in (bat, os.path.splitext(bat)[0] + ".query.txt"):
@@ -387,7 +387,7 @@ def _archive_launchers(P, verbose=True):
                 move(f)
     # The script copy that old versions kept beside the .bat files moves only when no launcher is left.
     ps1 = os.path.join(d, "scopus_search.ps1")
-    if os.path.exists(ps1) and not glob.glob(os.path.join(d, prefix + "*.bat")):
+    if os.path.exists(ps1) and not textio.glob(os.path.join(d, prefix + "*.bat")):
         move(ps1)
     if moved and verbose:
         print(f"Moved {len(moved)} launcher files to {os.path.basename(arc)}/: " +
@@ -635,12 +635,12 @@ def cmd_doctor(args):
     import collections
     c = collections.Counter(r["rel"] for r in rows)
     print(f"Papers: {len(cur)} source / {len(rows)} indexed / "
-          f"{len([f for f in os.listdir(P['fulltext']) if f.endswith('.txt')]) if os.path.isdir(P['fulltext']) else 0} cached")
+          f"{len([k for k, _f in textio.listdir(P['fulltext']) if k.endswith('.txt')]) if os.path.isdir(P['fulltext']) else 0} cached")
     print("Paths missing (only in the index):", len(idx - cur))
     print("Not in the index (only in the source):", len(cur - idx))
     print("Duplicate mappings:", [k for k, v in c.items() if v > 1] or "none")
     print("Missing cache:", [r["id"] for r in rows
-                    if not os.path.exists(os.path.join(P["fulltext"], r["txt"]))] or "none")
+                    if not os.path.exists(textio.resolve(P["fulltext"], r["txt"]))] or "none")
     print("Full text under 500 characters:", [(r["id"], r["file"][:40]) for r in rows if r.get("chars", 0) < 500] or "none")
     print("Entries with a note:", sum(1 for r in rows if r.get("note")))
     if _library_too_small(cfg, len(cur), len(rows)):

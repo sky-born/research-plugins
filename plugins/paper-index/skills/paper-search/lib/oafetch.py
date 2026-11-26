@@ -53,6 +53,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import textio
+
 UA = "paper-index-tool/1.0 (open-access fetch)"
 OPENALEX = "https://api.openalex.org/works/doi:"
 MIN_PDF_BYTES = 20_000
@@ -159,8 +161,8 @@ def _rel(path, stg):
 
 
 def _key(rel):
-    """A path relative to the staging folder, made comparable — separators and case (Windows) aligned."""
-    return os.path.normcase(os.path.normpath(rel))
+    """A path relative to the staging folder, made comparable — Unicode form, separators and case (Windows) aligned."""
+    return os.path.normcase(os.path.normpath(textio.nfc(rel)))
 
 
 def _md5(path):
@@ -191,9 +193,9 @@ def _result_records(results_dir, log=print):
     out, bad = {}, []
     if not results_dir or not os.path.isdir(results_dir):
         return out
-    for fn in sorted(os.listdir(results_dir)):
+    for key, fn in textio.listdir(results_dir):
         p = os.path.join(results_dir, fn)
-        if not fn.lower().endswith(".json") or not os.path.isfile(p):
+        if not key.lower().endswith(".json") or not os.path.isfile(p):
             continue
         try:
             with open(p, "rb") as f:
@@ -277,7 +279,7 @@ class Staging:
         """PDFs in the staging folder that are not in the manifest — result JSON is read only when there are some."""
         mapped = {_key(r["file"]) for r in self.files.values() if self._rec_ok(r)}
         try:
-            names = os.listdir(self.stg)
+            names = [n for _k, n in textio.listdir(self.stg)]
         except OSError:
             return []
         return [n for n in names if n.lower().endswith(".pdf") and _key(n) not in mapped and self._ok(n)]
@@ -323,7 +325,7 @@ class Staging:
     def same_content(self, size, digest):
         """The name of a PDF with the same content (md5) already in the staging folder. Only files of the same size are read."""
         try:
-            names = sorted(os.listdir(self.stg))
+            names = [n for _k, n in textio.listdir(self.stg)]
         except OSError:
             return ""
         for n in names:
@@ -523,8 +525,8 @@ def prune_text(txt_dir, owned_dois):
     names = {text_name(d) for d in owned_dois}
     obs = os.path.join(txt_dir, "_obsolete")
     n = 0
-    for f in os.listdir(txt_dir):
-        if f.endswith(".txt") and f in names:
+    for key, f in textio.listdir(txt_dir):
+        if key.endswith(".txt") and key in names:
             os.makedirs(obs, exist_ok=True)
             try:
                 shutil.move(os.path.join(txt_dir, f), os.path.join(obs, f))

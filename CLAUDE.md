@@ -135,3 +135,18 @@ Only what to follow when editing this repository is written here.
 **A leftover upload (`My Uploads`) hides the CLI install of the same name** — while the upload is in `rpm`, the skill list
 stays on the old version, and once the upload folder is gone it switches to the CLI install. Delete the upload.
 Which session has what attached is answered by `cat "$APPDATA/Claude/local-agent-mode-sessions"/*/*/rpm/manifest.json`.
+
+---
+
+## 5. Text at the boundary
+
+**File and folder names are compared, stored and used as keys in NFC; a file found on disk is opened by the name the listing returned; a name a tool creates is written in NFC.**
+macOS and Drive mirrors on it return Korean names in NFD and open either spelling; Linux and NTFS keep the code points as given, so an NFD file does not open by its NFC name there.
+ASCII data looks the same in every form, so a test without Korean names cannot catch a slip.
+
+- **One definition** — `shared/textio.py` (NFC keys, listings with the name on disk, lookup by key, the Hangul class). Install units cannot import from one another,
+  so `python scripts/sync_shared.py` copies it byte for byte into each that needs it (paper-index `lib/textio.py`, research-writing `tools/_textio.py`).
+  Edit the canonical file and run the script — never edit a copy. `check` stops when a copy differs.
+- **`check` also stops** (`boundary_problems` in `scripts/release.py`) on a text-mode `open` · `read_text` · `write_text` in plugin code without an explicit encoding,
+  on a `가-힣` range in a unit that has a text module (use its `HANGUL`), and on a folder listing in paper-index outside its text module.
+- **Tests that need Korean or NFD names create them at run time** — file names in the repository stay ASCII.

@@ -23,7 +23,9 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
 _T = HERE.parent / 'plugins' / 'research-writing' / 'skills' / 'new-manuscript' / 'tools'
-TOOL_FILES = [_T / n for n in ('grammar_baseline.py', '_config.py', '_location.py', '_sync.py')]
+# the tool and the modules every tool imports — the `required` entries of managed_files.json
+_MANAGED = json.loads((_T.parent / 'managed_files.json').read_text(encoding='utf-8'))['files']
+TOOL_FILES = [_T / 'grammar_baseline.py'] + [_T.parent / item['src'] for item in _MANAGED if item.get('required')]
 PY = [sys.executable, '-X', 'utf8', '-B']
 BASELINE_REL = '.manuscript/grammar_baseline.jsonl'
 DEFAULT_CHAPTERS = ['ch%d.md' % i for i in (1, 2, 3, 4)]

@@ -199,9 +199,10 @@ Restore with `--restore <file> [--at "YYYY-MM-DD HH:MM" | --hash <8 chars>]` (th
 Merging (which rows of which version to keep) is a judgement, so it is not automated.
 
 **File-name normalization — macOS.** macOS (Google Drive mirror · HFS+) stores Korean names in NFD, so `os.listdir` results differ from the NFC strings in settings and text.
-Opening files works, but **string comparison and import go wrong** — Python's import compares against the folder listing as it is, so `from _location import …`
+Opening by either spelling works on macOS (Linux and NTFS keep the code points as given, so tools open a file by the name the listing returned),
+but **string comparison and import go wrong** — Python's import compares against the folder listing as it is, so `from _location import …`
 stops with `ModuleNotFoundError`. Therefore ① `_config` registers a finder that accepts modules with NFD names — **a tool that uses a module with a Korean name imports `_config`
-first** ② tools normalize to NFC with `_config.nfc` when they compare names, paths or lines or use them as keys (snapshot names · the set of shared files · hashes of written lines)
+first** ② tools normalize to NFC with `nfc` (defined once in `tools/_textio.py`, which `_config` passes on) when they compare names, paths or lines or use them as keys (snapshot names · the set of shared files · hashes of written lines)
 ③ the state folder name `<name slug>-<root path hash8>` (in one place, `_sync.project_id`) also hashes the root path after normalizing it to NFC — the hook receives the NFC path from standard input,
 and a tool run from a shell receives the file system's NFD path, so otherwise the folder splits in two and `--ack` does not reach the hook. A folder made under the old definition is, the first time it is met,
 moved to the new name or merged into the new folder (snapshots · written lines · IDs · confirmation records are combined; of the highest numbers seen, the larger is kept).

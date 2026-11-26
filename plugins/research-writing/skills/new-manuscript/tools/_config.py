@@ -16,12 +16,10 @@ The old location `.writing/project.json` is still read.
 
 import importlib.abc, importlib.util, io, json, os, re, sys, unicodedata
 
-
-def nfc(s):
-    """Unicode NFC normalization — apply it when file names, paths and lines are **compared or used as keys**.
-    macOS (Google Drive mirrors, HFS+) stores Korean names in NFD, so the names `os.listdir` returns differ from the NFC strings in settings and text.
-    **Opening** a file works either way (APFS and HFS+ ignore normalization) — only string comparison differs."""
-    return unicodedata.normalize('NFC', s) if isinstance(s, str) else s
+# nfc and the Hangul class have one definition, the text module beside this file (a copy of shared/textio.py in the plugin
+# repository). Apply nfc when file names, paths and lines are compared or used as keys — a macOS mirror returns Korean names in NFD.
+# The tools keep importing nfc from here.
+from _textio import HANGUL, nfc  # noqa: E402,F401
 
 
 class _NFCFinder(importlib.abc.MetaPathFinder):

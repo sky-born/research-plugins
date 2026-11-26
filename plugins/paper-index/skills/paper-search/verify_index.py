@@ -14,7 +14,7 @@ import sys
 
 # Keep running this read-only helper from creating files in the installed skill.
 sys.dont_write_bytecode = True
-from lib import config, extract
+from lib import config, extract, textio
 
 
 def inside(path, root):
@@ -47,7 +47,7 @@ def state(cfg):
             raise ValueError(f"Source and {key} must be separate: {library} / {paths[key]}")
     sources = {}
     for rel in extract.scan(str(library)):
-        source = (library / rel).resolve()
+        source = Path(extract.source(str(library), rel)).resolve()
         if not inside(source, library):
             raise ValueError(f"Source link escapes the selected library: {rel}")
         sources[rel] = digest(source)
@@ -64,7 +64,7 @@ def state(cfg):
         if not isinstance(rows, list):
             raise ValueError("papers_index.json must contain a list")
         index_count = len(rows)
-        relative_paths = [row.get("rel", "") for row in rows]
+        relative_paths = [textio.nfc(row.get("rel", "")) for row in rows]
         for rel, count in Counter(relative_paths).items():
             if count > 1:
                 issues.append(f"Duplicate source mapping ({count}): {rel}")
@@ -75,8 +75,8 @@ def state(cfg):
         cache_hashes = {}
         cache_owners = {}
         for row in rows:
-            rel, text_name = row.get("rel", ""), row.get("txt", "")
-            target = (paths["fulltext"] / text_name).resolve()
+            rel, text_name = textio.nfc(row.get("rel", "")), textio.nfc(row.get("txt", ""))
+            target = Path(textio.resolve(str(paths["fulltext"]), text_name)).resolve() if text_name else paths["fulltext"]
             if not text_name or not inside(target, paths["fulltext"]):
                 issues.append(f"Invalid cache path: {rel}")
                 continue

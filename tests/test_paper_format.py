@@ -9,11 +9,13 @@ import datetime
 import importlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 
 
@@ -349,6 +351,86 @@ class ScopusHistoryTests(CliCase):
         saved = json.loads((self.index / "_scopus" / "raw.json").read_text(encoding="utf-8"))
         self.assertEqual("(raw response)", saved["meta"]["query"])
         self.assertEqual("(raw response)", legacy.LEGACY_QUERY["(원본 응답)"])   # the label older versions wrote
+
+
+def nfd(s):
+    return unicodedata.normalize("NFD", s)
+
+
+# Stand-in extractor (see the repair test): called as `<python> -q <pdf> <out>` it runs the fixture "PDF", a script
+# that writes its text to <out>, or prints it when <out> is "-".
+STAND_IN = (b'import sys\nt = "The solder and the substrate form a stable interface after reflow. " * 40\n'
+            b'o = sys.argv[1] if len(sys.argv) > 1 else "-"\n'
+            b'print(t) if o == "-" else open(o, "w", encoding="utf-8").write(t)\n')
+
+
+class UnicodeNameTests(CliCase):
+    """A library whose Korean names are stored in NFD (a macOS Drive mirror) against an index written in NFC.
+    The names are made at run time; on Linux and NTFS an NFD file does not open by its NFC name."""
+    DIR, PDF = "2026", "가나다문헌_1.pdf"
+
+    def setUp(self):
+        super().setUp()
+        self.write_config(preset="solder-thesis", pdftotext=sys.executable)
+        rel = self.DIR + "/" + self.PDF
+        (self.library / self.DIR).mkdir()
+        (self.library / self.DIR / nfd(self.PDF)).write_bytes(STAND_IN)
+        (self.library / "plain.pdf").write_bytes(STAND_IN)
+        self.korean = self.row_for(rel)
+        self.write_index([self.korean, self.row_for("plain.pdf")])
+
+    def row_for(self, rel, **fields):
+        txt = rel[:-4].replace("/", "__") + ".txt"
+        body = "interfacial solder reliability after reflow. " * 20
+        (self.index / "_fulltext" / txt).write_text(body, encoding="utf-8")
+        r = dict(id="P000", rel=rel, folder=os.path.dirname(rel) or "(root)", file=os.path.basename(rel), year="2026",
+                 author="Kim", title="Solder joint study", title_src="pdf", doi="", journal="", chars=len(body),
+                 note="", txt=txt, tags=["Reflow · process"])
+        r.update(fields)
+        return r
+
+    def test_doctor_counts_the_same_file_once(self):
+        out = self.papertool("doctor")
+        self.assertIn("Paths missing (only in the index): 0", out)
+        self.assertIn("Not in the index (only in the source): 0", out)
+        self.assertIn("Missing cache: none", out)
+
+    def test_reindex_and_resync_add_nothing(self):
+        self.assertIn("Added 0 new papers", self.papertool("reindex"))
+        out = self.papertool("resync")
+        self.assertNotIn("removed", out)
+        self.assertNotIn("new files", out)
+        self.assertEqual({self.DIR + "/" + self.PDF, "plain.pdf"}, set(self.rows()))
+
+    def test_new_nfd_file_gets_one_entry_and_an_nfc_cache_name(self):
+        new = "새문헌.pdf"
+        (self.library / self.DIR / nfd(new)).write_bytes(STAND_IN)
+        self.assertIn("Added 1 new papers", self.papertool("reindex"))
+        self.assertIn(self.DIR + "/" + new, self.rows())
+        cache = self.DIR + "__" + new[:-4] + ".txt"
+        self.assertIn(cache, os.listdir(self.index / "_fulltext"))      # written under the NFC name
+        self.assertIn("Added 0 new papers", self.papertool("reindex"))
+
+    def test_repair_opens_the_nfd_source(self):
+        broken = dict(self.korean, note=NOTE_BROKEN)
+        (self.index / "_fulltext" / broken["txt"]).write_text("xq zv " * 50, encoding="utf-8")
+        self.write_index([broken, self.row_for("plain.pdf")])
+        self.assertIn("restored 1 / failed 0", self.papertool("repair"))
+
+    def test_verify_index_sees_one_mapping(self):
+        out = self.base / "snapshot.json"
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(SKILL / "verify_index.py"), "--config",
+                                 str(self.config), "snapshot", "--out", str(out)],
+                                cwd=self.base, text=True, encoding="utf-8", capture_output=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        issues = json.loads(out.read_text(encoding="utf-8"))["issues"]
+        self.assertEqual([], [i for i in issues if "source" in i.lower() or "cache" in i.lower()])
+
+    def test_keys_keep_hangul_from_nfd_names(self):
+        resync, render = lib_module("resync"), lib_module("render")
+        self.assertEqual(resync.norm_key(self.DIR + "/" + self.PDF), resync.norm_key(nfd(self.DIR + "/" + self.PDF)))
+        self.assertIn("가나다문헌", resync.norm_key(nfd(self.PDF)))
+        self.assertEqual(render._norm("가나 다라"), render._norm(nfd("가나 다라")))
 
 
 if __name__ == "__main__":

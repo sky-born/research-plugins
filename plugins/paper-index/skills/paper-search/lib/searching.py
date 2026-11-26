@@ -14,13 +14,22 @@ Full text and query terms both go through `textnorm.norm_text` before comparison
 """
 import json, os, re
 
+from . import textio
 from .textnorm import norm_text
+
+PATH_FIELDS = ("rel", "txt", "file", "folder")     # names from the file system — compared and stored in NFC
 
 
 def load_rows(paths):
+    """Index rows, with the path fields in NFC — an index written on a computer that returned NFD names reads the same."""
     if not os.path.exists(paths["json"]):
         return []
-    return json.load(open(paths["json"], encoding="utf-8"))
+    rows = json.load(open(paths["json"], encoding="utf-8"))
+    for r in rows:
+        for k in PATH_FIELDS:
+            if k in r:
+                r[k] = textio.nfc(r[k])
+    return rows
 
 
 def _flat(path):
@@ -83,7 +92,7 @@ def search(paths, terms, any_of=False, tag="", year="", snippets=3, context=120,
     scanned = 0
     stopped = False
     for r in rows:
-        p = os.path.join(paths["fulltext"], r["txt"])
+        p = textio.resolve(paths["fulltext"], r["txt"])
         if not os.path.exists(p):
             continue
         scanned += 1

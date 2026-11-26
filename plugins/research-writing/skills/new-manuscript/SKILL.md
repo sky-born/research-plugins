@@ -106,7 +106,7 @@ bring them up to date with `update_tools.py` in this folder.
 
 ```text
 python -X utf8 "<this skill folder>/update_tools.py" "<project>"            # report only — same · older canonical version · locally modified · missing · old name
-python -X utf8 "<this skill folder>/update_tools.py" "<project>" --apply    # replace older canonical versions; locally modified: --force <file>, missing: --add <file>
+python -X utf8 "<this skill folder>/update_tools.py" "<project>" --apply    # replace older canonical versions and add missing required modules; locally modified: --force <file>, other missing: --add <file>
 python -X utf8 "<this skill folder>/update_tools.py" --scan "<parent folder>"   # status table of all sibling projects
 ```
 

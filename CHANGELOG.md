@@ -5,6 +5,19 @@ User-facing changes to each plugin, newest first. Each released version gets a `
 
 ## research-writing
 
+### 0.14.1 — 2026-11-27
+
+- New managed tool `tools/_textio.py` — the one definition of `nfc` and the Hangul character class, shared with paper-index.
+  `_config.py` imports it, so the updated tools need it beside them
+- `update_tools.py --apply` adds a missing required module (`_textio.py` · `_config.py` · `_location.py` · `_sync.py`, the modules the other tools import)
+  without `--add`, in a project that has the tool set. Any other missing tool still needs `--add`
+- **Existing projects** — after updating the plugin, run `update_tools.py <project> --apply` once; it brings `_config.py` and `_textio.py` in together.
+  Copies that have not been updated keep working as they are
+- Location syntax: the text of a cell is read in NFC, and Hangul written in decomposed form (pasted from a macOS file name) counts as Hangul
+- The state-folder name of a project or computer whose name contains a stand-alone Hangul jamo (such as `ㄱ`) keeps it now instead of turning it into `-`,
+  so such a project starts a new state folder once. Names made of syllables, Latin letters and other characters keep the name they had
+- `references/environment.md`: scripts written during a session compare file names in NFC and open a file by the name the listing returned
+
 ### 0.14.0 — 2026-11-25
 
 - The format the tools write into a project is English — block markers (`<!-- location-table -->` · `<!-- now -->` · `<!-- archived-list:A -->` …),
@@ -79,6 +92,16 @@ User-facing changes to each plugin, newest first. Each released version gets a `
 - `plugin.json` has the keyword `scaffold`, which only the marketplace entry had
 
 ## paper-index
+
+### 0.12.1 — 2026-11-27
+
+- File names with Korean or accented letters, which macOS and Google Drive mirrors on it return in decomposed form (NFD), are the same papers as in an
+  index written elsewhere — `doctor`, `index`, `reindex`, `resync`, `repair`, `search` and `verify_index.py` compare library and cache names in NFC and
+  open each file by its name on disk. Until this version a Mac counted every such PDF as both missing and new, so `resync` or `reindex` there would
+  have added them again
+- Full-text cache names are made from the NFC name, so every computer writes and finds the same `_fulltext/*.txt`
+- Name matching in `resync` and duplicate-title grouping keep the Hangul of decomposed names
+- The path fields of `papers_index.json` (`rel` · `txt` · `file` · `folder`) are read in NFC and written back that way
 
 ### 0.12.0 — 2026-11-25
 

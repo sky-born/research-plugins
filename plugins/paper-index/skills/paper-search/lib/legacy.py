@@ -23,6 +23,8 @@ Kept as written in Scopus result files under `_scopus/`; no code compares them, 
 """
 import collections, re
 
+from . import textio
+
 LEGACY_TAGS = {
     "기타(미분류)": "untagged",                          # "other (unclassified)"
 }
@@ -77,7 +79,7 @@ LEGACY_QUERY = {
     "(원본 응답)": "(raw response)",                      # "(original response)": query of a raw Scopus response
 }
 
-HANGUL = re.compile("[가-힣]")
+HANGUL = re.compile("[%s]" % textio.HANGUL)
 
 
 def has_encoding_word(note):

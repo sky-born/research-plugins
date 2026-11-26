@@ -17,9 +17,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "plugins" / "paper-index" / "skills" / "paper-search"
-_spec = importlib.util.spec_from_file_location("paper_index_oafetch", SKILL / "lib" / "oafetch.py")
-oafetch = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(oafetch)
 
 
 def lib_module(name):
@@ -30,6 +27,9 @@ def lib_module(name):
         sys.modules["paper_index_lib"] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules["paper_index_lib"])
     return importlib.import_module("paper_index_lib." + name)
+
+
+oafetch = lib_module("oafetch")      # a package module — it imports lib.textio
 
 # argv: <skill dir> <spec json> <papertool args...>
 # spec: oa = DOIs OpenAlex knows as OA with a direct PDF · pdftotext = whether extraction works

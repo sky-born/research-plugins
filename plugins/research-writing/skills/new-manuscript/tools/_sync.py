@@ -57,7 +57,7 @@ import time
 import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _config import (load as _load_cfg, CONFIG_REL, CONFIG_REL_OLD, DEFAULTS, nfc,                  # noqa: E402  — nfc: names, paths and lines are compared in NFC
+from _config import (load as _load_cfg, CONFIG_REL, CONFIG_REL_OLD, DEFAULTS, nfc, HANGUL,          # noqa: E402  — nfc: names, paths and lines are compared in NFC
                      TABLE_ROW_RE_M, table_problems, describe_table_problem,              # table row grammar lives in _config.py only (same as the tidy tool and the hook)
                      list_block_ids, id_key,                                              # ID positions of the list and ID order: same definitions as the tidy tool
                      allocation_scope, id_stem,                                           # scope of tool-assigned numbers — same definition as new_pending.py
@@ -95,7 +95,7 @@ def norm_sha(data):
 
 
 def _slug(s):
-    s = re.sub(r'[^0-9A-Za-z가-힣_-]+', '-', nfc(s)).strip('-')
+    s = re.sub(r'[^0-9A-Za-z' + HANGUL + r'_-]+', '-', nfc(s)).strip('-')
     return s[:24] or 'project'
 
 
@@ -110,7 +110,7 @@ def computer_id():
             name = ''
     if not name:
         name = os.environ.get('COMPUTERNAME') or socket.gethostname() or 'unknown'
-    return re.sub(r'[^0-9A-Za-z가-힣-]+', '-', nfc(name)).strip('-')[:32] or 'unknown'
+    return re.sub(r'[^0-9A-Za-z' + HANGUL + r'-]+', '-', nfc(name)).strip('-')[:32] or 'unknown'
 
 
 def state_home():

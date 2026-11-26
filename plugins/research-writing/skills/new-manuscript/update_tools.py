@@ -8,7 +8,7 @@ Usage  (`<py>` is this computer's Python 3 — `python` on Windows, `python3` on
     <py> -X utf8 update_tools.py <project>                       verdicts only (default, = --check)
     <py> -X utf8 update_tools.py <project> --apply               replaces canonical versions that differ
     <py> -X utf8 update_tools.py <project> --apply --force tools/index_records.py   also replaces a locally edited file (after a backup)
-    <py> -X utf8 update_tools.py <project> --apply --add tools/_location.py         adds a missing file
+    <py> -X utf8 update_tools.py <project> --apply --add tools/grammar_baseline.py  adds a missing file
     <py> -X utf8 update_tools.py --scan <folder> [--depth N]        status table of the projects below
 
 Verdicts — one per file. Hashes are taken of the content with line endings normalized to LF (so that line-ending differences on macOS or in sync
@@ -16,7 +16,9 @@ copies are not mistaken for local edits).
     same                        same as the canonical copy (if only line endings differ: "same · line endings differ" — --apply aligns it to the canonical bytes)
     older canonical version vX  a version found in the canonical history (--apply replaces it)
     locally modified            not in the canonical history (only with --force <dst>; the original goes to .manuscript/tools_backup/<date>/ first)
-    missing                     not in the project (only with --add <dst> — the tool set is not installed into projects that do not use it)
+    missing                     not in the project — a required module (`required` in managed_files.json: the modules the tools import) is added
+                                by --apply when the project has the tool set; any other file only with --add <dst> (the tool set is not installed
+                                into projects that do not use it)
     old name                    present only under its 0.12-or-earlier name (`LEGACY_TOOL_NAMES` in `tools/_config.py`) — a canonical version is moved to the new name by --apply;
                                 a locally modified copy only with --force <dst> (after a backup)
 
@@ -235,6 +237,16 @@ def backup(project, rel, path):
     raise SystemExit('Could not find a free backup name: %s' % folder)
 
 
+def required_missing(manifest, rows, tools_dir):
+    """dsts of required modules missing from a project that has the tool set — the other tools import them, so --apply adds them without --add.
+    A project without the tool set (hook only) gets nothing."""
+    tool_dsts = {item['dst'].replace('{tools_dir}', tools_dir) for item in manifest['files'] if item['src'].startswith('tools/')}
+    if not any(v != 'missing' for d, v, *_ in rows if d in tool_dsts):
+        return []
+    required = {item['dst'].replace('{tools_dir}', tools_dir) for item in manifest['files'] if item.get('required')}
+    return [d for d, v, *_ in rows if v == 'missing' and d in required]
+
+
 def apply(project, rows, force, add):
     """An old-name copy is deleted after the canonical copy is written under the new name — an old copy that is not a canonical version (locally modified) only after a backup."""
     changed, left = [], []
@@ -379,6 +391,9 @@ def main(argv=None):
     force = [x.replace('\\', '/') for x in a.force]
     add = [x.replace('\\', '/') for x in a.add]
     print_report(project, rows, config_report(project), hook_report(project, manifest))
+    auto = required_missing(manifest, rows, project_names(project)[0])
+    for dst in auto:
+        print('  required  %s — a module the other tools import; --apply adds it' % dst)
     pins = project_names(project)[1]
     if pins:
         print('  old names ' + _config.legacy_message(pins).replace('\n', '\n            '))
@@ -396,7 +411,7 @@ def main(argv=None):
     if not ok:
         return 1
     print('Applying')
-    apply(project, rows, force, add)
+    apply(project, rows, force, add + auto)
     rows2 = classify(project, manifest, hist)
     bad = [(d, v) for d, v, _n, _s, _p, old in rows2 if v != 'same' or old]
     print('after     ' + ('all same' if not bad else 'differences left — ' + ', '.join('%s(%s)' % x for x in bad)))

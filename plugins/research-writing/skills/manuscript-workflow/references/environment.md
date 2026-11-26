@@ -93,6 +93,10 @@ First see whether it can be moved to number 1 (discovery).
 - **If code that modifies a file contains a backslash, do not pass it as a command string** — create a script file with Write and run that file.
   The Bash tool of Claude Code reduces `\\` in a command string to `\` once. This holds inside a quoted heredoc (`<<'PY'`), `-c` and `printf` too,
   so `'\\n'` becomes a real line break and splits a row of a tracker table into two lines. A short command with no backslash may be used as it is. For handling a split row, see `tracker-workflow.md` "Table row format — one item per line".
+- **Compare file names in NFC, open them by the listed name.** macOS, and Google Drive mirrors on it, return Korean names in NFD, while settings, indexes and
+  typed text hold NFC — a one-off script that lists a folder and compares names, or filters paths by a Korean string, silently misses them.
+  Normalize both sides with `unicodedata.normalize('NFC', …)` before comparing, and open a file by the name the listing returned (Linux and NTFS do not open
+  an NFD file by its NFC name). A shell whose locale is C (no `LANG`) prints Korean as `??` from tools other than Python — read such output through Python with `-X utf8`.
 
 ## Finding source files
 

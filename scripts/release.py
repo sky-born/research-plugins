@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cli_common import (REPO_ROOT, Stop, claude_version, find_claude, git, git_ok, info, lines,  # noqa: E402
                         marketplace, ok, plugin_version, read_json, run, show, step, utf8_console, warn)
 from sync_codex_manifests import SEMVER, synchronize  # noqa: E402
+from sync_shared import synchronize as stale_shared_copies  # noqa: E402
 from validate_shared_plugins import validate  # noqa: E402
 
 
@@ -335,6 +336,58 @@ def hangul_problems(root: Path) -> tuple[list[str], int]:
     return problems, data
 
 
+# Install units whose code reads names from the file system: (folders and files of the unit, its copy of shared/textio.py,
+# whether its folder listings must go through that copy). The citation-check template is a unit of its own that compares
+# no file names, so it is not listed.
+TEXT_UNITS = (
+    (("plugins/paper-index/skills/paper-search/papertool.py", "plugins/paper-index/skills/paper-search/verify_index.py",
+      "plugins/paper-index/skills/paper-search/lib/"), "plugins/paper-index/skills/paper-search/lib/textio.py", True),
+    (("plugins/research-writing/skills/new-manuscript/",), "plugins/research-writing/skills/new-manuscript/tools/_textio.py", False),
+)
+LISTING_CALLS = {"os.walk", "os.listdir", "os.scandir", "glob.glob", "glob.iglob"}
+LISTING_METHODS = {"iterdir", "rglob"}
+HANGUL_CLASS = re.compile(r"\[[^\]]*[가-힣]-[가-힣][^\]]*\]")      # a regex character class with a Hangul range
+
+
+def _call_name(func: ast.expr) -> str:
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        base = _call_name(func.value)
+        return f"{base}.{func.attr}" if base else f".{func.attr}"
+    return ""
+
+
+def _text_mode(call: ast.Call) -> bool:
+    mode = call.args[1] if len(call.args) > 1 else next((k.value for k in call.keywords if k.arg == "mode"), None)
+    return not (isinstance(mode, ast.Constant) and isinstance(mode.value, str) and "b" in mode.value)
+
+
+def boundary_problems(root: Path) -> list[str]:
+    """Text at the boundary (`CLAUDE.md`). In every plugin file a text-mode `open`, `read_text` or `write_text` names its encoding.
+    In an install unit of TEXT_UNITS the Hangul class comes from the unit's text module (no `가-힣` range), and where the unit
+    says so, folder listings go through that module too — it returns NFC keys beside the names on disk."""
+    problems = []
+    for rel in git(root, "ls-files", "plugins").splitlines():
+        if not rel.endswith(".py"):
+            continue
+        unit = next((u for u in TEXT_UNITS if any(rel == p or rel.startswith(p) for p in u[0]) and rel != u[1]), None)
+        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        tables = legacy_literals(tree)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = _call_name(node.func)
+                if (name in ("open", "io.open", "codecs.open") and _text_mode(node)
+                        or name.endswith((".read_text", ".write_text"))) and not any(k.arg == "encoding" for k in node.keywords):
+                    problems.append(f"{rel}:{node.lineno}: text file opened without an explicit encoding")
+                elif unit and unit[2] and (name in LISTING_CALLS or name.split(".")[-1] in LISTING_METHODS):
+                    problems.append(f"{rel}:{node.lineno}: folder listing outside the text module — use {Path(unit[1]).stem}")
+            elif (unit and isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in tables
+                  and HANGUL_CLASS.search(node.value)):
+                problems.append(f"{rel}:{node.lineno}: Hangul range — use {Path(unit[1]).stem}.HANGUL")
+    return problems
+
+
 def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
     root: Path = args.root.resolve()
     baseline: str = args.baseline
@@ -391,6 +444,19 @@ def check(args: argparse.Namespace) -> tuple[list[Bump], list[str]]:
     if problems:
         raise Stop("skill reference tables of contents:\n" + lines(problems))
     ok(f"skill reference files over {TOC_MIN_LINES} lines open with a matching table of contents")
+    if (root / "shared").is_dir():
+        try:
+            stale = stale_shared_copies(root, check=True)
+        except OSError as error:
+            raise Stop(f"shared module copies cannot be compared: {error}")
+        if stale:
+            raise Stop("shared module copies differ from shared/:\n" + lines(stale)
+                       + "\n          regenerate with: python scripts/sync_shared.py")
+        ok("shared module copies match shared/")
+    problems = boundary_problems(root)
+    if problems:
+        raise Stop("text boundary (see \"Text at the boundary\" in CLAUDE.md):\n" + lines(problems))
+    ok("text files name their encoding; names and the Hangul class go through each unit's text module")
     problems, data = hangul_problems(root)
     if problems:
         raise Stop("Korean outside data (put data in a code span, write prose in English):\n" + lines(problems))

@@ -431,6 +431,44 @@ class KoreanOnlyAsData(unittest.TestCase):
         self.assertEqual([], release.hangul_problems(Path(__file__).resolve().parents[1])[0])
 
 
+class TextBoundary(unittest.TestCase):
+    """Names from the file system go through each unit's text module; text files name their encoding (boundary_problems)."""
+    PI = "plugins/paper-index/skills/paper-search/"
+    RW = "plugins/research-writing/skills/new-manuscript/"
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="release-boundary-test-")
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        git(self.root, "init", "-q")
+
+    def problems(self, files: dict) -> list[str]:
+        for rel, text in files.items():
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        git(self.root, "add", "-A")
+        return sorted(release.boundary_problems(self.root))
+
+    def test_listing_hangul_class_and_encoding(self):
+        listing = 'import glob, os\nfor n in os.listdir("."): pass\nglob.glob("*.pdf")\n'
+        found = self.problems({
+            self.PI + "lib/textio.py": 'import os\nHANGUL = "\\uac00-\\ud7a3"\nos.listdir(".")\n',   # the module itself lists
+            self.PI + "lib/extract.py": listing,
+            self.PI + "templates/citation-check/citecheck.py": listing + 'KEY = r"[^가-힣]"\n',   # a unit of its own
+            self.RW + "tools/_location.py": listing + 'SEG = r"[A-Za-z가-힣]+"\n',              # listings allowed here
+            self.RW + "tools/_config.py": 'LEGACY = {"format": "문법기준-묶음/1"}\nopen("a.md")\nopen("a.bin", "rb")\n'
+                                          'open("b.md", "w", encoding="utf-8")\n',
+        })
+        self.assertEqual([self.PI + "lib/extract.py:2: folder listing outside the text module — use textio",
+                          self.PI + "lib/extract.py:3: folder listing outside the text module — use textio",
+                          self.RW + "tools/_config.py:2: text file opened without an explicit encoding",
+                          self.RW + "tools/_location.py:4: Hangul range — use _textio.HANGUL"], found)
+
+    def test_this_repository_passes(self):
+        self.assertEqual([], release.boundary_problems(Path(__file__).resolve().parents[1]))
+
+
 class TryInSession(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory(prefix="release-try-test-")

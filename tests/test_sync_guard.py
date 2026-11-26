@@ -778,6 +778,16 @@ class StateFolderId(Fixture):
         self.assertEqual(_sync.legacy_project_ids("normalization sample", nfd_root), [legacy])
         self.assertEqual(_sync.legacy_project_ids("ascii", os.path.abspath(os.sep + "ascii-only")), [])
 
+    def test_name_slug_is_unchanged_for_syllables_and_ascii(self):
+        # Since the Hangul class comes from _textio it also holds stand-alone jamo. Names made of syllables, ASCII and other
+        # characters must keep the slug the earlier hand-written range gave, so their state folders stay where they are.
+        import re
+        import unicodedata
+        old = lambda s: re.sub(r'[^0-9A-Za-z가-힣_-]+', '-', unicodedata.normalize('NFC', s)).strip('-')[:24] or 'project'   # noqa: E731
+        for name in ("Manuscript", "Paper_draft (rev 1)", "한글 원고 2026", unicodedata.normalize("NFD", "가나다 문헌"), "—", "x·y"):
+            self.assertEqual(old(name), _sync._slug(name), name)
+        self.assertEqual("가나-ㄱ", _sync._slug("가나 ㄱ"))     # a stand-alone jamo now stays; it became "-" before
+
     def test_legacy_state_folder_is_renamed_or_merged(self):
         import shutil
         import unicodedata

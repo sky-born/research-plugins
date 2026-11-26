@@ -2,13 +2,15 @@
 """Writing the index files — papers_index.{json,md,csv}"""
 import collections, csv, datetime, difflib, json, os, re
 
+from . import textio
 from .textnorm import norm_text
 
 YEAR_UNKNOWN = "year unknown"
 
 
 def _norm(s):
-    return re.sub(r"[^a-z0-9가-힣]", "", norm_text(s).lower())   # unfold ligatures in index titles (Eﬀect) before comparing
+    # NFC first so Hangul stays in the key; unfold ligatures in index titles (Eﬀect) before comparing
+    return re.sub(r"[^a-z0-9%s]" % textio.HANGUL, "", norm_text(textio.nfc(s)).lower())
 
 
 def duplicate_groups(rows, ratio=0.93):

@@ -128,7 +128,8 @@ python <plugin>/skills/new-manuscript/init_manuscript.py <target folder> --name 
 The canonical copy of the tools is in `skills/new-manuscript/tools/`, and at initialization it is **copied**
 into each project's tools folder. The project then runs on its own and, if needed, can be modified only there.
 The single source for the list of managed files is `new-manuscript/managed_files.json`. **When the canonical copy changes, bring each project copy in line
-with `new-manuscript/update_tools.py`** — `--check` (judge) · `--apply` (replace — a locally modified copy needs `--force`, a missing file needs `--add`) ·
+with `new-manuscript/update_tools.py`** — `--check` (judge) · `--apply` (replace — a locally modified copy needs `--force`; a missing required module,
+one the other tools import — `required` in `managed_files.json` — is added, any other missing file needs `--add`) ·
 `--scan <folder>` (all sibling projects). The source is the plugin copy that holds the tool, and it recognizes old versions by the hashes in the canonical history (`tool_hashes.json`).
 For Korean-named copies from 0.12 or earlier (`LEGACY_TOOL_NAMES` in `tools/_config.py`), `--apply` moves them to the new names.
 A project whose tracker anchors still use the Korean spellings from before 0.14 is migrated in the same run (`new-manuscript/migrate_format.py`):
@@ -139,6 +140,7 @@ keys that rely on defaults are only reported, so show the needed values to the u
 The command lines are in the `new-manuscript` skill, "Bringing an existing project's tools up to date".
 
 ```
+tools/_textio.py            names in NFC · the Hangul class — one definition shared with paper-index (copied from the plugin repository) — use as is
 tools/_config.py            settings loader · shared definitions (figure markers · status vocabulary) — use as is
 tools/_location.py          "file · section" location syntax — used together by the index · location table · focus · new-record check
 tools/check_numbers.py      Full cross-check of Figure · Table · reference numbers — after finishing each chapter
