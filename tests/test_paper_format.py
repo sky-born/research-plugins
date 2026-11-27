@@ -294,9 +294,9 @@ class ReindexMigrationTests(CliCase):
 
 class RepairTests(CliCase):
     def test_repair_finds_encoding_notes_in_either_spelling(self):
-        # Stand-in extractor: `pdftotext` is this Python, and each fixture "PDF" is a Python script that prints
-        # well-formed English, so `repair` (which runs `<pdftotext> -q <file> -`) gets text it can restore.
-        self.write_config(pdftotext=sys.executable)
+        # Each fixture "PDF" is a Python script that prints well-formed English, which the stand-in extractor runs,
+        # so `repair` gets text it can restore.
+        self.write_config(pdftotext=stand_in_extractor(self.base))
         script = b'print("The results of the analysis show that the solder and the substrate form a stable interface. " * 40)\n'
         gibberish = "xq zv " * 50
         self.write_index([self.row(rel, cache=gibberish, pdf=script, note=note) for rel, note in
@@ -307,6 +307,7 @@ class RepairTests(CliCase):
         rows = self.rows()
         self.assertEqual([NOTE_BROKEN, NOTE_BROKEN, NOTE_FAIL, OLD_FAIL],
                          [rows[r]["note"] for r in ("r1.pdf", "r2.pdf", "r3.pdf", "r4.pdf")])
+        self.assertNotIn("-enc", (self.base / "calls.log").read_text(encoding="utf-8"))   # restoration reads the raw output
 
 
 class ScopusHistoryTests(CliCase):
@@ -357,11 +358,162 @@ def nfd(s):
     return unicodedata.normalize("NFD", s)
 
 
-# Stand-in extractor (see the repair test): called as `<python> -q <pdf> <out>` it runs the fixture "PDF", a script
-# that writes its text to <out>, or prints it when <out> is "-".
+# A fixture "PDF" for the stand-in extractor: a script that writes TEXT to the output path, or prints it for "-".
+TEXT = "The solder and the substrate form a stable interface after reflow. " * 40
 STAND_IN = (b'import sys\nt = "The solder and the substrate form a stable interface after reflow. " * 40\n'
             b'o = sys.argv[1] if len(sys.argv) > 1 else "-"\n'
             b'print(t) if o == "-" else open(o, "w", encoding="utf-8").write(t)\n')
+
+# The stand-in pdftotext: it logs its arguments to calls.log beside it, skips the options (-q alone, the others with
+# one value) and runs the fixture "PDF" with the output path as its argument.
+STAND_IN_TOOL = r'''import os, runpy, sys
+args, files, i = sys.argv[1:], [], 0
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "calls.log"), "a", encoding="utf-8") as log:
+    log.write(" ".join(args) + "\n")
+while i < len(args):
+    if args[i] == "-q":
+        i += 1
+    elif args[i].startswith("-") and args[i] != "-":
+        i += 2
+    else:
+        files.append(args[i])
+        i += 1
+sys.argv = files
+runpy.run_path(files[0], run_name="__main__")
+'''
+
+
+def stand_in_extractor(folder):
+    """Write the stand-in pdftotext into `folder` and return the path to put in the config — a .cmd file on Windows,
+    a shell script elsewhere, either one calling this Python."""
+    folder = Path(folder)
+    (folder / "stand_in_pdftotext.py").write_text(STAND_IN_TOOL, encoding="utf-8")
+    if os.name == "nt":
+        exe = folder / "pdftotext.cmd"
+        exe.write_text(f'@"{sys.executable}" "%~dp0stand_in_pdftotext.py" %*\r\n', encoding="utf-8")
+    else:
+        exe = folder / "pdftotext"
+        exe.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/stand_in_pdftotext.py" "$@"\n',
+                       encoding="utf-8")
+        exe.chmod(0o755)
+    return str(exe)
+
+
+class RenameCacheTests(CliCase):
+    """A renamed file keeps its entry's full-text cache; `reindex` fills caches that are missing."""
+
+    def setUp(self):
+        super().setUp()
+        self.write_config(preset="solder-thesis", pdftotext=stand_in_extractor(self.base))
+
+    def cache(self, name):
+        return (self.index / "_fulltext" / name).read_text(encoding="utf-8")
+
+    def rename(self, old, new):
+        os.replace(self.library / old, self.library / new)
+
+    def titles(self):
+        return {rel: r["title"] for rel, r in self.rows().items()}
+
+    def test_renamed_files_keep_their_caches(self):
+        own = "text the extractor would never write, checked by hand " * 30
+        restored = "a restored text " * 60
+        self.write_index([self.row("Kim-Solder joint study_1.pdf", cache=own, pdf=STAND_IN),
+                          self.row("Lee-Interface study_1.pdf", cache=restored, pdf=STAND_IN, note=NOTE_BROKEN)])
+        self.rename("Kim-Solder joint study_1.pdf", "Kim-Solder joint study.pdf")
+        self.rename("Lee-Interface study_1.pdf", "Lee-Interface study_2.pdf")
+        out = self.papertool("resync")
+        self.assertIn("kept the full-text cache of 2 renamed papers", out)
+        self.assertEqual(own, self.cache("Kim-Solder joint study.txt"))
+        self.assertEqual(restored, self.cache("Lee-Interface study_2.txt"))
+        self.assertEqual(NOTE_BROKEN, self.rows()["Lee-Interface study_2.pdf"]["note"])
+        self.assertIn("Missing cache: none", self.papertool("doctor"))
+        backups = sorted(os.listdir(self.index / "_backup"))
+        self.assertEqual(1, len(backups))
+        again = self.papertool("resync")                                  # nothing left to do
+        self.assertNotIn("kept the full-text", again)
+        self.assertIn("moved 0 old cache files", again)
+        self.assertEqual(backups, sorted(os.listdir(self.index / "_backup")))
+        self.assertIn("Added 0 new papers", self.papertool("reindex"))
+        self.assertEqual(own, self.cache("Kim-Solder joint study.txt"))
+
+    def test_case_only_rename(self):
+        own = "the entry's own cache " * 60
+        self.write_index([self.row("solder study.pdf", cache=own, pdf=STAND_IN)])
+        self.rename("solder study.pdf", "Solder Study.pdf")
+        self.assertIn("kept the full-text cache of 1 renamed papers", self.papertool("resync"))
+        names = os.listdir(self.index / "_fulltext")
+        self.assertIn("Solder Study.txt", names)
+        self.assertNotIn("solder study.txt", names)
+        self.assertEqual(own, self.cache("Solder Study.txt"))
+        self.assertEqual([], os.listdir(self.index / "_fulltext" / "_obsolete"))
+
+    def test_entry_cache_wins_over_a_fresh_extraction(self):
+        own = TEXT + "\na tail added by hand"            # starts like the stand-in's text, so the content step matches
+        self.write_index([self.row("Alpha.pdf", cache=own, pdf=STAND_IN)])
+        self.rename("Alpha.pdf", "Completely different name.pdf")
+        self.assertIn("kept the full-text cache of 1 renamed papers", self.papertool("resync"))
+        self.assertEqual(own, self.cache("Completely different name.txt"))
+        self.assertEqual(TEXT, (self.index / "_fulltext" / "_obsolete" / "Completely different name.txt")
+                         .read_text(encoding="utf-8"))
+
+    def test_entry_whose_file_is_gone_does_not_take_another_file(self):
+        gone = self.row("Same long title of a solder paper_1.pdf", title="The deleted copy")
+        kept = self.row("Same long title of a solder paper_2.pdf", title="The paper still there")
+        self.write_index([gone, kept])
+        os.remove(self.library / gone["rel"])
+        out = self.papertool("resync")
+        self.assertIn("removed, gone from the source: 1 papers", out)
+        self.assertNotIn("merged", out)
+        self.assertEqual({kept["rel"]: "The paper still there"}, self.titles())
+        self.assertEqual(1, len(os.listdir(self.index / "_backup")))       # the dropped entry can be recovered
+
+    def test_supplement_does_not_pair_with_its_paper(self):
+        stem = "Doe-An invented title long enough to pass the cut"
+        resync = lib_module("resync")
+        self.assertNotEqual(resync.norm_key(stem + " paper.pdf"), resync.norm_key(stem + "_supplement_1.pdf"))
+        paper = self.row(stem + " paper.pdf", title="The paper")
+        supp = self.row(stem + "_supplement_2.pdf", title="The supplement")
+        self.write_index([paper, supp])
+        os.remove(self.library / paper["rel"])
+        self.rename(supp["rel"], stem + "_supplement_1.pdf")
+        self.papertool("resync")
+        self.assertEqual({stem + "_supplement_1.pdf": "The supplement"}, self.titles())
+
+    def test_match_inside_a_shared_name_key_is_reported(self):
+        renamed = self.row("Roe-An invented study of finishes_1.pdf", title="Renamed")
+        other = self.row("Roe-An invented study of finishes.pdf", title="Another version")
+        self.write_index([renamed, other])
+        self.rename(renamed["rel"], "Roe-An invented study of finishes_2.pdf")
+        out = self.papertool("resync")
+        self.assertIn("check against the PDF", out)
+        self.assertEqual({"Roe-An invented study of finishes_2.pdf": "Renamed", other["rel"]: "Another version"}, self.titles())
+
+    def test_reindex_fills_a_missing_cache_of_an_existing_entry(self):
+        self.write_index([self.row("plain.pdf", pdf=STAND_IN), self.row("restored.pdf", pdf=STAND_IN, note=NOTE_BROKEN)])
+        for name in ("plain.txt", "restored.txt"):
+            os.remove(self.index / "_fulltext" / name)
+        self.assertIn("Some full-text caches are missing. Run `reindex`", self.papertool("doctor"))
+        out = self.papertool("reindex")
+        self.assertIn("Added 0 new papers", out)
+        self.assertIn("extracted the missing full text of 2 existing entries", out)
+        self.assertIn("run `repair`", out)
+        self.assertEqual(TEXT, self.cache("plain.txt"))
+        self.assertIn("Missing cache: none", self.papertool("doctor"))
+        self.assertIn("-q -enc UTF-8 ", (self.base / "calls.log").read_text(encoding="utf-8"))
+
+    def test_failed_pdf_and_missing_extractor_are_told_apart(self):
+        self.write_index([self.row("plain.pdf", pdf=STAND_IN)])
+        (self.library / "broken.pdf").write_bytes(b"import sys\nsys.exit(3)\n")
+        out = self.papertool("reindex")
+        self.assertIn("1 PDFs could not be extracted", out)
+        self.assertIn("broken.pdf", out)
+        self.assertNotIn("pdftotext not found", out)
+        self.write_config(preset="solder-thesis", pdftotext=str(self.base / "no-such-extractor"))
+        (self.library / "new.pdf").write_bytes(STAND_IN)
+        out = self.papertool("reindex")
+        self.assertIn("pdftotext not found", out)
+        self.assertNotIn("could not be extracted", out)
 
 
 class UnicodeNameTests(CliCase):
@@ -371,7 +523,7 @@ class UnicodeNameTests(CliCase):
 
     def setUp(self):
         super().setUp()
-        self.write_config(preset="solder-thesis", pdftotext=sys.executable)
+        self.write_config(preset="solder-thesis", pdftotext=stand_in_extractor(self.base))
         rel = self.DIR + "/" + self.PDF
         (self.library / self.DIR).mkdir()
         (self.library / self.DIR / nfd(self.PDF)).write_bytes(STAND_IN)
@@ -410,6 +562,15 @@ class UnicodeNameTests(CliCase):
         cache = self.DIR + "__" + new[:-4] + ".txt"
         self.assertIn(cache, os.listdir(self.index / "_fulltext"))      # written under the NFC name
         self.assertIn("Added 0 new papers", self.papertool("reindex"))
+
+    def test_renamed_nfd_file_keeps_its_cache(self):
+        body = (self.index / "_fulltext" / self.korean["txt"]).read_text(encoding="utf-8")
+        os.replace(self.library / self.DIR / nfd(self.PDF), self.library / self.DIR / nfd("가나다문헌_2.pdf"))
+        self.assertIn("kept the full-text cache of 1 renamed papers", self.papertool("resync"))
+        self.assertIn(self.DIR + "/가나다문헌_2.pdf", self.rows())
+        cache = self.DIR + "__가나다문헌_2.txt"
+        self.assertIn(cache, os.listdir(self.index / "_fulltext"))      # the NFC name
+        self.assertEqual(body, (self.index / "_fulltext" / cache).read_text(encoding="utf-8"))
 
     def test_repair_opens_the_nfd_source(self):
         broken = dict(self.korean, note=NOTE_BROKEN)

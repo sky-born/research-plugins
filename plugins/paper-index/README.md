@@ -27,7 +27,7 @@ With Claude Code 2.1.275 or later, this one line registers the marketplace and i
 For older versions, Codex, and updates on several computers, follow the [README](../../README.md) at the repository root.
 Claude Code and Codex use the same `skills/paper-search/` source. Do not copy the skill and the tools and maintain them separately.
 
-You need only Python 3 and `pdftotext` (poppler-utils). No extra Python packages are used.
+You need only Python 3 and `pdftotext` (poppler-utils, or the xpdf one that Git for Windows ships — the tools ask either for UTF-8 output when they fill the full-text cache). No extra Python packages are used.
 `python3` in this document is an example. Replace it with the `python`, `python3` or `py -3` you confirmed
 in the current environment, or with the Python path the app provides. On Windows, add `-X utf8` and quote paths.
 Find the tools relative to the directory of `paper-search/SKILL.md` that the app registered.
@@ -162,13 +162,15 @@ becomes the order of the topic sections of the index document.
 
 ```bash
 papertool.py doctor     # if it reports "Paths missing"
-papertool.py resync     # re-match by name normalisation → content comparison
-papertool.py reindex    # add newly created files
+papertool.py resync     # re-match: unchanged paths → name normalisation → content comparison
+papertool.py reindex    # add newly created files and extract any missing cache
 ```
 
-`resync` decides that two files are the same document by **the beginning of the cache text**, not by the file name.
-An entry that does not match is treated as deleted from the source and removed from the index. An unused cache is
-not deleted; it is moved to `_fulltext/_obsolete/`.
+`resync` first keeps every entry whose file is still there, then matches the rest by the normalised name
+(suffixes such as `_1` removed), and only then by **the beginning of the cache text**. A renamed paper keeps its own
+full-text cache under the new name. Matches made by a name key that several files share are listed for checking.
+An entry that does not match is treated as deleted from the source and removed from the index; `papers_index.json` is
+copied to `_backup/` before such a change. An unused cache is not deleted; it is moved to `_fulltext/_obsolete/`.
 
 ## PDFs with broken encoding
 

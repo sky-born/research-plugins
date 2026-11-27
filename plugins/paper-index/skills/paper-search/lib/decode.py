@@ -8,7 +8,9 @@ One document can mix several subsets, so the best offset is chosen per line, the
 Limits — passages where subsets mix are not fully restored, and case information can be lost.
 The restored text is for searching; always cite from the source PDF.
 """
-import re, subprocess
+import re
+
+from . import extract
 
 KS = [0, 0x12, 0x13, 0x17, 0x18, 0x1d, 0x1f, 0x21, 0x2f, 0x33, 0x37, 0x38, 0x3c]
 VOW = set("aeiouAEIOU")
@@ -57,8 +59,7 @@ def decode_text(raw):
 
 
 def decode_pdf(path, pdftotext="pdftotext"):
-    raw = subprocess.run([pdftotext, "-q", path, "-"],
-                         capture_output=True).stdout.decode("utf-8", "ignore")
+    raw = extract.raw_output(pdftotext, path)
     # Control characters sometimes take the place of spaces, so turn them into spaces first.
     raw = CTRL.sub(" ", raw)
     return decode_text(raw)

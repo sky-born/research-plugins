@@ -350,6 +350,8 @@ python -X utf8 "<tool>/papertool.py" reindex
 ```
 
 Existing entries (including manual corrections) are kept and only new files are added.
+Any missing full-text cache, of a new file or of an existing entry, is extracted; PDFs that cannot be extracted are listed,
+and an existing entry with a restoration note that was extracted again needs `repair`.
 **The first `reindex` after an update can change existing entries too:** values that older versions wrote in Korean
 (the `untagged` tag, the notes `repair` writes, journal names guessed from a DOI) and tag names the preset's `renamed` retires
 are rewritten in English, exact matches only. Before that write, `papers_index.json` is copied once to
@@ -373,9 +375,13 @@ Reference managers add and remove `_1`/`_2` suffixes, or download everything aga
 
 ```bash
 python -X utf8 "<tool>/papertool.py" doctor    # if it reports "Paths missing"
-python -X utf8 "<tool>/papertool.py" resync    # name normalization → re-match by content
-python -X utf8 "<tool>/papertool.py" reindex   # add new files
+python -X utf8 "<tool>/papertool.py" resync    # unchanged paths → name normalization → content
+python -X utf8 "<tool>/papertool.py" reindex   # add new files, extract missing caches
 ```
+
+`resync` keeps a renamed paper's own full-text cache under the new name and copies `papers_index.json` to `_backup/`
+before it drops or renames entries. Check the IDs it lists as "matched by a name key that several files or entries share"
+against their PDFs before relying on those entries.
 
 **Confirm the library is stable before working.** Take a hash of the file list twice, 20 seconds apart,
 and check that they match. If not, a sync is in progress; wait before starting.

@@ -93,6 +93,21 @@ User-facing changes to each plugin, newest first. Each released version gets a `
 
 ## paper-index
 
+### 0.12.2 — 2026-11-28
+
+- `resync` keeps a renamed paper's own full-text cache under the new name. Until this version the cache went to `_fulltext/_obsolete/`,
+  the entry was left without full text, and `reindex` did not extract it again; a text restored by `repair` was lost with it
+- `resync` settles every entry whose file is still there before it matches names, so an entry whose file is gone no longer takes the
+  file of another entry, which was then dropped as a duplicate
+- The supplement marker of a long file name survives the 34-character cut, so a supplement and its paper no longer share a name key
+- `resync` lists the matches made by a name key that several files or entries share, and copies `papers_index.json` to `_backup/`
+  before it drops or renames entries
+- `reindex` extracts every missing full-text cache, of existing entries too, and lists the PDFs it could not extract; `doctor` points
+  to it. A `pdftotext` that cannot be found is reported once, apart from a PDF that fails
+- Full-text caches and OA texts are extracted with UTF-8 output (`-enc UTF-8`). The xpdf `pdftotext` that Git for Windows ships writes
+  Latin-1 by default, and Greek and other non-ASCII letters were lost from the caches it made. Caches made before this version are not
+  extracted again. `repair` still reads the extractor's own output, on which its restoration is tuned
+
 ### 0.12.1 — 2026-11-27
 
 - File names with Korean or accented letters, which macOS and Google Drive mirrors on it return in decomposed form (NFD), are the same papers as in an

@@ -1,6 +1,6 @@
 {
   "name": "paper-index",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "Indexes a PDF literature library down to the full text and searches it. Scopus searches fetch abstracts too (COMPLETE view) and are matched against the papers you hold; open-access papers you lack are downloaded to a staging folder and turned into full text (--fetch-oa). Files are matched again by content when their names change. The API key is read only from an environment variable.",
   "author": {
     "name": "sky-born"

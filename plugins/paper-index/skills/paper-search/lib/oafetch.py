@@ -46,14 +46,13 @@ import os
 import random
 import re
 import socket
-import subprocess
 import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import textio
+from . import extract, textio
 
 UA = "paper-index-tool/1.0 (open-access fetch)"
 OPENALEX = "https://api.openalex.org/works/doi:"
@@ -150,7 +149,7 @@ def _unique(folder, name):
 
 def to_text(pdftotext, pdf, txt, timeout=60):
     try:
-        r = subprocess.run([pdftotext, "-q", pdf, txt], timeout=timeout)
+        r = extract.run_extractor(pdftotext, pdf, txt, timeout=timeout)
         return r.returncode == 0 or os.path.exists(txt)
     except Exception:
         return False

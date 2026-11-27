@@ -140,6 +140,8 @@ def cmd_index(args):
     _require_library(cfg, "index")
     os.makedirs(P["fulltext"], exist_ok=True)
     st = extract.extract_missing(cfg, P["fulltext"], limit=args.limit)
+    if st["no_extractor"]:
+        sys.exit(_NO_EXTRACTOR.format(exe=cfg["pdftotext"], n=st["total"]))
     print(f"Full-text extraction: {st['done']} processed, {st['remaining']} left ({st['total']} to extract in total)")
     if st["failed"]:
         print("  extraction failed:", len(st["failed"]))
@@ -176,14 +178,15 @@ def cmd_reindex(args):
                  f"Library: {cfg['library']}\n"
                  "If this folder is right, run `reindex --force`.")
     known = {r["rel"] for r in rows}
+    # every missing cache is filled — a new file's, and an existing entry's lost after a rename or by hand
+    st = extract.extract_missing(cfg, P["fulltext"], limit=None, verbose=False)
+    done = set(st["extracted"])
+    refilled = [r for r in rows if r["rel"] in done]
     preset, compiled, order = _preset(cfg)
     added = 0
     for rel in cur:
         if rel in known:
             continue
-        tp = extract.cache(P["fulltext"], rel)
-        if not os.path.exists(tp):
-            extract.extract_missing(cfg, P["fulltext"], limit=None, verbose=False)
         body = extract.read_cache(P["fulltext"], rel)
         r = meta.build(rel, os.path.basename(rel), os.path.dirname(rel) or "(root)", body)
         r["txt"] = extract.txtname(rel)
@@ -197,6 +200,26 @@ def cmd_reindex(args):
     print(f"Added {added} new papers · {len(rows)} papers in total")
     if added:
         print("  ※ Titles and journals of new entries are automatic guesses. If one looks wrong, fix it in papers_index.json and run again.")
+    if refilled:
+        print(f"  extracted the missing full text of {len(refilled)} existing entries: {_ids(refilled)}")
+        restored = [r for r in refilled if legacy.has_encoding_word(r.get("note", ""))]
+        if restored:
+            print(f"  ※ {_ids(restored)} had a restored text — run `repair` to restore it again.")
+    if st["failed"]:
+        print(f"  ※ {len(st['failed'])} PDFs could not be extracted — check that each opens:")
+        for rel in st["failed"][:10]:
+            print("   -", rel)
+    if st["no_extractor"]:
+        print("  ※ " + _NO_EXTRACTOR.format(exe=cfg["pdftotext"], n=st["total"]))
+
+
+_NO_EXTRACTOR = ("pdftotext not found ({exe}), so {n} PDFs have no full-text cache. "
+                 "Install it (poppler or xpdf) or set `pdftotext` in the config, then run the command again.")
+
+
+def _ids(rows, limit=20):
+    ids = [r["id"] for r in rows]
+    return ", ".join(ids[:limit]) + (f" … ({len(ids)})" if len(ids) > limit else "")
 
 
 def cmd_resync(args):
@@ -218,9 +241,27 @@ def cmd_resync(args):
     rows = res["rows"]
     preset, compiled, order = _preset(cfg)
     render.assign_ids(rows, cfg["id_prefix"])
+    if (res["dropped"] or res["collided"] or res["carry"]) and os.path.exists(P["json"]):
+        # a dropped entry takes its hand corrections with it, so the index is copied first (a failed copy stops here)
+        print("  backup: " + render.backup_copy(P["json"], P["backup"]))
     render.write_json(rows, P["json"])
     render.write_csv(rows, P["csv"])
     render.write_md(rows, P["md"], cfg, order)
+    kept, missing = [], []
+    for r, old in res["carry"]:
+        st = extract.carry(P["fulltext"], old, r["txt"])
+        if st == "moved":
+            kept.append(r)
+        elif st == "missing":
+            missing.append(r)
+        else:
+            print(f"  ※ the cache of {r['id']} could not be moved to its new name ({st})")
+    if kept:
+        print(f"  kept the full-text cache of {len(kept)} renamed papers under the new names")
+    if missing:
+        print(f"  no cache to keep for {_ids(missing)} → `reindex` extracts it")
+    if res["shared"]:
+        print(f"  matched by a name key that several files or entries share — check against the PDF: {_ids(res['shared'])}")
     moved = extract.prune_orphans(P["fulltext"], {r["txt"] for r in rows} | {"_vocab.json"})
     print(f"  moved {moved} old cache files to _obsolete/")
 
@@ -639,8 +680,8 @@ def cmd_doctor(args):
     print("Paths missing (only in the index):", len(idx - cur))
     print("Not in the index (only in the source):", len(cur - idx))
     print("Duplicate mappings:", [k for k, v in c.items() if v > 1] or "none")
-    print("Missing cache:", [r["id"] for r in rows
-                    if not os.path.exists(textio.resolve(P["fulltext"], r["txt"]))] or "none")
+    nocache = [r["id"] for r in rows if not os.path.exists(textio.resolve(P["fulltext"], r["txt"]))]
+    print("Missing cache:", nocache or "none")
     print("Full text under 500 characters:", [(r["id"], r["file"][:40]) for r in rows if r.get("chars", 0) < 500] or "none")
     print("Entries with a note:", sum(1 for r in rows if r.get("note")))
     if _library_too_small(cfg, len(cur), len(rows)):
@@ -650,6 +691,9 @@ def cmd_doctor(args):
         print("\n→ File names seem to have changed. Run `resync`.")
     if cur - idx:
         print("\n→ There are new files. Run `reindex`.")
+    if nocache:
+        print("\n→ Some full-text caches are missing. Run `reindex`; a paper still listed after it could not be extracted "
+              "— check that its PDF opens.")
 
 
 # ------------------------------------------------------------------ main

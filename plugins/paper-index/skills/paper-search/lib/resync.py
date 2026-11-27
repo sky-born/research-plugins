@@ -4,9 +4,15 @@
 Reference managers (ReadCube, Zotero and others) add and remove suffixes such as `_1`, `_2`, or
 download everything again when switching to the cloud. Each time, all index paths go out of step.
 
-Matching runs in two steps.
-  1) Name normalization — strip suffixes and supplement markers, then compare the first 34 characters. Most are resolved here.
-  2) Content comparison — for the rest, compare the start of the cached text. The decision rests on content, not the file name.
+Matching runs in three steps.
+  0) Unchanged paths — every entry whose file is still there keeps it first, so an entry whose file is gone never
+     takes the file of an entry that is still there.
+  1) Name normalization — among the files left, strip suffixes and supplement markers, then compare the first
+     34 characters. Most renames are resolved here.
+  2) Content comparison — for the rest, compare the start of the cached text. This works only while the old cache and
+     the new file's extraction come from the same extractor.
+
+An entry whose path changed keeps its own cache under the new name (`carry` in the result; `extract.carry` moves it).
 """
 import os, re
 from . import extract, textio
@@ -17,12 +23,16 @@ def norm_key(rel, n=34):
     d = os.path.dirname(rel)
     b = os.path.splitext(os.path.basename(rel))[0]
     b = re.sub(r"_\d+$", "", b)
-    b = re.sub(r"_supplement.*$", "#SUP", b)
-    b = re.sub(r"[^0-9a-z%s#]" % textio.HANGUL, "", b.lower())[:n]
-    return d + "|" + b
+    sup = "_supplement" in b
+    b = re.sub(r"_supplement.*$", "", b)
+    b = re.sub(r"[^0-9a-z%s]" % textio.HANGUL, "", b.lower())[:n]
+    return d + "|" + b + ("#SUP" if sup else "")      # the marker goes after the cut, so a long name keeps it
 
 
 def resync(rows, cfg, ft_dir, verbose=True):
+    """Re-match `rows` to the library. Returns rows (kept, paths updated), dropped, collided, new (files no entry has),
+    carry ((row, old txt) for each kept entry whose cache name changed) and shared (rows matched by a name key that
+    several files or entries share — worth checking against their PDFs)."""
     cur = extract.scan(cfg["library"])
     curset = set(cur)
     curmap = {}
@@ -32,13 +42,22 @@ def resync(rows, cfg, ft_dir, verbose=True):
     matched, leftover, used = {}, [], set()
     for r in rows:
         if r["rel"] in curset:
-            matched[r["id"]] = r["rel"]
+            matched[id(r)] = r["rel"]
             used.add(r["rel"])
-            continue
-        cand = [x for x in curmap.get(norm_key(r["rel"]), []) if x not in used]
+    waiting = [r for r in rows if id(r) not in matched]
+    keys = {id(r): norm_key(r["rel"]) for r in waiting}
+    rowcount = {}
+    for k in keys.values():
+        rowcount[k] = rowcount.get(k, 0) + 1
+    shared_ids = set()
+    for r in waiting:
+        k = keys[id(r)]
+        cand = [x for x in curmap.get(k, []) if x not in used]
         if len(cand) == 1:
-            matched[r["id"]] = cand[0]
+            matched[id(r)] = cand[0]
             used.add(cand[0])
+            if len(curmap[k]) > 1 or rowcount[k] > 1:
+                shared_ids.add(id(r))
         else:
             leftover.append(r)
 
@@ -49,11 +68,9 @@ def resync(rows, cfg, ft_dir, verbose=True):
         for rel in free:
             p = extract.cache(ft_dir, rel)
             if not os.path.exists(p):
-                import subprocess
                 p = os.path.join(ft_dir, extract.txtname(rel))
                 try:
-                    subprocess.run([cfg["pdftotext"], "-q",
-                                    extract.source(cfg["library"], rel), p], timeout=60)
+                    extract.run_extractor(cfg["pdftotext"], extract.source(cfg["library"], rel), p, timeout=60)
                 except Exception:
                     pass
             newtext[rel] = (open(p, encoding="utf-8", errors="ignore").read()[:1200]
@@ -71,18 +88,19 @@ def resync(rows, cfg, ft_dir, verbose=True):
                         hit = rel
                         break
             if hit:
-                matched[r["id"]] = hit
+                matched[id(r)] = hit
                 used.add(hit)
             else:
                 still.append(r)
         leftover = still
 
-    out, dropped = [], []
+    out, dropped, old_txt = [], [], {}
     for r in rows:
-        rel = matched.get(r["id"])
+        rel = matched.get(id(r))
         if not rel:
             dropped.append(r)
             continue
+        old_txt[id(r)] = r.get("txt", "")
         r["rel"] = rel
         r["folder"] = os.path.dirname(rel) or "(root)"
         r["file"] = os.path.basename(rel)
@@ -101,5 +119,7 @@ def resync(rows, cfg, ft_dir, verbose=True):
         seen.add(r["rel"])
         deduped.append(r)
 
+    carry = [(r, old_txt[id(r)]) for r in deduped if old_txt[id(r)] and old_txt[id(r)] != r["txt"]]
+    shared = [r for r in deduped if id(r) in shared_ids]
     newfiles = [x for x in cur if x not in seen]
-    return dict(rows=deduped, dropped=dropped, collided=collided, new=newfiles)
+    return dict(rows=deduped, dropped=dropped, collided=collided, new=newfiles, carry=carry, shared=shared)

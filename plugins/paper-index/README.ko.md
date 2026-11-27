@@ -27,7 +27,7 @@ Claude Code 2.1.275 이상에서는 이 한 줄로 마켓플레이스 등록과 
 그 아래 판과 Codex, 여러 컴퓨터의 갱신은 저장소 루트의 [README](../../README.md)를 따릅니다.
 Claude Code·Codex가 같은 `skills/paper-search/` 원본을 사용합니다. 스킬과 도구를 각각 복사해 따로 관리하지 않습니다.
 
-파이썬 3와 `pdftotext`(poppler-utils)만 있으면 됩니다. 별도 파이썬 패키지를 쓰지 않습니다.
+파이썬 3와 `pdftotext`(poppler-utils, 또는 Git for Windows 에 딸린 xpdf 판 — 전문 캐시를 만들 때 도구가 어느 쪽에든 UTF-8 출력을 요청합니다)만 있으면 됩니다. 별도 파이썬 패키지를 쓰지 않습니다.
 이 문서의 `python3`은 예시입니다. 현재 환경에서 확인한 `python`·`python3`·`py -3` 또는 앱이
 제공한 Python 경로로 바꿉니다. Windows에서는 `-X utf8`을 붙이고 경로를 인용합니다.
 실행 도구 위치는 앱이 등록한 `paper-search/SKILL.md`의 디렉토리를 기준으로 찾습니다.
@@ -162,13 +162,15 @@ papertool.py tags-auto --top 20        # index/tags.auto.json 생성
 
 ```bash
 papertool.py doctor     # "Paths missing"이 잡히면
-papertool.py resync     # 이름 정규화 → 내용 대조로 다시 맞춤
-papertool.py reindex    # 새로 생긴 파일 추가
+papertool.py resync     # 그대로인 경로 → 이름 정규화 → 내용 대조로 다시 맞춤
+papertool.py reindex    # 새로 생긴 파일 추가 · 빠진 캐시 추출
 ```
 
-`resync` 는 파일명이 아니라 **캐시 텍스트의 앞부분**으로 동일 문서를 판정합니다.
-매칭 안 된 항목은 원본에서 삭제된 것으로 보고 인덱스에서 뺍니다. 쓰이지 않는 캐시는
-지우지 않고 `_fulltext/_obsolete/` 로 옮깁니다.
+`resync` 는 파일이 그대로 있는 항목을 먼저 확정하고, 나머지를 정규화한 이름(`_1` 같은 꼬리 제거)으로,
+그다음 **캐시 텍스트의 앞부분**으로 맞춥니다. 이름이 바뀐 문헌은 자기 전문 캐시를 새 이름으로 가져갑니다.
+여러 파일이 같은 이름 키를 쓰는 곳에서 맞춘 항목은 확인하도록 따로 알려 줍니다.
+맞지 않는 항목은 원본에서 삭제된 것으로 보고 인덱스에서 빼며, 그 전에 `papers_index.json` 을 `_backup/` 에 복사합니다.
+쓰이지 않는 캐시는 지우지 않고 `_fulltext/_obsolete/` 로 옮깁니다.
 
 ## 인코딩이 깨진 PDF
 
