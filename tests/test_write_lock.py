@@ -5,6 +5,7 @@ These are the devices that let a write go through while other sessions are open 
   · The tidy tool goes "lock → read → compute → full check → save" — if any file changed after reading, nothing is saved and it tries once more.
   · A new open-item number is assigned by the tool inside the lock — runs started together never get the same number, and an archived number is not reused.
   · The hook refuses only a hand-written row with a new ID (out-of-scope letters, already known IDs and branch numbers pass), and it only waits for the lock without blocking.
+  · A save waits out a reader that holds the file open (Windows refuses the replace meanwhile), and a failed save leaves no temporary file.
 Fixtures are in the OS temp folder and the state is in a temp folder under `SYNC_STATE_HOME` (the fixture helper of test_sync_guard is used as it is).
 """
 
@@ -13,9 +14,11 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -95,6 +98,54 @@ def edit(p: Path, rel: str, new: str, tid: str, tool_name="Edit"):
     else:
         ti.update(old_string="a", new_string=new)
     return {"tool_name": tool_name, "tool_input": ti, "cwd": str(p), "tool_use_id": tid}
+
+
+class SaveWaitsOutAReader(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="replace-retry-"))
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.path = self.dir / "tracker_pending.md"
+        self.path.write_bytes(b"old\n")
+
+    def refuse(self, times):
+        """os.replace refused `times` times the way Windows refuses it while a reader holds the file; sleeps are skipped."""
+        real, calls = os.replace, []
+
+        def fake(src, dst):
+            calls.append(dst)
+            if len(calls) <= times:
+                raise PermissionError(13, "Access is denied", str(dst))
+            return real(src, dst)
+        for mod, name, value in ((_sync.os, "replace", fake), (_sync.time, "sleep", lambda s: None)):
+            self.addCleanup(setattr, mod, name, getattr(mod, name))
+            setattr(mod, name, value)
+        return calls
+
+    def leftovers(self):
+        return sorted(p.name for p in self.dir.iterdir() if p.name != "tracker_pending.md")
+
+    def test_refused_a_few_times_then_saved(self):
+        calls = self.refuse(2)
+        _sync._atomic_write(str(self.path), b"new\n")
+        self.assertEqual(3, len(calls))
+        self.assertEqual(b"new\n", self.path.read_bytes())
+        self.assertEqual([], self.leftovers())
+
+    def test_refused_every_time_raises_and_leaves_nothing(self):
+        calls = self.refuse(10 ** 6)
+        with self.assertRaises(PermissionError):
+            _sync._atomic_write(str(self.path), b"new\n")
+        self.assertEqual(_sync.REPLACE_TRIES, len(calls))
+        self.assertEqual(b"old\n", self.path.read_bytes())
+        self.assertEqual([], self.leftovers())
+
+    def test_a_real_reader_holding_the_file(self):
+        reader = open(self.path, "rb")                    # on Windows the replace is refused while this is open
+        threading.Timer(0.3, reader.close).start()
+        _sync._atomic_write(str(self.path), b"new\n")
+        reader.close()
+        self.assertEqual(b"new\n", self.path.read_bytes())
+        self.assertEqual([], self.leftovers())
 
 
 class LockItself(unittest.TestCase):

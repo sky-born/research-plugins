@@ -1,6 +1,6 @@
 {
   "name": "research-writing",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Shared working rules for academic paper writing. Covers style and expressions to avoid, hedging by evidence grade, confirming citations, the protocol for proposing revisions and for the user's confirmation, tracking open items and figure rules. Also includes an entry skill that starts manuscript work from any folder, and an initialiser that creates a new manuscript project with its tools, settings and tracker files in one go.",
   "author": {
     "name": "sky-born"

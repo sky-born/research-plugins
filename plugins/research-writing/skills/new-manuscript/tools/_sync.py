@@ -181,13 +181,37 @@ def _read_bytes(path):
 
 
 def _atomic_write(path, data):
+    """Writes data to a temporary file beside path, then puts it in place. On failure the temporary file is removed and the error raised."""
     d = os.path.dirname(path)
     if d and not os.path.isdir(d):
         os.makedirs(d)
     tmp = path + '.tmp%d' % os.getpid()
     with io.open(tmp, 'wb') as f:
         f.write(data)
-    os.replace(tmp, path)
+    try:
+        _replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+REPLACE_TRIES = 15          # waits about 2.4 s in all
+
+
+def _replace(src, dst):
+    """os.replace that waits out a reader — Windows refuses to replace a file while another process has it open (another session
+    reading the shared file for its own pre-save check) and raises PermissionError. Such an open is brief, so it is tried again
+    with a growing pause before the error is raised. Other systems never refuse this way."""
+    for i in range(REPLACE_TRIES):
+        try:
+            return os.replace(src, dst)
+        except PermissionError:
+            if i == REPLACE_TRIES - 1:
+                raise
+            time.sleep(0.02 * (i + 1))
 
 
 def _mtime(path):

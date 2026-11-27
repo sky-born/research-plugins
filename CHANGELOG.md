@@ -5,6 +5,15 @@ User-facing changes to each plugin, newest first. Each released version gets a `
 
 ## research-writing
 
+### 0.14.2 — 2026-11-28
+
+- A save of a shared file (`tools/_sync.py`, used by `new_pending.py`, `replace_once` and the sync state) waits out a reader. Windows refuses
+  to replace a file while another process has it open — another session reading it for its own pre-save check — and the save failed with
+  `PermissionError` and left a `<file>.tmp<pid>` behind. It now tries again for about two seconds, and a save that still fails removes its
+  temporary file
+- **Existing projects** — after updating the plugin, run `update_tools.py <project> --apply` once to bring in the new `_sync.py`.
+  Copies that have not been updated keep working as they are
+
 ### 0.14.1 — 2026-11-27
 
 - New managed tool `tools/_textio.py` — the one definition of `nfc` and the Hangul character class, shared with paper-index.
